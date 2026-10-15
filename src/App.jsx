@@ -317,7 +317,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
           <div className="text-xs mb-3" style={{ color: C.textFaint }}>Label finance snapshot</div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Distributor gross (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalGross)}</span></div>
-            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Swift fees (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalSwift)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Inbound Banking Charges (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalSwift)}</span></div>
             <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Artist share</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.artistEarn)}</span></div>
             <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Label share</span><span style={{ fontFamily: MONO_FONT, color: C.teal }}>{formatCurrency(finance.labelEarn)}</span></div>
             {Math.abs(finance.untrackedGap) > 0.01 && (
@@ -2888,18 +2888,18 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 
   return (
     <div>
-      <SectionHeader title="Master Gross" description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat swift fee split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
+      <SectionHeader title="Master Gross" description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Total gross (all months)" value={formatCurrency(totals.totalGross)} tone="teal" />
-        <KPICard icon={Wallet} label="Total swift fees" value={formatCurrency(totals.totalSwift)} />
+        <KPICard icon={Wallet} label="Total inbound banking charges" value={formatCurrency(totals.totalSwift)} />
         <KPICard icon={TrendingUp} label="Tracked gross (revenue rows)" value={formatCurrency(totals.trackedGross)} />
         <KPICard icon={ClipboardList} label="Untracked gap" value={formatCurrency(totals.untrackedGap)} tone={Math.abs(totals.untrackedGap) > 0.01 ? 'amber' : 'teal'} sub={Math.abs(totals.untrackedGap) > 0.01 ? 'Reconciliation flag, not an error' : 'Fully reconciled'} />
       </div>
 
       {canEdit && (
         <form onSubmit={saveFee} className="rounded border p-4 mb-6 flex items-end gap-3 flex-wrap" style={{ background: C.panel, borderColor: C.border }}>
-          <Field label="Default swift fee for new months (USD)"><Input type="number" min="0" step="0.01" value={feeInput} onChange={e => setFeeInput(e.target.value)} style={{ maxWidth: 160 }} /></Field>
+          <Field label="Default inbound banking charge for new months (USD)"><Input type="number" min="0" step="0.01" value={feeInput} onChange={e => setFeeInput(e.target.value)} style={{ maxWidth: 160 }} /></Field>
           <Btn variant="ghost" type="submit">Save default</Btn>
         </form>
       )}
@@ -2908,7 +2908,7 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
         <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
           <Field label="Month"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} disabled={!!editing} /></Field>
           <Field label="Total gross received (USD)"><Input type="number" min="0" step="0.01" required value={form.totalGross} onChange={e => setForm({ ...form, totalGross: e.target.value })} /></Field>
-          <Field label="Swift fee (USD)"><Input type="number" min="0" step="0.01" required value={form.swiftFee} onChange={e => setForm({ ...form, swiftFee: e.target.value })} /></Field>
+          <Field label="Inbound Banking Charge (USD)"><Input type="number" min="0" step="0.01" required value={form.swiftFee} onChange={e => setForm({ ...form, swiftFee: e.target.value })} /></Field>
           <div className="imss-span-2 flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Log month'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
@@ -2917,11 +2917,11 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
       )}
 
       {sorted.length === 0 ? (
-        <EmptyState icon={DollarSign} title="No months logged yet" description="Log the distributor's real gross and swift fee for a month to start splitting it across artists." />
+        <EmptyState icon={DollarSign} title="No months logged yet" description="Log the distributor's real gross and inbound banking charge for a month to start splitting it across artists." />
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 620 }}>
-            <thead><tr><Th>Month</Th><Th align="right">Total gross</Th><Th align="right">Swift fee</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
+            <thead><tr><Th>Month</Th><Th align="right">Total gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(g => {
                 const trackedThisMonth = revByMonth(revenue)[g.month] || 0;
@@ -3068,7 +3068,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
         <>
           <div className="flex flex-wrap gap-3 mb-6">
             <KPICard icon={DollarSign} label="Gross earnings" value={formatCurrency(periodTotals.gross)} />
-            <KPICard icon={Wallet} label="Swift share" value={formatCurrency(periodTotals.swift)} />
+            <KPICard icon={Wallet} label="Inbound Banking Charge share" value={formatCurrency(periodTotals.swift)} />
             <KPICard icon={TrendingUp} label="Your share" value={formatCurrency(periodTotals.artistShare)} tone="teal" sub={Math.round((artist.artistPct != null ? artist.artistPct : 0) * 100) + '% of net'} />
             <KPICard icon={ClipboardList} label={recoupment.balance > 0 ? 'Unrecouped balance' : 'Fully recouped'} value={formatCurrency(recoupment.balance > 0 ? recoupment.unrecouped : recoupment.dueOnTop)} tone={recoupment.balance > 0 ? 'red' : 'teal'} />
           </div>
@@ -3091,7 +3091,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
                   <div style={{ fontWeight: 600 }}>{monthLabel(month)}</div>
                   <div className="text-sm" style={{ color: C.textFaint }}>
                     Gross <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(gross)}</span>
-                    {' · '}Swift share <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(swift)}</span>
+                    {' · '}Inbound Banking Charge share <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(swift)}</span>
                     {' · '}Your share <span style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT }}>{formatCurrency(artistShare)}</span>
                   </div>
                 </div>
@@ -3950,7 +3950,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
 
   return (
     <div>
-      <SectionHeader title="Payouts" description="Generate a payout statement for an artist over any period — computed live from revenue and master gross, per the swift-fee split formula." />
+      <SectionHeader title="Payouts" description="Generate a payout statement for an artist over any period — computed live from revenue and master gross, per the inbound banking charge split formula." />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Label earnings (lifetime)" value={formatCurrency(pnl.labelEarn)} tone="teal" />
@@ -3973,7 +3973,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
           {preview && (
             <div className="imss-span-2 rounded border p-3 flex flex-wrap gap-4" style={{ background: C.bg, borderColor: C.border }}>
               <div className="text-xs" style={{ color: C.textFaint }}>Gross <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.gross)}</div></div>
-              <div className="text-xs" style={{ color: C.textFaint }}>Swift share <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.swift)}</div></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Inbound Banking Charge share <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.swift)}</div></div>
               <div className="text-xs" style={{ color: C.textFaint }}>Net <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.net)}</div></div>
               <div className="text-xs" style={{ color: C.textFaint }}>Artist share ({Math.round(preview.artistPct * 100)}%) <div style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.artistShare)}</div></div>
               <div className="text-xs" style={{ color: C.textFaint }}>Label share <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.labelShare)}</div></div>
@@ -4007,7 +4007,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
         </table>
       </div>
 
-      <ExportBar filename="imss-payout-statements" headers={['Artist', 'Period start', 'Period end', 'Gross', 'Swift share', 'Net', 'Artist %', 'Artist share', 'Label share', 'Status']} rows={sortedPayouts.map(p => [p.artist, p.periodStart, p.periodEnd, p.grossEarning, p.swiftShare, p.netAfterSwift, p.artistPct, p.artistShare, p.labelShare, p.status])} />
+      <ExportBar filename="imss-payout-statements" headers={['Artist', 'Period start', 'Period end', 'Gross', 'Inbound Banking Charge share', 'Net', 'Artist %', 'Artist share', 'Label share', 'Status']} rows={sortedPayouts.map(p => [p.artist, p.periodStart, p.periodEnd, p.grossEarning, p.swiftShare, p.netAfterSwift, p.artistPct, p.artistShare, p.labelShare, p.status])} />
 
       <div className="text-xs mb-3" style={{ color: C.textFaint }}>Statement history</div>
       {sortedPayouts.length === 0 ? (

@@ -69,6 +69,7 @@ implements a written spec — five collections, computed on read, never stored:
 - **`payouts`** — generated statements
 
 The one non-obvious rule: **the swift fee is split proportionally**, not evenly.
+On screen it's called the **Inbound Banking Charge**; the code keeps `swiftFee`/`swift`.
 
 ```
 swiftShare(artist, month) = swiftFee[month] × revByArtistMonth[artist][month] / revByMonth[month]
