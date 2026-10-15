@@ -3412,85 +3412,213 @@ function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null
 }
 
 const INVOICE_KINDS = { expense: 'Expense claim', service: 'Services / fee' };
-const INVOICE_TONES = { Pending: 'amber', Approved: 'teal', Paid: 'teal', Rejected: 'red' };
+// Invoice approval pipeline: Submitted → PM Approval → Finance Queue → LH Queue →
+// DP Queue → Pay Approved → Paid. Each waiting status names who reviews it.
+const INVOICE_STAGES = [
+  { status: 'PM Approval', who: 'pm', approve: 'Approve' },
+  { status: 'Finance Queue', who: 'finance', approve: 'Approve' },
+  { status: 'LH Queue', who: 'lh', approve: 'Approve' },
+  { status: 'DP Queue', who: 'dp', approve: 'Approve for payment' },
+  { status: 'Pay Approved', who: 'pay', approve: 'Mark paid' },
+];
+const INVOICE_FLOW = ['Submitted', ...INVOICE_STAGES.map(st => st.status), 'Paid'];
+const WORKFLOW_ROLES = [
+  { key: 'finance', label: 'Finance Queue' },
+  { key: 'lh', label: 'LH Queue' },
+  { key: 'dp', label: 'DP Queue' },
+  { key: 'pay', label: 'Pay Approved', hint: 'pays the artist and marks it paid' },
+];
+// Older invoices used Pending / Approved.
+function invoiceStatus(inv) {
+  if (inv.status === 'Pending') return 'PM Approval';
+  if (inv.status === 'Approved') return 'Pay Approved';
+  return inv.status;
+}
+const invoiceStage = inv => INVOICE_STAGES.find(st => st.status === invoiceStatus(inv)) || null;
+function invoiceReviewers(inv, roster, staff, workflow) {
+  const stage = invoiceStage(inv);
+  if (!stage) return [];
+  if (stage.who === 'pm') {
+    const pm = String((roster.find(a => a.id === inv.artistId) || {}).productManager || '').trim().toLowerCase();
+    return staff.filter(m => pm && m.name.trim().toLowerCase() === pm);
+  }
+  const ids = (workflow || {})[stage.who] || [];
+  return staff.filter(m => ids.includes(m.id));
+}
+// What the artist sees: progress, not internal queue names.
+function artistInvoiceStatus(inv) {
+  const st = invoiceStatus(inv);
+  if (st === 'Paid' || st === 'Rejected') return st;
+  if (st === 'Pay Approved') return 'Approved for payment';
+  const step = INVOICE_FLOW.indexOf(st);
+  return step > 0 ? 'In review · step ' + (step + 1) + ' of ' + INVOICE_FLOW.length : 'Submitted';
+}
+const INVOICE_TONES = { 'PM Approval': 'amber', 'Finance Queue': 'amber', 'LH Queue': 'amber', 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red', Pending: 'amber', Approved: 'teal' };
 
-function InvoicesSection({ invoices, update, roster, canEdit = true, sessionName = '', pmScope = null }) {
-  const [status, setStatus] = useState('Pending');
+function InvoicesSection({ invoices, update, roster, staff = [], labelSettings = {}, updateLabelSettings, canEdit = true, session = {}, pmScope = null }) {
+  const workflow = labelSettings.invoiceWorkflow || {};
+  const isAdmin = session.role === 'Admin';
+  const me = staff.find(m => m.name === session.name);
+  const assignedSomewhere = !!me && Object.values(workflow).some(ids => (ids || []).includes(me.id));
+  const [tab, setTab] = useState('mine');
   const [openId, setOpenId] = useState(null);
   const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [showWorkflow, setShowWorkflow] = useState(false);
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
-  const scoped = invoices.filter(i => !pmScope || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
-  const shown = scoped.filter(i => status === 'all' || i.status === status).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
-  const sum = st => scoped.filter(i => i.status === st).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
+  const reviewersOf = inv => invoiceReviewers(inv, roster, staff, workflow);
+  const canAct = inv => canEdit && !!invoiceStage(inv) && (isAdmin || reviewersOf(inv).some(m => me && m.id === me.id));
+  const mine = scoped.filter(i => invoiceStage(i) && me && reviewersOf(i).some(m => m.id === me.id));
+  const shown = (tab === 'mine' ? mine : tab === 'all' ? scoped : scoped.filter(i => invoiceStatus(i) === tab))
+    .sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  const sumBy = st => scoped.filter(i => invoiceStatus(i) === st).reduce((t, i) => t + (Number(i.amount) || 0), 0);
+  const inReview = scoped.filter(i => invoiceStage(i) && invoiceStatus(i) !== 'Pay Approved');
 
-  function decide(inv, next) {
+  function move(inv, action) {
+    const from = invoiceStatus(inv);
+    const idx = INVOICE_STAGES.findIndex(st => st.status === from);
+    const text = note.trim();
+    if ((action === 'back' || action === 'reject') && !text) { setError(action === 'reject' ? 'Say why it’s rejected. The artist sees this.' : 'Say what needs changing before it comes back.'); return; }
+    const to = action === 'approve' ? (INVOICE_STAGES[idx + 1] ? INVOICE_STAGES[idx + 1].status : 'Paid') : action === 'back' ? INVOICE_STAGES[idx - 1].status : 'Rejected';
     const stamp = new Date().toISOString();
+    const entry = { at: stamp, by: session.name, action: action === 'approve' ? (to === 'Paid' ? 'paid' : 'approved') : action === 'back' ? 'sent back' : 'rejected', from, to, note: text };
     update(invoices.map(i => i.id !== inv.id ? i : {
-      ...i, status: next,
-      ...(next === 'Paid' ? { paidAt: stamp } : { reviewedBy: sessionName, reviewedAt: stamp, reviewNote: note.trim() || i.reviewNote || '' }),
+      ...i, status: to, history: [...(i.history || []), entry],
+      reviewedBy: session.name, reviewedAt: stamp,
+      ...(action === 'reject' ? { reviewNote: text } : {}),
+      ...(to === 'Paid' ? { paidAt: stamp } : {}),
     }));
-    setNote('');
-    if (next !== 'Approved') setOpenId(null);
+    setNote(''); setError('');
   }
+  function toggleAssignee(key, id) {
+    const cur = workflow[key] || [];
+    const next = { ...workflow, [key]: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
+    updateLabelSettings({ ...labelSettings, invoiceWorkflow: next });
+  }
+  const tabs = [['mine', 'My queue', mine.length], ...INVOICE_STAGES.map(st => [st.status, st.status, scoped.filter(i => invoiceStatus(i) === st.status).length]), ['Paid', 'Paid', 0], ['Rejected', 'Rejected', 0], ['all', 'All', 0]];
+  const activeStaff = staff.filter(m => (m.status || 'Active') !== 'Inactive');
 
   return (
     <div>
-      <SectionHeader title="Invoices" description="Expense claims and service fees artists have submitted. Approve, reject, then mark paid once the money has gone out." />
+      <SectionHeader title="Invoices" description="Artist expense claims and service invoices move through PM Approval, Finance, LH and DP before they’re approved for payment and paid."
+        action={isAdmin && <Btn variant="ghost" onClick={() => setShowWorkflow(v => !v)}><UserCog size={14} /> {showWorkflow ? 'Close workflow' : 'Workflow'}</Btn>} />
+
+      {isAdmin && showWorkflow && (
+        <section aria-labelledby="wf-h" className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <h2 id="wf-h" style={{ fontWeight: 600, fontSize: 15 }}>Who handles each queue</h2>
+          <p className="text-xs mt-1 mb-4" style={{ color: C.textDim }}>PM Approval always goes to the artist’s Product Manager (set on the Roster). Pick one or more people for the other queues; they get an email when an invoice reaches them. Admins can act on any queue.</p>
+          <div className="imss-wf-grid">
+            {WORKFLOW_ROLES.map(r => (
+              <fieldset key={r.key} className="rounded border p-3" style={{ borderColor: C.border }}>
+                <legend className="text-sm px-1" style={{ fontWeight: 600 }}>{r.label}</legend>
+                {r.hint && <div className="text-xs mb-2" style={{ color: C.textDim }}>{r.hint}</div>}
+                <div className="flex flex-col gap-1.5">
+                  {activeStaff.map(m => (
+                    <label key={m.id} className="flex items-center gap-2 text-sm" style={{ cursor: 'pointer' }}>
+                      <input type="checkbox" checked={(workflow[r.key] || []).includes(m.id)} onChange={() => toggleAssignee(r.key, m.id)} style={{ accentColor: C.amber }} />
+                      {m.name} <span className="text-xs" style={{ color: C.textDim }}>{m.role}</span>
+                    </label>
+                  ))}
+                </div>
+                {!(workflow[r.key] || []).length && <div className="text-xs mt-2" style={{ color: C.amber }}>No one assigned yet. Only Admins can move invoices on.</div>}
+              </fieldset>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="flex flex-wrap gap-3 mb-6">
-        <KPICard icon={FileText} label="Waiting for review" value={formatCurrency(sum('Pending'))} tone="amber" sub={scoped.filter(i => i.status === 'Pending').length + ' invoices'} />
-        <KPICard icon={Wallet} label="Approved, not yet paid" value={formatCurrency(sum('Approved'))} />
-        <KPICard icon={CheckCircle2} label="Paid" value={formatCurrency(sum('Paid'))} tone="teal" />
+        <KPICard icon={FileText} label="In review" value={formatCurrency(inReview.reduce((t, i) => t + (Number(i.amount) || 0), 0))} tone="amber" sub={inReview.length + ' invoice' + (inReview.length === 1 ? '' : 's')} />
+        <KPICard icon={Wallet} label="Approved, not yet paid" value={formatCurrency(sumBy('Pay Approved'))} />
+        <KPICard icon={CheckCircle2} label="Paid" value={formatCurrency(sumBy('Paid'))} tone="teal" />
       </div>
-      <div className="flex gap-1 mb-4 flex-wrap">
-        {['Pending', 'Approved', 'Paid', 'Rejected', 'all'].map(s => (
-          <button key={s} onClick={() => setStatus(s)} className="text-sm px-3 py-1.5 rounded"
-            style={{ background: status === s ? C.amberSoft : 'transparent', color: status === s ? C.amber : C.textDim, border: '1px solid ' + (status === s ? 'transparent' : C.border), fontWeight: status === s ? 600 : 500 }}>
-            {s === 'all' ? 'All' : s}
+
+      <div className="flex gap-1 mb-4 flex-wrap" role="tablist" aria-label="Queues">
+        {tabs.map(([id, label, n]) => (
+          <button key={id} role="tab" aria-selected={tab === id} onClick={() => { setTab(id); setOpenId(null); }} className="text-sm px-3 py-1.5 rounded inline-flex items-center gap-1.5"
+            style={{ background: tab === id ? C.amberSoft : 'transparent', color: tab === id ? C.amber : C.textDim, border: '1px solid ' + (tab === id ? 'transparent' : C.border), fontWeight: tab === id ? 600 : 500 }}>
+            {label}{n > 0 && <span style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{n}</span>}
           </button>
         ))}
       </div>
+
       {shown.length === 0 ? (
-        <EmptyState icon={FileText} title={status === 'all' ? 'No invoices yet' : 'Nothing ' + status.toLowerCase()} description="When an artist submits an expense claim or a service invoice from their portal, it lands here." />
+        <EmptyState icon={FileText} title={tab === 'mine' ? 'Nothing waiting for you' : 'Nothing here'} description={tab === 'mine' ? 'Invoices assigned to you show up here when they reach your queue.' : 'When artists submit expense claims or service invoices, they move through these queues.'} />
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
-          <table className="w-full" style={{ minWidth: 760 }}>
-            <thead><tr><Th>Submitted</Th><Th>Artist</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Status</Th><Th align="right"></Th></tr></thead>
+          <table className="w-full" style={{ minWidth: 860 }}>
+            <thead><tr><Th>Submitted</Th><Th>Artist</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Stage</Th><Th>With</Th><Th align="right"></Th></tr></thead>
             <tbody>
-              {shown.map(inv => (
-                <React.Fragment key={inv.id}>
-                  <tr>
-                    <Td mono>{formatDate((inv.submittedAt || '').slice(0, 10))}</Td>
-                    <Td>{artistName(inv.artistId)}</Td>
-                    <Td>{INVOICE_KINDS[inv.kind] || inv.kind}</Td>
-                    <Td>{inv.title}</Td>
-                    <Td align="right" mono>{formatCents(inv.amount)}</Td>
-                    <Td><Badge tone={INVOICE_TONES[inv.status]}>{inv.status}</Badge></Td>
-                    <Td align="right"><button onClick={() => { setOpenId(openId === inv.id ? null : inv.id); setNote(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{openId === inv.id ? 'Close' : 'Open'}</button></Td>
-                  </tr>
-                  {openId === inv.id && (
-                    <tr><td colSpan={7} style={{ padding: 16, borderBottom: '1px solid ' + C.border }}>
-                      <div className="imss-form-grid gap-3 text-sm" style={{ color: C.textDim }}>
-                        <div><b style={{ color: C.text }}>Invoice date</b><br />{formatDate(inv.invoiceDate)}</div>
-                        <div><b style={{ color: C.text }}>Invoice number</b><br />{inv.invoiceNumber || '—'}</div>
-                        <div><b style={{ color: C.text }}>Pay to</b><br />{inv.payTo || '—'}</div>
-                        <div className="imss-span-2"><b style={{ color: C.text }}>Details</b><br /><span style={{ whiteSpace: 'pre-wrap' }}>{inv.details || '—'}</span></div>
-                        {inv.attachment && <div className="imss-span-2"><b style={{ color: C.text }}>Attachment</b><br /><a href={inv.attachment} download={inv.attachmentName || 'invoice'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download {inv.attachmentName || 'file'}</a></div>}
-                        {inv.reviewedBy && <div className="imss-span-2"><b style={{ color: C.text }}>Reviewed</b><br />{inv.reviewedBy} · {formatDate((inv.reviewedAt || '').slice(0, 10))}{inv.reviewNote ? ' · “' + inv.reviewNote + '”' : ''}{inv.paidAt ? ' · paid ' + formatDate(inv.paidAt.slice(0, 10)) : ''}</div>}
-                      </div>
-                      {canEdit && (inv.status === 'Pending' || inv.status === 'Approved') && (
-                        <div className="mt-4 flex flex-col gap-2" style={{ maxWidth: 560 }}>
-                          {inv.status === 'Pending' && <Field label="Note to the artist (optional)"><Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Approved, paying with the March statement" /></Field>}
-                          <div className="flex gap-2 flex-wrap">
-                            {inv.status === 'Pending' && <Btn variant="primary" onClick={() => decide(inv, 'Approved')}><CheckCircle2 size={14} /> Approve</Btn>}
-                            {inv.status === 'Pending' && <Btn variant="danger" onClick={() => decide(inv, 'Rejected')}>Reject</Btn>}
-                            {inv.status === 'Approved' && <Btn variant="primary" onClick={() => decide(inv, 'Paid')}><Wallet size={14} /> Mark paid</Btn>}
-                          </div>
+              {shown.map(inv => {
+                const st = invoiceStatus(inv), stage = invoiceStage(inv), reviewers = reviewersOf(inv), isOpen = openId === inv.id, idx = INVOICE_STAGES.findIndex(x => x.status === st);
+                return (
+                  <React.Fragment key={inv.id}>
+                    <tr>
+                      <Td mono>{formatDate((inv.submittedAt || '').slice(0, 10))}</Td>
+                      <Td>{artistName(inv.artistId)}</Td>
+                      <Td>{INVOICE_KINDS[inv.kind] || inv.kind}</Td>
+                      <Td>{inv.title}</Td>
+                      <Td align="right" mono>{formatCents(inv.amount)}</Td>
+                      <Td><Badge tone={INVOICE_TONES[st]}>{st}</Badge></Td>
+                      <Td>{stage ? (reviewers.length ? reviewers.map(m => m.name).join(', ') : <span style={{ color: C.amber }}>Unassigned</span>) : '—'}</Td>
+                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : canAct(inv) ? 'Review' : 'Open'}</button></Td>
+                    </tr>
+                    {isOpen && (
+                      <tr><td colSpan={8} style={{ padding: 0, borderBottom: '1px solid ' + C.border }}>
+                        <div className="imss-sub-review">
+                          <section className="imss-sub-wide" style={{ borderTop: 'none', paddingTop: 0 }}>
+                            <ol className="imss-steps" aria-label="Approval progress">
+                              {INVOICE_FLOW.map((step, i) => {
+                                const cur = INVOICE_FLOW.indexOf(st);
+                                const state = st === 'Rejected' ? (i === 0 ? 'done' : 'todo') : i < cur || st === 'Paid' ? 'done' : i === cur ? 'current' : 'todo';
+                                return <li key={step} className={'is-' + state} aria-current={state === 'current' ? 'step' : undefined}><span className="imss-step-dot" aria-hidden="true">{state === 'done' ? <CheckCircle2 size={14} /> : i + 1}</span><span>{step}</span></li>;
+                              })}
+                            </ol>
+                            {st === 'Rejected' && <div className="text-sm mt-2" style={{ color: C.red }}>Rejected{inv.reviewedBy ? ' by ' + inv.reviewedBy : ''}: {inv.reviewNote}</div>}
+                          </section>
+                          <section>
+                            <h3 className="imss-sub-h">Invoice</h3>
+                            <dl className="imss-sub-dl">
+                              <dt>Artist</dt><dd>{artistName(inv.artistId)}</dd>
+                              <dt>Type</dt><dd>{INVOICE_KINDS[inv.kind] || inv.kind}</dd>
+                              <dt>Amount</dt><dd style={{ fontFamily: MONO_FONT }}>{formatCents(inv.amount)}</dd>
+                              <dt>Invoice date</dt><dd>{formatDate(inv.invoiceDate)}</dd>
+                              <dt>Invoice no.</dt><dd>{inv.invoiceNumber || '—'}</dd>
+                              <dt>Pay to</dt><dd>{inv.payTo || '—'}</dd>
+                              <dt>Details</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{inv.details || '—'}</dd>
+                              <dt>File</dt><dd>{inv.attachment ? <a href={inv.attachment} download={inv.attachmentName || 'invoice'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download {inv.attachmentName || 'file'}</a> : '—'}</dd>
+                            </dl>
+                          </section>
+                          <section>
+                            <h3 className="imss-sub-h">History</h3>
+                            <ol className="imss-history">
+                              <li><b>Submitted</b> by {artistName(inv.artistId)} · {formatDate((inv.submittedAt || '').slice(0, 10))}</li>
+                              {(inv.history || []).map((h, i) => (
+                                <li key={i}><b style={{ textTransform: 'capitalize' }}>{h.action}</b> by {h.by} · {formatDate(String(h.at).slice(0, 10))} <span style={{ color: C.textDim }}>({h.from} → {h.to})</span>{h.note && <div style={{ color: C.textDim, whiteSpace: 'pre-wrap' }}>“{h.note}”</div>}</li>
+                              ))}
+                            </ol>
+                          </section>
+                          {canAct(inv) && (
+                            <section className="imss-sub-wide">
+                              <h3 className="imss-sub-h">{st}: your decision{isAdmin && !reviewers.some(m => me && m.id === me.id) ? ' (as Admin)' : ''}</h3>
+                              <Field label={idx === 0 ? 'Note (needed to reject)' : 'Note (needed to send back or reject)'}>
+                                <TextArea rows={2} value={note} onChange={e => { setNote(e.target.value); setError(''); }} placeholder="e.g. Receipt doesn’t match the amount" />
+                              </Field>
+                              {error && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{error}</div>}
+                              <div className="flex gap-2 flex-wrap mt-3">
+                                <Btn variant="primary" onClick={() => move(inv, 'approve')}><CheckCircle2 size={14} /> {stage.approve}{stage.status !== 'Pay Approved' && INVOICE_STAGES[idx + 1] ? ' → ' + INVOICE_STAGES[idx + 1].status : ''}</Btn>
+                                {idx > 0 && <Btn variant="ghost" onClick={() => move(inv, 'back')}><ChevronLeft size={14} /> Send back to {INVOICE_STAGES[idx - 1].status}</Btn>}
+                                <Btn variant="danger" onClick={() => move(inv, 'reject')}>Reject</Btn>
+                              </div>
+                            </section>
+                          )}
                         </div>
-                      )}
-                    </td></tr>
-                  )}
-                </React.Fragment>
-              ))}
+                      </td></tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -5092,7 +5220,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   // Invoices and expenses the artist paid themselves.
   const myInvoices = useMemo(() => [...invoices.filter(i => i.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [invoices, artist.id]);
   const myExpenseClaims = myInvoices.filter(i => i.kind === 'expense');
-  const invoicesDue = myInvoices.filter(i => i.status === 'Approved').reduce((t, i) => t + (Number(i.amount) || 0), 0);
+  const invoicesDue = myInvoices.filter(i => invoiceStatus(i) === 'Pay Approved').reduce((t, i) => t + (Number(i.amount) || 0), 0);
   const emptyInvoice = { kind: 'expense', title: '', invoiceNumber: '', invoiceDate: todayStr(), amount: '', payTo: '', details: '', attachment: '', attachmentName: '' };
   const [invoiceForm, setInvoiceForm] = useState(emptyInvoice);
   const [invoiceError, setInvoiceError] = useState('');
@@ -5111,7 +5239,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     const amount = Math.round(parseFloat(invoiceForm.amount) * 100) / 100;
     if (!invoiceForm.title.trim()) { setInvoiceError('Add a short description of what the invoice is for.'); return; }
     if (!(amount > 0)) { setInvoiceError('Enter the amount in USD, for example 120.50.'); return; }
-    const invoice = { id: uid(), artistId: artist.id, ...invoiceForm, title: invoiceForm.title.trim(), amount, status: 'Pending', submittedAt: new Date().toISOString() };
+    const invoice = { id: uid(), artistId: artist.id, ...invoiceForm, title: invoiceForm.title.trim(), amount, status: 'PM Approval', history: [], submittedAt: new Date().toISOString() };
     updateInvoices([invoice, ...invoices]);
     setInvoiceForm(emptyInvoice); setInvoiceError(''); setInvoiceSent(true);
     if (invoiceFileRef.current) invoiceFileRef.current.value = '';
@@ -6271,7 +6399,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       <tr key={i.id}>
                         <Td mono>{formatDate(i.invoiceDate)}</Td>
                         <Td>{i.title}</Td>
-                        <Td><Badge tone={INVOICE_TONES[i.status]}>{i.status}</Badge></Td>
+                        <Td><Badge tone={INVOICE_TONES[invoiceStatus(i)]}>{artistInvoiceStatus(i)}</Badge></Td>
                         <Td align="right" mono>{formatCents(i.amount)}</Td>
                       </tr>
                     ))}
@@ -6329,7 +6457,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td>{INVOICE_KINDS[i.kind] || i.kind}</Td>
                         <Td>{i.title}{i.reviewNote ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>Label: {i.reviewNote}</div> : null}</Td>
                         <Td align="right" mono>{formatCents(i.amount)}</Td>
-                        <Td><Badge tone={INVOICE_TONES[i.status]}>{i.status}</Badge></Td>
+                        <Td><Badge tone={INVOICE_TONES[invoiceStatus(i)]}>{artistInvoiceStatus(i)}</Badge></Td>
                       </tr>
                     ))}
                   </tbody>
@@ -6634,6 +6762,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
 
+  // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
+  const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
+  const inInvoiceWorkflow = !!sessionStaff && Object.values((labelSettings || {}).invoiceWorkflow || {}).some(ids => (ids || []).includes(sessionStaff.id));
   const NAV = [
     perms.analytics && { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Analytics' },
     perms.analytics && { id: 'streams', label: 'Streams', icon: Radio, group: 'Analytics' },
@@ -6649,7 +6780,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.royalties && { id: 'mastergross', label: 'Master Gross', icon: Coins, group: 'Finance' },
     perms.spend && { id: 'ledger', label: 'Ledger', icon: Wallet, group: 'Finance' },
     perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Finance' },
-    perms.spend && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Finance' },
+    (perms.spend || inInvoiceWorkflow) && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Finance' },
     perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Finance' },
     perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Finance' },
 
@@ -6736,7 +6867,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalog} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
-        {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} canEdit={canEdit} sessionName={session.name} pmScope={pmScope} />}
+        {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
         {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={masterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}

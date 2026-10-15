@@ -199,6 +199,15 @@ export const GLOBAL_STYLES = `
 .imss-my-subs { list-style: none; margin: 0; padding: 0; border-top: 1px solid ${C.border}; }
 .imss-my-subs > li { padding: 14px 16px; }
 .imss-my-subs > li + li { border-top: 1px solid ${C.border}; }
+.imss-wf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.imss-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: center; }
+.imss-steps li { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: ${C.textDim}; padding: 4px 10px 4px 4px; border-radius: 9999px; border: 1px solid ${C.border}; }
+.imss-steps li + li::before { content: ''; width: 10px; height: 1px; background: ${C.border}; margin-left: -9px; margin-right: 2px; }
+.imss-step-dot { width: 22px; height: 22px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; font: 600 11px ${MONO_FONT}; background: rgba(255,255,255,0.06); }
+.imss-steps li.is-done { color: ${C.text}; } .imss-steps li.is-done .imss-step-dot { background: ${C.tealSoft}; color: ${C.teal}; }
+.imss-steps li.is-current { color: ${C.amber}; border-color: rgba(231,162,61,0.55); background: ${C.amberSoft}; font-weight: 600; } .imss-steps li.is-current .imss-step-dot { background: ${C.amber}; color: #1A1500; }
+.imss-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.imss-history li { padding-left: 12px; border-left: 2px solid ${C.border}; }
 .imss-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9999px; border: 1px solid; font-size: 13px; font-weight: 600; }
 .imss-chip small { font-size: 11px; font-weight: 500; opacity: 0.85; }
 .imss-chip button { display: inline-flex; margin-left: 2px; color: inherit; opacity: 0.8; }

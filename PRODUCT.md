@@ -303,10 +303,20 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 - **Ledger** — non-royalty income and expenses. Filters by type and artist.
   Recoupment-status table per artist (spent / earned / balance). PM-scoped.
 - **Budget** — label-wide category allocations vs actual spend. Hidden for PMs.
-- **Invoices** — artists' expense claims and service invoices. Filter by
-  status, open one to see its details and attachment, approve or reject with an
-  optional note to the artist, then mark paid. Gated on `spend`; PMs see only
-  their artists.
+- **Invoices** — artists' expense claims and service invoices move through an
+  approval pipeline: **Submitted → PM Approval → Finance Queue → LH Queue → DP
+  Queue → Pay Approved → Paid**. PM Approval goes to the artist's Product
+  Manager (from the Roster); an Admin assigns one or more people to Finance,
+  LH, DP and Pay Approved in the **Workflow** panel (stored in
+  `labelSettings.invoiceWorkflow`). At each stage the assigned reviewer (or any
+  Admin) can **Approve** (next stage), **Send back** to the previous stage, or
+  **Reject**; send back and reject need a note. Pay Approved's action is
+  **Mark paid**. Tabs: My queue, each stage, Paid, Rejected, All. Every step is
+  recorded in the invoice's history, and the people for the next stage are
+  emailed. Anyone assigned to a queue sees Invoices even without the `spend`
+  permission. Artists see "In review · step N of 7", "Approved for payment",
+  "Paid" or "Rejected" with the reason, and are emailed when it's paid or
+  rejected.
 - **Payouts** — pick artist + period → generates a statement live from the
   formulas; save as draft or mark paid. Label P&L KPIs. Recoupment table.
 - **Statements** — pick an artist, choose a period, Generate → month-by-month

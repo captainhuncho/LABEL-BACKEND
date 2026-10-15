@@ -18,7 +18,7 @@ const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -42,6 +42,24 @@ async function teamFor(artist: Item | undefined): Promise<string[]> {
     .map(s => String(s.email || '').trim())
     .filter(e => e.includes('@'));
   return [...new Set(emails.map(lower))];
+}
+
+// Invoice queues: PM Approval → the artist's PM; the rest → people an Admin
+// assigned in labelSettings.invoiceWorkflow. Falls back to Admins.
+const STAGE_KEY: Record<string, string> = { 'Finance Queue': 'finance', 'LH Queue': 'lh', 'DP Queue': 'dp', 'Pay Approved': 'pay' };
+async function stageReviewers(status: string, artist: Item | undefined): Promise<string[]> {
+  const staff = await section('staff');
+  const active = staff.filter(m => (m.status || 'Active') !== 'Inactive');
+  let people: Item[] = [];
+  if (status === 'PM Approval' || status === 'Pending') {
+    people = active.filter(m => artist?.productManager && lower(m.name) === lower(artist.productManager));
+  } else if (STAGE_KEY[status]) {
+    const { data } = await db.from('app_data').select('value').eq('key', 'labelSettings').maybeSingle();
+    const ids: string[] = (data?.value?.invoiceWorkflow || {})[STAGE_KEY[status]] || [];
+    people = active.filter(m => ids.includes(m.id));
+  }
+  if (!people.length) people = active.filter(m => m.role === 'Admin');
+  return [...new Set(people.map(m => lower(m.email)).filter(e => e.includes('@')))];
 }
 
 // ---------- mail ----------
@@ -106,10 +124,29 @@ async function handleEvent(ev: Event) {
     }
     if (ev.key === 'invoices') {
       const kind = item.kind === 'expense' ? 'expense claim' : 'service invoice';
-      return send(team, `New ${kind} from ${artistName}: $${Number(item.amount || 0).toFixed(2)}`,
-        page(`${artistName} submitted an ${kind}`, [`<b>${esc(item.title || '')}</b> · $${Number(item.amount || 0).toFixed(2)}`, 'Review it in Invoices to approve, reject or mark it paid.'],
+      return send(await stageReviewers('PM Approval', artist), `PM Approval: ${kind} from ${artistName}, $${Number(item.amount || 0).toFixed(2)}`,
+        page(`${artistName} submitted an ${kind}`, [`<b>${esc(item.title || '')}</b> · $${Number(item.amount || 0).toFixed(2)}`, 'It’s waiting for PM Approval in Invoices.'],
           { label: 'Open Invoices', url: `${APP_URL}/` }, item.details || undefined));
     }
+  }
+
+  if (ev.type === 'stage' && ev.key === 'invoices') {
+    const amount = `$${Number(item.amount || 0).toFixed(2)}`;
+    const last = (Array.isArray(item.history) ? item.history : []).slice(-1)[0] || {};
+    if (item.status === 'Rejected') {
+      return send([artistEmail], `Your invoice “${item.title}” wasn’t approved`,
+        page('Your invoice wasn’t approved', [`Hi ${esc(artistName)}, your invoice <b>${esc(item.title)}</b> (${amount}) wasn’t approved.`],
+          { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined));
+    }
+    if (item.status === 'Paid') {
+      return send([artistEmail], `Paid: your invoice “${item.title}” (${amount})`,
+        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }));
+    }
+    const reviewers = await stageReviewers(item.status, artist);
+    const back = last.action === 'sent back';
+    return send(reviewers, `${back ? 'Sent back' : 'Ready'} for ${item.status}: ${artistName}, ${amount}`,
+      page(`${item.status}: ${artistName}`, [`<b>${esc(item.title)}</b> · ${amount}`, back ? `${esc(last.by || 'Someone')} sent it back from ${esc(last.from || 'the next queue')}.` : `${esc(last.by || 'It')} approved it at ${esc(last.from || 'the previous queue')}; it’s now waiting for you.`],
+        { label: 'Open Invoices', url: `${APP_URL}/` }, last.note || undefined));
   }
 
   if (ev.type === 'message') {
