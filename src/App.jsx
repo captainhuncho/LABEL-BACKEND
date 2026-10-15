@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, History, LayoutDashboard, LogOut, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
+import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
 import Papa from 'papaparse';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -731,6 +731,25 @@ function ArtistDetailPanel({ artist, roster, catalog, revenue, streams, masterGr
   );
 }
 
+// Admin-only: emails someone a fresh sign-in link (same email they'd get from the sign-in page).
+function SendLinkButton({ email }) {
+  const [state, setState] = useState('idle');
+  if (!supabase || !email) return null;
+  async function send() {
+    setState('sending');
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+    setState(error ? 'error' : 'sent');
+    setTimeout(() => setState('idle'), 4000);
+  }
+  const label = state === 'sent' ? 'Sign-in link sent to ' + email : state === 'error' ? 'Could not send. Try again shortly.' : 'Email ' + email + ' a sign-in link';
+  return (
+    <button onClick={send} disabled={state === 'sending'} title={label} aria-label={label}
+      style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textDim }}>
+      {state === 'sent' ? <CheckCircle2 size={14} /> : <Mail size={14} />}
+    </button>
+  );
+}
+
 function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '' };
@@ -1020,6 +1039,7 @@ function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope
                         <ConfirmInline onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
                       ) : canEdit ? (
                         <span className="inline-flex gap-3 justify-end">
+                          {isAdmin && <SendLinkButton email={a.email} />}
                           <button onClick={() => openEdit(a)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                           <button onClick={() => setConfirmId(a.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                         </span>
@@ -1537,6 +1557,7 @@ function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', a
                     <Td align="right">
                       {confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : (
                         <span className="inline-flex gap-3 justify-end">
+                          {isTopRole(sessionRole) && <SendLinkButton email={s.email} />}
                           <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                           <button onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                         </span>
