@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
+import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
 import { ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
@@ -5652,7 +5653,7 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
   );
 }
 
-export default function RecordLabelDashboard() {
+export default function RecordLabelDashboard({ authEmail = null, signOut = null }) {
   const [roster, setRoster] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [revenue, setRevenue] = useState([]);
@@ -5683,7 +5684,8 @@ export default function RecordLabelDashboard() {
       let needsReseed = false;
       try {
         const versionRes = await window.storage.get('dataVersion', false);
-        if (!versionRes || versionRes.value !== DATA_VERSION) needsReseed = true;
+        // Shared data is never wiped on a version bump; only a fresh database gets seeded.
+        if (!versionRes || versionRes.value !== DATA_VERSION) needsReseed = !supabase;
       } catch (e) {
         needsReseed = true;
       }
@@ -5842,6 +5844,13 @@ export default function RecordLabelDashboard() {
 
   const shellStyle = { background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text };
 
+  // Signed in by email: the staff record with that email decides role and access.
+  const authMember = authEmail ? staff.find(s => (s.email || '').toLowerCase() === authEmail.toLowerCase()) : null;
+  useEffect(() => {
+    if (!loading && authMember && !session) setSession({ mode: 'team', name: authMember.name, role: authMember.role, permissions: permissionsFor(authMember) });
+  }, [loading, authMember, session]);
+  const logout = () => { setSession(null); if (signOut) signOut(); };
+
   if (loading) {
     return (
       <div style={shellStyle} className="w-full rounded-lg border flex flex-col items-center justify-center gap-2 imss-gate" >
@@ -5856,6 +5865,17 @@ export default function RecordLabelDashboard() {
     );
   }
 
+  if (authEmail && !authMember && !loading) {
+    return (
+      <div className="p-8 text-sm" style={{ color: C.text, fontFamily: HEADING_FONT }} role="alert">
+        <style>{GLOBAL_STYLES}</style>
+        <p className="mb-3">{authEmail} isn't on the IMSS Records team list. Ask an Admin to add this email on the Team screen.</p>
+        <Btn variant="ghost" onClick={signOut}>Sign out</Btn>
+      </div>
+    );
+  }
+  if (authEmail && !session) return null;
+
   if (!session) {
     return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
   }
@@ -5863,7 +5883,7 @@ export default function RecordLabelDashboard() {
   if (session.mode === 'artist') {
     const artist = roster.find(a => a.id === session.artistId);
     if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} labelSettings={labelSettings} onLogout={() => setSession(null)} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (
@@ -5873,7 +5893,7 @@ export default function RecordLabelDashboard() {
       <div className="imss-bg-blob imss-bg-blob-2"></div>
       <div className="imss-bg-blob imss-bg-blob-3"></div>
       <div className="imss-bg-blob imss-bg-blob-4"></div>
-      <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={() => setSession(null)} />
+      <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
         <TopBar roster={roster} catalog={catalog} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} setActive={setActive} />

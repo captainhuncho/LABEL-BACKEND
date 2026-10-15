@@ -1,14 +1,32 @@
 # IMSS Records — Label Operations Dashboard
 
 Internal dashboard for running the label: roster, catalog, royalties, payouts,
-expenses, and team access. React + Vite, no backend.
+expenses, and team access. React + Vite, with Supabase for shared data and
+email-link sign-in.
 
 ## Running it
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
+npm test           # finance baseline
 ```
+
+## Backend (Supabase)
+
+- `.env.local` holds `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
+  (both public). Without them the app runs on localStorage as before.
+- Data: one table `app_data` (`key` = section name, `value` = jsonb), behind
+  `window.storage` in `src/storage.js`.
+- Access: row-level security lets a signed-in user read/write only if their
+  email is on the `staff` list (`is_team_member()`). Role permissions are still
+  enforced in the app, not the database.
+- Sign-in: `src/AuthGate.jsx` (email link). The signed-in email picks the staff
+  record; there is no name picker in Supabase mode.
+- With Supabase, a `DATA_VERSION` bump does **not** reseed; only an empty
+  database gets seed data. Shape changes need a migration of `app_data`.
+- Production builds leave the real roster/catalog/revenue/master gross out of
+  the JS bundle (`OMIT_REAL_DATA` in `seed.js`).
 
 ## Where things live
 
@@ -20,7 +38,8 @@ npm run dev        # http://localhost:5173
 | `src/constants.js` | Domain constants, roles/permissions, formatters | ~425 lines |
 | `src/ui.jsx` | Shared primitives: `Btn`, `Field`, `Input`, `Th`/`Td`, `KPICard`, `ExportBar` | ~190 lines |
 | `src/theme.js` | Colour tokens (`C`), fonts, `GLOBAL_STYLES` | ~125 lines |
-| `src/storage.js` | `window.storage` adapter (localStorage today) | ~20 lines |
+| `src/storage.js` | `window.storage` adapter: Supabase or localStorage | ~45 lines |
+| `src/AuthGate.jsx` | Email-link sign-in screen | ~70 lines |
 
 `App.jsx` is still large. When you touch a screen, consider lifting that one
 component into `src/sections/` rather than refactoring the whole file at once.

@@ -2,7 +2,12 @@
 import { ONBOARDING_TASKS_TEMPLATE, defaultPermissionsForRole, todayStr } from './constants.js';
 import { slug } from './finance.js';
 
-export const SEED_ROSTER = [
+// Production builds read live data from Supabase, so the real roster and
+// revenue are left out of the public JS bundle. Dev and tests still get them
+// to seed a fresh database.
+const OMIT_REAL_DATA = import.meta.env?.PROD === true;
+
+export const SEED_ROSTER = OMIT_REAL_DATA ? [] : [
   { id: "aizo-clutch", name: "Aizo Clutch", genre: '', subGenre: '', royaltyRate: 70.0, artistPct: 0.7, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },
   { id: "d-h", name: "D.H", genre: '', subGenre: '', royaltyRate: 70.0, artistPct: 0.7, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },
   { id: "daboy-kenzi", name: "Daboy Kenzi", genre: '', subGenre: '', royaltyRate: 75.0, artistPct: 0.75, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },
@@ -21,7 +26,7 @@ export const SEED_ROSTER = [
 
 // Catalog derived from the real royalty history — one release per distinct track,
 // carrying that track's own type and release date.
-export const SEED_CATALOG = [
+export const SEED_CATALOG = OMIT_REAL_DATA ? [] : [
   { id: "aizo-clutch_first-love-rebass", artistId: "aizo-clutch", title: "First Love (ReBass)", type: "Single", releaseDate: "2024-02-08", isrc: '', upc: '', status: 'Released', enteredBy: 'Ledger import', hasVideo: false, licenseExpiration: '', primaryMarket: '', secondaryMarket: '' },
   { id: "aizo-clutch_ask-me-nothing", artistId: "aizo-clutch", title: "Ask Me Nothing", type: "EP Track", releaseDate: "2024-09-12", isrc: '', upc: '', status: 'Released', enteredBy: 'Ledger import', hasVideo: false, licenseExpiration: '', primaryMarket: '', secondaryMarket: '' },
   { id: "aizo-clutch_intro", artistId: "aizo-clutch", title: "Intro", type: "EP Track", releaseDate: "2025-02-13", isrc: '', upc: '', status: 'Released', enteredBy: 'Ledger import', hasVideo: false, licenseExpiration: '', primaryMarket: '', secondaryMarket: '' },
@@ -117,7 +122,7 @@ export function revenueRow(id, artist, title, month, earning, type, epAlbum, rel
   return { id, artist, artistSlug: slug(artist), title, month, earning, type, epAlbum: epAlbum || null, releaseDate: releaseDate || null, approvalStatus: approvalStatus || 'Approved', approvedBy: approvalStatus === 'Pending' ? '' : 'Maxwell', approvedAt: approvalStatus === 'Pending' ? '' : todayStr() };
 }
 // One row per track per month, exactly as held in the Ledger & Royalties ledger.
-export const SEED_REVENUE = [
+export const SEED_REVENUE = OMIT_REAL_DATA ? [] : [
   revenueRow("aizo-clutch_100xp_2026-06", "Aizo Clutch", "100XP", "2026-06", 28.18, "EP Track", "Glow Lock", "2026-04-23"),
   revenueRow("aizo-clutch_100xp_2026-07", "Aizo Clutch", "100XP", "2026-07", 36.41, "EP Track", "Glow Lock", "2026-04-23"),
   revenueRow("aizo-clutch_100xp_2026-08", "Aizo Clutch", "100XP", "2026-08", 38.28, "EP Track", "Glow Lock", "2026-04-23"),
@@ -718,7 +723,7 @@ export const SEED_REVENUE = [
 
 // masterGross: one row per calendar month, company-wide.
 // Company-wide remittances actually received, one row per calendar month.
-export const SEED_MASTER_GROSS = [
+export const SEED_MASTER_GROSS = OMIT_REAL_DATA ? [] : [
   { id: "2023-12", month: "2023-12", totalGross: 0, swiftFee: 0 },
   { id: "2024-01", month: "2024-01", totalGross: 0, swiftFee: 0 },
   { id: "2024-02", month: "2024-02", totalGross: 43.71, swiftFee: 3.98 },
@@ -765,7 +770,7 @@ export const SEED_LABEL_SETTINGS = { swiftFee: 30 };
 export const DATA_VERSION = 'v27-access-control';
 
 export const SEED_STAFF = [
-  { id: 'st0', name: 'Maxwell', role: 'Admin', email: 'maxwell@imssrecords.co', phone: '', startDate: '2022-01-10', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Admin'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st0', label, done: true })) },
+  { id: 'st0', name: 'Maxwell', role: 'Admin', email: 'maxwelladjavon@gmail.com', phone: '', startDate: '2022-01-10', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Admin'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st0', label, done: true })) },
   { id: 'stl', name: 'Adwoa Mensah', role: 'Legal', email: 'legal@imssrecords.co', phone: '', startDate: '2023-08-01', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Legal'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-stl', label, done: true })) },
   { id: 'st1', name: 'Dana Whitfield', role: 'Product Manager', email: 'dana@imssrecords.co', phone: '', startDate: '2022-11-02', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Product Manager'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st1', label, done: true })) },
   { id: 'st2', name: 'Priya Anand', role: 'Product Manager', email: 'priya@imssrecords.co', phone: '', startDate: '2023-04-18', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Product Manager'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st2', label, done: true })) },
