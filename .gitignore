@@ -5,4 +5,6 @@ dist/
 .env
 .env.*
 ops-upload.zip
-.impeccable/
+.impeccable/*
+!.impeccable/design.json
+!.impeccable/surfaces/

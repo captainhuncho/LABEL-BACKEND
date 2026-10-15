@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T21:01:38.021897Z",
+  "title": "Design System: IMSS Records — Label Operations",
+  "extensions": {
+    "colorMeta": {
+      "tape-amber": {
+        "role": "primary",
+        "displayName": "Tape Amber",
+        "canonical": "#E7A23D",
+        "tonalRamp": [
+          "oklch(15% 0.14 70)",
+          "oklch(25% 0.14 70)",
+          "oklch(35% 0.14 70)",
+          "oklch(48% 0.14 70)",
+          "oklch(60% 0.14 70)",
+          "oklch(72% 0.14 70)",
+          "oklch(84% 0.14 70)",
+          "oklch(95% 0.14 70)"
+        ]
+      },
+      "console-teal": {
+        "role": "secondary",
+        "displayName": "Console Teal",
+        "canonical": "#5FA593",
+        "tonalRamp": [
+          "oklch(15% 0.07 170)",
+          "oklch(25% 0.07 170)",
+          "oklch(35% 0.07 170)",
+          "oklch(48% 0.07 170)",
+          "oklch(60% 0.07 170)",
+          "oklch(72% 0.07 170)",
+          "oklch(84% 0.07 170)",
+          "oklch(95% 0.07 170)"
+        ]
+      },
+      "oxide-red": {
+        "role": "tertiary",
+        "displayName": "Oxide Red",
+        "canonical": "#C1584A",
+        "tonalRamp": [
+          "oklch(15% 0.12 30)",
+          "oklch(25% 0.12 30)",
+          "oklch(35% 0.12 30)",
+          "oklch(48% 0.12 30)",
+          "oklch(60% 0.12 30)",
+          "oklch(72% 0.12 30)",
+          "oklch(84% 0.12 30)",
+          "oklch(95% 0.12 30)"
+        ]
+      },
+      "vault-black": {
+        "role": "neutral",
+        "displayName": "Vault Black",
+        "canonical": "#14171A",
+        "tonalRamp": [
+          "oklch(15% 0.008 230)",
+          "oklch(25% 0.008 230)",
+          "oklch(35% 0.008 230)",
+          "oklch(48% 0.008 230)",
+          "oklch(60% 0.008 230)",
+          "oklch(72% 0.008 230)",
+          "oklch(84% 0.008 230)",
+          "oklch(95% 0.008 230)"
+        ]
+      },
+      "ivory-ink": {
+        "role": "neutral",
+        "displayName": "Ivory Ink",
+        "canonical": "#EEEAE2",
+        "tonalRamp": [
+          "oklch(15% 0.012 85)",
+          "oklch(25% 0.012 85)",
+          "oklch(35% 0.012 85)",
+          "oklch(48% 0.012 85)",
+          "oklch(60% 0.012 85)",
+          "oklch(72% 0.012 85)",
+          "oklch(84% 0.012 85)",
+          "oklch(95% 0.012 85)"
+        ]
+      },
+      "ash-ink": {
+        "role": "neutral",
+        "displayName": "Ash Ink",
+        "canonical": "#9BA1A1"
+      },
+      "smoke-ink": {
+        "role": "neutral",
+        "displayName": "Smoke Ink",
+        "canonical": "#686E6E"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "One balance figure per screen, e.g. the artist's amount owed."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions and notices."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, table headers, nav group names."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Every amount in tables and breakdowns."
+      },
+      "kpi-figure": {
+        "displayName": "KPI figure",
+        "purpose": "Figures on KPI cards."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-rest",
+        "value": "0 1px 2px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.22)",
+        "purpose": "Bordered cards at rest."
+      },
+      {
+        "name": "panel-lifted",
+        "value": "0 4px 10px rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.28)",
+        "purpose": "Clickable cards on hover."
+      },
+      {
+        "name": "button-lift",
+        "value": "0 6px 16px rgba(0,0,0,0.22)",
+        "purpose": "Buttons on hover with translateY(-1px)."
+      },
+      {
+        "name": "focus-glow",
+        "value": "0 0 0 3px rgba(231,162,61,0.2)",
+        "purpose": "Focused inputs, with an amber border."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-ui",
+        "value": "ease 0.18s",
+        "purpose": "Buttons, inputs, nav and card hover."
+      },
+      {
+        "name": "ease-out-quick",
+        "value": "cubic-bezier(0.16,1,0.3,1) 160ms",
+        "purpose": "Portal nav and ledger row hover."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "owed-stack",
+        "value": "900px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a view.",
+      "html": "<button class=\"ds-btn-primary\">Generate statement</button>",
+      "css": ".ds-btn-primary{background:linear-gradient(135deg,#E7A23D,#C77F1F);color:#1A1500;border:1px solid rgba(231,162,61,0.6);border-radius:14px;padding:8px 14px;font:500 14px 'Space Grotesk',sans-serif;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}.ds-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.22);filter:brightness(1.06)}.ds-btn-primary:focus-visible{outline:2px solid #E7A23D;outline-offset:2px}.ds-btn-primary:active{transform:none;box-shadow:none}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary actions and export bars.",
+      "html": "<button class=\"ds-btn-ghost\">CSV</button>",
+      "css": ".ds-btn-ghost{background:rgba(255,255,255,0.04);color:#EEEAE2;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px 14px;font:500 14px 'Space Grotesk',sans-serif;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}.ds-btn-ghost:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.22)}.ds-btn-ghost:focus-visible{outline:2px solid #E7A23D;outline-offset:2px}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive actions.",
+      "html": "<button class=\"ds-btn-danger\">Delete</button>",
+      "css": ".ds-btn-danger{background:rgba(193,88,74,0.1);color:#C1584A;border:1px solid rgba(193,88,74,0.5);border-radius:14px;padding:8px 14px;font:500 14px 'Space Grotesk',sans-serif;cursor:pointer}.ds-btn-danger:hover{filter:brightness(1.1)}.ds-btn-danger:focus-visible{outline:2px solid #E7A23D;outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Every text field, select and textarea.",
+      "html": "<label class=\"ds-field\">Email<input class=\"ds-input\" placeholder=\"you@example.com\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:4px;font:12px 'Space Grotesk',sans-serif;color:#9BA1A1}.ds-input{background:rgba(20,23,26,0.85);border:1px solid rgba(255,255,255,0.18);color:#EEEAE2;border-radius:10px;padding:7px 9px;font:13px 'Space Grotesk',sans-serif;transition:border-color .18s ease,box-shadow .18s ease}.ds-input:focus{outline:none;border-color:rgba(231,162,61,0.75);box-shadow:0 0 0 3px rgba(231,162,61,0.2)}"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Grouped sidebar navigation; current page in Tape Amber.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-nav-group\">Money</div><a class=\"ds-nav-item ds-active\">Earnings</a><a class=\"ds-nav-item\">Statements</a><a class=\"ds-nav-item\">Requests <span class=\"ds-count\">2</span></a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:4px;width:224px;padding:8px;background:rgba(20,23,26,0.92);border-right:1px solid rgba(255,255,255,0.14);font-family:'Space Grotesk',sans-serif}.ds-nav-group{color:#9BA1A1;font-size:11px;font-weight:600;padding:14px 12px 4px}.ds-nav-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:14px;font-size:14px;font-weight:500;color:#9BA1A1;cursor:pointer;transition:background-color 160ms cubic-bezier(0.16,1,0.3,1),color 160ms}.ds-nav-item:hover{background:rgba(255,255,255,0.05);color:#EEEAE2}.ds-nav-item.ds-active{background:rgba(231,162,61,0.2);color:#E7A23D;font-weight:600}.ds-count{background:#E7A23D;color:#1A1500;border-radius:9999px;font-size:10px;font-weight:700;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-teal",
+      "description": "Status and release type.",
+      "html": "<span class=\"ds-badge ds-teal\">Released</span> <span class=\"ds-badge\">EP Track</span>",
+      "css": ".ds-badge{display:inline-block;padding:2px 8px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);color:#9BA1A1;font:600 10.5px 'Space Grotesk',sans-serif;text-transform:uppercase;letter-spacing:.02em}.ds-badge.ds-teal{background:rgba(95,165,147,0.2);color:#5FA593;border-color:rgba(95,165,147,0.55)}"
+    },
+    {
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Every card and table container.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">Total gross</div><div class=\"ds-card-fig\">$13,257</div></div>",
+      "css": ".ds-card{background:rgba(20,23,26,0.92);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px;color:#EEEAE2;box-shadow:0 1px 2px rgba(0,0,0,0.25),0 6px 16px rgba(0,0,0,0.22);font-family:'Space Grotesk',sans-serif}.ds-card-label{font-size:12px;color:#9BA1A1;margin-bottom:12px}.ds-card-fig{font:600 22px 'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Release Ledger Row",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Artist portal: a release ranked by what it earned the artist.",
+      "html": "<button class=\"ds-ledger\"><span class=\"ds-art\">AS</span><span class=\"ds-name\"><b>Ask Me Nothing</b><small>EP Track · Sep 12, 2024</small></span><span class=\"ds-bar\"><i style=\"width:100%\"></i></span><span class=\"ds-amt\">$294.36<small>Aug 26 +$107.36</small></span></button>",
+      "css": ".ds-ledger{width:100%;display:grid;grid-template-columns:44px minmax(0,1.4fr) minmax(80px,1fr) auto;align-items:center;gap:16px;padding:12px 16px;background:rgba(20,23,26,0.92);border:1px solid rgba(255,255,255,0.14);border-radius:14px;color:#EEEAE2;text-align:left;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:background-color 160ms cubic-bezier(0.16,1,0.3,1)}.ds-ledger:hover{background:rgba(40,44,48,0.95)}.ds-ledger:hover .ds-bar i{background:#5FA593}.ds-art{width:44px;height:44px;border-radius:6px;background:#7FB7A4;color:#14171A;font-weight:700;display:flex;align-items:center;justify-content:center}.ds-name{display:flex;flex-direction:column;gap:2px}.ds-name small,.ds-amt small{font-size:12px;color:#9BA1A1;font-weight:400}.ds-bar{height:8px;border-radius:9999px;background:rgba(255,255,255,0.06);overflow:hidden}.ds-bar i{display:block;height:100%;background:rgba(95,165,147,0.65);border-radius:9999px}.ds-amt{display:flex;flex-direction:column;align-items:flex-end;font:600 15px 'IBM Plex Mono',monospace;color:#5FA593;font-variant-numeric:tabular-nums}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Masters Vault",
+    "overview": "IMSS Records keeps its catalog and its money in one dark, secure room. The dashboard should feel like that vault: a near-black field with a faint warm-and-cool glow at the edges, quiet panels laid on top, and figures that read as exact. Nothing in it is loud. The two lights in the room, Tape Amber and Console Teal, each do one job: amber marks money owed and the place you are, teal marks money earned and things confirmed.\n\nIt's a working tool used daily by label staff, and by artists checking what they're owed, often on a phone. Density is moderate. Tables carry the real information and sit in a full hairline grid. Money is always set in mono with tabular numerals, so columns line up and amounts can't be misread. Prose stays short and plain.\n\nThe same world serves both doors. The team side and the artist portal share the canvas, the panels, the sidebar and the type; the portal simply leads with the artist's balance and their releases.",
+    "keyCharacteristics": [
+      "Near-black vault ground with a diagonal amber → black → green → violet glow and soft blurred colour blobs behind everything.",
+      "Translucent dark panels with 1px hairline borders and generous 14px corners.",
+      "Two accents with fixed meanings: amber = owed / active / primary action, teal = earned / confirmed.",
+      "Every amount in IBM Plex Mono with tabular figures.",
+      "Sidebar navigation on desktop that collapses to a swipeable strip on phones."
+    ],
+    "rules": [
+      {
+        "name": "The Two Lights Rule",
+        "body": "Amber means owed, active or act-now; teal means earned or confirmed. Never swap them, and never use either as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Readable Ink Rule",
+        "body": "Text a person must read is Ivory Ink or Ash Ink. Smoke Ink is for icons and placeholders, never for words that carry information.",
+        "section": "colors"
+      },
+      {
+        "name": "The Statement Figures Rule",
+        "body": "Every amount of money is set in IBM Plex Mono with tabular numerals and right-aligned in its column. Whole dollars on team overviews; cents wherever an artist reads a breakdown.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Scroll Rule",
+        "body": "Only the content pane scrolls. Never add a second scroll container inside a page; wide tables scroll sideways inside their own bordered box.",
+        "section": "layout"
+      },
+      {
+        "name": "The Soft Lift Rule",
+        "body": "Shadows are always offset and blurred, and only ever lift by 1px. No hard-edged block shadows, no coloured glows.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** set every amount in IBM Plex Mono with tabular numerals, right-aligned.",
+      "**Do** keep amber for owed / active / primary and teal for earned / confirmed (The Two Lights Rule).",
+      "**Do** use 14px corners on surfaces and buttons and 10px on inputs, with 1px Hairline borders.",
+      "**Do** put tables in a full hairline grid with a shaded header row.",
+      "**Do** show the arithmetic whenever you show an artist a total: gross, Inbound Banking Charge, label share, then their earnings.",
+      "**Do** call the swift fee \"Inbound Banking Charge\" everywhere a person can read it.",
+      "**Do** put responsive changes in the global stylesheet's media queries."
+    ],
+    "donts": [
+      "**Don't** use Smoke Ink (#686E6E) for text people need to read; it fails contrast on the vault ground.",
+      "**Don't** add a second scrolling area inside a page.",
+      "**Don't** use hard offset shadows, coloured glows or gradient text.",
+      "**Don't** use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`); breakpoints live in the stylesheet.",
+      "**Don't** show an artist gross figures without the breakdown beside them.",
+      "**Don't** open a modal for a delete; confirm inline."
+    ]
+  }
+}
