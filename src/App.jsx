@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
-import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
+import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueRowSplit, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { supabase } from './storage.js';
@@ -1337,9 +1337,18 @@ function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', a
     if (!file) return;
     resizeImageFile(file, 300, dataUrl => setForm(f => ({ ...f, photoUrl: dataUrl })));
   }
+  const [emailError, setEmailError] = useState('');
   function save(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    // A new or changed staff email must be on a label domain; unchanged existing ones keep working.
+    const previousEmail = editing ? ((staff.find(x => x.id === editing) || {}).email || '') : null;
+    const email = (form.email || '').trim();
+    if (!email) { setEmailError('Add their work email. It’s how they sign in.'); return; }
+    if (email.toLowerCase() !== String(previousEmail || '').toLowerCase() && !isStaffEmailAllowed(email)) {
+      setEmailError('Use a label email ending in ' + STAFF_EMAIL_DOMAINS.map(d => '@' + d).join(' or ') + '.'); return;
+    }
+    setEmailError('');
     if (editing) {
       const before = staff.find(s => s.id === editing);
       // Legal outranks nobody where Admin is concerned.
@@ -1451,7 +1460,10 @@ function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', a
                 {STAFF_ROLES.filter(r => !proposesOnly || editingAdmin || !isTopRole(r)).map(r => <option key={r} value={r}>{r}</option>)}
               </Select>
             </Field>
-            <Field label="Email"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Work email">
+              <Input type="email" required value={form.email} onChange={e => { setForm({ ...form, email: e.target.value }); setEmailError(''); }} placeholder={'name@' + STAFF_EMAIL_DOMAINS[0]} aria-invalid={!!emailError} />
+              {emailError && <span className="text-xs" role="alert" style={{ color: C.red }}>{emailError}</span>}
+            </Field>
             <Field label="Phone"><Input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Optional" /></Field>
             <Field label="Start date"><Input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} /></Field>
             <Field label="Status">

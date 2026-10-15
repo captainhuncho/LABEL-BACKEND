@@ -10,6 +10,12 @@ export const EXPLICIT_OPTIONS = ['Not Set', 'Explicit', 'Clean'];
 export function emptyCredits() {
   return { performedBy: '', writtenBy: '', producedBy: '', recordingEngineer: '', mixingEngineer: '', masteringEngineer: '', dolbyEngineer: '' };
 }
+// Staff sign in with a label address. imullar.com today; imssrecords.com when the team moves.
+export const STAFF_EMAIL_DOMAINS = ['imullar.com', 'imssrecords.com'];
+export function isStaffEmailAllowed(email) {
+  const domain = String(email || '').trim().toLowerCase().split('@')[1] || '';
+  return STAFF_EMAIL_DOMAINS.includes(domain);
+}
 export const COLLABORATOR_ROLES = ['Feature', 'Producer', 'Songwriter', 'Co-Writer', 'Remixer', 'Other'];
 // Roles that take a share of the song: a split % is required when one is listed.
 export const SPLIT_REQUIRED_ROLES = ['Feature', 'Producer', 'Songwriter', 'Co-Writer'];

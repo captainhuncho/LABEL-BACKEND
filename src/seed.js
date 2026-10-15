@@ -771,19 +771,6 @@ export const DATA_VERSION = 'v27-access-control';
 
 export const SEED_STAFF = [
   { id: 'st0', name: 'Maxwell', role: 'Admin', email: 'maxwelladjavon@gmail.com', phone: '', startDate: '2022-01-10', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Admin'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st0', label, done: true })) },
-  { id: 'stl', name: 'Adwoa Mensah', role: 'Legal', email: 'legal@imssrecords.co', phone: '', startDate: '2023-08-01', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Legal'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-stl', label, done: true })) },
-  { id: 'st1', name: 'Dana Whitfield', role: 'Product Manager', email: 'dana@imssrecords.co', phone: '', startDate: '2022-11-02', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Product Manager'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st1', label, done: true })) },
-  { id: 'st2', name: 'Priya Anand', role: 'Product Manager', email: 'priya@imssrecords.co', phone: '', startDate: '2023-04-18', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Product Manager'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st2', label, done: true })) },
-  { id: 'st3', name: 'Marcus Chen', role: 'A&R', email: 'marcus@imssrecords.co', phone: '', startDate: '2023-02-06', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('A&R'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st3', label, done: true })) },
-  { id: 'st4', name: 'Iris Okafor', role: 'A&R', email: 'iris@imssrecords.co', phone: '', startDate: '2024-06-24', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('A&R'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st4', label, done: true })) },
-  { id: 'st5', name: 'Elena Cross', role: 'Finance', email: 'elena@imssrecords.co', phone: '', startDate: '2024-09-09', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Finance'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st5', label, done: true })) },
-  { id: 'st6', name: 'Jordan Reyes', role: 'Marketing', email: 'jordan@imssrecords.co', phone: '', startDate: todayStr(), status: 'Onboarding', bio: 'Joining to lead campaign planning for Q4 releases.', photoUrl: '', permissions: defaultPermissionsForRole('Marketing'), onboarding: [
-    { id: 'ob0-st6', label: ONBOARDING_TASKS_TEMPLATE[0], done: true },
-    { id: 'ob1-st6', label: ONBOARDING_TASKS_TEMPLATE[1], done: true },
-    { id: 'ob2-st6', label: ONBOARDING_TASKS_TEMPLATE[2], done: false },
-    { id: 'ob3-st6', label: ONBOARDING_TASKS_TEMPLATE[3], done: false },
-    { id: 'ob4-st6', label: ONBOARDING_TASKS_TEMPLATE[4], done: false },
-  ] },
 ];
 
 export const TASK_STATUSES = ['Open', 'Done'];

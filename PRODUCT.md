@@ -315,6 +315,8 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 **Team**
 - **Team** — staff profiles, roles, the permission checkboxes, onboarding
   checklists. Admin/Legal only.
+  Staff work emails must end in **@imullar.com** (or **@imssrecords.com**, for
+  the planned move); an existing address that isn't changed keeps working.
 - **Access Requests** — queue of permission changes Legal proposed, each
   showing a from → to diff per changed field. Admin approves or rejects;
   approving is what applies the change. Legal sees status only.
