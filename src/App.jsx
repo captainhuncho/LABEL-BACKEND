@@ -732,7 +732,7 @@ function ArtistDetailPanel({ artist, roster, catalog, revenue, streams, masterGr
 }
 
 // Admin-only: emails someone a fresh sign-in link (same email they'd get from the sign-in page).
-function SendLinkButton({ email }) {
+function SendLinkButton({ email, labeled = false }) {
   const [state, setState] = useState('idle');
   if (!supabase || !email) return null;
   async function send() {
@@ -742,6 +742,17 @@ function SendLinkButton({ email }) {
     setTimeout(() => setState('idle'), 4000);
   }
   const label = state === 'sent' ? 'Sign-in link sent to ' + email : state === 'error' ? 'Could not send. Try again shortly.' : 'Email ' + email + ' a sign-in link';
+  // In edit forms: a full button naming the saved address the link goes to.
+  if (labeled) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <Btn variant="ghost" onClick={send} disabled={state === 'sending'}><Mail size={14} /> {state === 'sending' ? 'Sending…' : 'Send sign-in link'}</Btn>
+        <span className="text-xs" role="status" style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textFaint }}>
+          {state === 'idle' || state === 'sending' ? 'to ' + email : label}
+        </span>
+      </span>
+    );
+  }
   return (
     <button onClick={send} disabled={state === 'sending'} title={label} aria-label={label}
       style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textDim }}>
@@ -931,6 +942,7 @@ function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope
           <div className="imss-span-2 flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add artist'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+            {isAdmin && editing && <SendLinkButton labeled email={(roster.find(x => x.id === editing) || {}).email} />}
           </div>
         </form>
       )}
@@ -1493,6 +1505,7 @@ function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', a
           <div className="flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add team member'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+            {isTopRole(sessionRole) && editing && <SendLinkButton labeled email={(staff.find(x => x.id === editing) || {}).email} />}
           </div>
         </form>
       )}
