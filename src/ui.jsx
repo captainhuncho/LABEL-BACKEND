@@ -224,3 +224,20 @@ export function PeopleInput({ value, onChange, placeholder = 'Type a name, then 
     </div>
   );
 }
+
+// Drop a file anywhere on this box, or use the file input inside it.
+// onFiles gets the same { target: { files } } shape an input's onChange does.
+export function DropZone({ onFiles, accept = '', children, className = '', style }) {
+  const [over, setOver] = useState(false);
+  const ok = file => !accept || accept.split(',').some(a => { a = a.trim().toLowerCase(); return a.startsWith('.') ? file.name.toLowerCase().endsWith(a) : a.endsWith('/*') ? file.type.startsWith(a.slice(0, -1)) : file.type === a; });
+  return (
+    <div className={className}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (!over) setOver(true); }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(false); }}
+      onDrop={e => { e.preventDefault(); setOver(false); const files = [...(e.dataTransfer.files || [])].filter(ok); if (files.length) onFiles({ target: { files } }); }}
+      style={{ ...style, ...(over ? { borderColor: C.amber, background: C.amberSoft } : {}), transition: 'border-color 120ms, background 120ms' }}>
+      {children}
+      {over && <div className="text-xs mt-2" style={{ color: C.amber, fontWeight: 600 }}>Drop to upload</div>}
+    </div>
+  );
+}

@@ -9,7 +9,7 @@ import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STAT
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
-import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
+import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, DropZone, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
 function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmReset, onReseed, confirmReseed, setConfirmReseed, sessionName, onLogout }) {
   return (
@@ -4936,14 +4936,14 @@ function ImportSection({ roster, catalog, revenue, streams, updateRoster, update
 
       {step === 'upload' && (
         <div>
-          <div className="rounded border p-8 text-center mb-4" style={{ borderColor: C.borderLight, borderStyle: 'dashed', background: C.panel }}>
+          <DropZone onFiles={handleFile} accept=".csv,text/csv" className="rounded border p-8 text-center mb-4" style={{ borderColor: C.borderLight, borderStyle: 'dashed', background: C.panel }}>
             <FileText size={22} style={{ color: C.textFaint, margin: '0 auto 10px' }} />
-            <div style={{ fontWeight: 600 }}>Upload a statement</div>
+            <div style={{ fontWeight: 600 }}>Drop a statement here, or choose a file</div>
             <div className="text-sm mt-1 mb-4" style={{ color: C.textDim }}>
               {mode === 'summary' ? 'A store-by-store summary report for one product, straight from EMPIRE.' : 'CSV files from DistroKid, CD Baby, TuneCore, or any distributor export.'}
             </div>
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="text-sm mx-auto block" style={{ color: C.textDim, maxWidth: 280 }} />
-          </div>
+          </DropZone>
           {parseError && <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{parseError}</div>}
           <div className="flex items-center justify-between">
             <button onClick={mode === 'summary' ? downloadSampleSummary : downloadSample} className="inline-flex items-center gap-1.5 text-xs" style={{ color: C.textDim }}>

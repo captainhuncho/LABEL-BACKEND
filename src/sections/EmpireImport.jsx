@@ -9,7 +9,7 @@ import { slug } from '../finance.js';
 import { formatCents, monthLabel, todayStr, uid } from '../constants.js';
 import { saveStatementFile } from '../storage.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Btn, Td, Th } from '../ui.jsx';
+import { Btn, DropZone, Td, Th } from '../ui.jsx';
 
 const lower = s => String(s || '').trim().toLowerCase();
 const months = obj => Object.keys(obj || {}).sort().map(monthLabel).join(', ');
@@ -123,7 +123,11 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
         <p className="text-sm mt-1 mb-3" style={{ color: C.textDim, maxWidth: '70ch' }}>
           Revenue is booked under the <b style={{ color: C.text }}>Statement Date</b> (when IMSS received the money) using EMPIRE’s unrounded “Net (Raw)” as the artist’s gross. Platform, country, type and sales month are kept for reporting. Re-importing a month replaces it instead of adding to it.
         </p>
-        <input ref={inputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="text-sm" style={{ color: C.textDim }} aria-label="EMPIRE detailed royalty report CSV" />
+        <DropZone onFiles={handleFile} accept=".csv,text/csv" className="rounded border p-6 text-center" style={{ borderColor: C.borderLight, borderStyle: 'dashed' }}>
+          <Upload size={20} style={{ color: C.textFaint, margin: '0 auto 8px' }} aria-hidden="true" />
+          <div className="text-sm mb-3" style={{ fontWeight: 600 }}>Drop the EMPIRE CSV here, or choose a file</div>
+          <input ref={inputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="text-sm mx-auto block" style={{ color: C.textDim, maxWidth: 280 }} aria-label="EMPIRE detailed royalty report CSV" />
+        </DropZone>
         {error && <div className="text-sm mt-3" role="alert" style={{ color: C.red }}>{error}</div>}
       </div>
 
