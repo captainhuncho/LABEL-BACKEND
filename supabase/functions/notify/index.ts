@@ -72,15 +72,18 @@ function page(title: string, lines: string[], cta: { label: string; url: string 
 ${lines.map(l => `<p style="margin:0 0 10px;font-size:15px;line-height:1.55;color:#C9CDCC">${l}</p>`).join('')}
 ${quote ? `<div style="margin:16px 0;padding:12px 14px;border-left:3px solid #E7A23D;background:#22272B;border-radius:0 8px 8px 0;font-size:15px;line-height:1.55;color:#EEEAE2;white-space:pre-wrap">${esc(quote)}</div>` : ''}
 <p style="margin:20px 0 0"><a href="${cta.url}" style="display:inline-block;background:#E7A23D;color:#1A1500;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:12px">${esc(cta.label)}</a></p>
-${RECEIVE_DOMAIN ? '<p style="margin:18px 0 0;font-size:13px;color:#9BA1A1">You can reply to this email; your reply is added to the conversation in the app.</p>' : ''}
+<!--REPLY_NOTE-->
 </td></tr></table></body></html>`;
 }
 
 async function send(to: string[], subject: string, html: string, replyKey?: string) {
   const recipients = [...new Set(to.filter(e => e && e.includes('@')))];
   if (!recipients.length || !RESEND_KEY) return { skipped: !RESEND_KEY ? 'no RESEND_API_KEY' : 'no recipients' };
-  const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html };
-  if (replyKey && RECEIVE_DOMAIN) body.reply_to = `reply-${replyKey}@${RECEIVE_DOMAIN}`;
+  // Only emails with a reply address (submissions, requests) say replies work.
+  const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
+  const note = replyable ? '<p style="margin:18px 0 0;font-size:13px;color:#9BA1A1">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
+  const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html: html.replace('<!--REPLY_NOTE-->', note) };
+  if (replyable) body.reply_to = `reply-${replyKey}@${RECEIVE_DOMAIN}`;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
