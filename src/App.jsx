@@ -5413,16 +5413,13 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {revByProduct.map(p => (
-                  <div key={p.title} className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
-                    <div className="flex items-center justify-between px-4 pt-3 pb-2">
-                      <div style={{ fontWeight: 500 }}>{p.title}</div>
-                      <div className="text-right" style={{ fontFamily: MONO_FONT }}>
-                        <span style={{ color: C.textDim }}>{formatCents(p.total)} gross · </span>
-                        <span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(sumSplits(p.entries).artistShare)} yours</span>
-                      </div>
-                    </div>
-                    <table className="w-full">
+                {revByProduct.map(p => { const t = sumSplits(p.entries); return (
+                  <div key={p.title} className="rounded border overflow-x-auto" style={{ background: C.panel, borderColor: C.border }}>
+                    <div className="px-3 pt-3 pb-1" style={{ fontWeight: 600 }}>{p.title}</div>
+                    {/* Fixed column widths so every product card lines up with the next. */}
+                    <table className="w-full" style={{ tableLayout: 'fixed', minWidth: 420 }}>
+                      <colgroup><col style={{ width: '22%' }} /><col style={{ width: '28%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /></colgroup>
+                      <thead><tr><Th>Month</Th><Th>Type</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
                       <tbody>
                         {p.entries.sort((a, b) => (b.month || '').localeCompare(a.month || '')).map((r, i) => (
                           <tr key={i}>
@@ -5432,10 +5429,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                             <Td align="right" mono><span style={{ color: C.teal }}>{formatCents(splitOf(r).artistShare)}</span></Td>
                           </tr>
                         ))}
+                        <tr>
+                          <Td><span style={{ fontWeight: 600 }}>Total</span></Td>
+                          <Td>{''}</Td>
+                          <Td align="right" mono><span style={{ fontWeight: 600 }}>{formatCents(t.gross)}</span></Td>
+                          <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(t.artistShare)}</span></Td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
-                ))}
+                ); })}
               </div>
             )}
             </>
