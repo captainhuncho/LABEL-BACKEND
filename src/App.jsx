@@ -3564,7 +3564,8 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
   const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
   const reviewersOf = inv => invoiceReviewers(inv, roster, staff, workflow);
   const canAct = inv => canEdit && !!invoiceStage(inv) && (isAdmin || reviewersOf(inv).some(m => me && m.id === me.id));
-  const mine = scoped.filter(i => invoiceStage(i) && me && reviewersOf(i).some(m => m.id === me.id));
+  // Admins can approve at PM Approval too, so those also sit in an Admin's queue.
+  const mine = scoped.filter(i => invoiceStage(i) && me && (reviewersOf(i).some(m => m.id === me.id) || (isAdmin && invoiceStage(i).who === 'pm')));
   const shown = (tab === 'mine' ? mine : tab === 'all' ? scoped : scoped.filter(i => invoiceStatus(i) === tab))
     .sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
   const sumBy = st => scoped.filter(i => invoiceStatus(i) === st).reduce((t, i) => t + (Number(i.amount) || 0), 0);
@@ -3608,7 +3609,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
       {isAdmin && showWorkflow && (
         <section aria-labelledby="wf-h" className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.borderLight }}>
           <h2 id="wf-h" style={{ fontWeight: 600, fontSize: 15 }}>Who handles each queue</h2>
-          <p className="text-xs mt-1 mb-4" style={{ color: C.textDim }}>PM Approval always goes to the artist’s Product Manager (set on the Roster). Pick one or more people for the other queues; they get an email when an invoice reaches them. Admins can act on any queue.</p>
+          <p className="text-xs mt-1 mb-4" style={{ color: C.textDim }}>PM Approval goes to the artist’s Product Manager (set on the Roster) and to Admins, so either can approve it. Pick one or more people for the other queues; they get an email when an invoice reaches them. Admins can act on any queue.</p>
           <div className="imss-wf-grid">
             {WORKFLOW_ROLES.map(r => (
               <fieldset key={r.key} className="rounded border p-3" style={{ borderColor: C.border }}>

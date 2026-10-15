@@ -52,7 +52,8 @@ async function stageReviewers(status: string, artist: Item | undefined): Promise
   const active = staff.filter(m => (m.status || 'Active') !== 'Inactive');
   let people: Item[] = [];
   if (status === 'PM Approval' || status === 'Pending') {
-    people = active.filter(m => artist?.productManager && lower(m.name) === lower(artist.productManager));
+    // The PM and every Admin: either can approve, so neither waits on the other.
+    people = active.filter(m => m.role === 'Admin' || (artist?.productManager && lower(m.name) === lower(artist.productManager)));
   } else if (STAGE_KEY[status]) {
     const { data } = await db.from('app_data').select('value').eq('key', 'labelSettings').maybeSingle();
     const ids: string[] = (data?.value?.invoiceWorkflow || {})[STAGE_KEY[status]] || [];
