@@ -186,16 +186,16 @@ Spacing follows a 4px base, mostly 8 / 12 / 16 / 24 / 32px: tight 8–12px insid
 
 ## Elevation & Depth
 
-Depth comes from tonal layering first: the glowing canvas, then translucent panels, then raised panels for tooltips. Bordered cards add a soft two-layer shadow so they sit just above the canvas, and interactive cards and buttons lift by 1px on hover with a deeper shadow.
+Depth comes from tonal layering first: the glowing canvas, then translucent panels, then raised panels for tooltips. Bordered cards add a soft two-layer shadow so they sit just above the canvas. Cards never move: a clickable card answers hover with a deeper shadow and an amber border. Only buttons lift, by 1px.
 
 ### Shadow Vocabulary
 - **Panel rest** (`box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.22)`): every bordered card at rest.
-- **Panel lifted** (`box-shadow: 0 4px 10px rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.28)`): clickable cards on hover.
+- **Panel lifted** (`box-shadow: 0 4px 10px rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.28)`): clickable cards on hover, without moving.
 - **Button lift** (`box-shadow: 0 6px 16px rgba(0,0,0,0.22)`): buttons on hover, with translateY(-1px).
 - **Focus glow** (`box-shadow: 0 0 0 3px rgba(231,162,61,0.2)`): focused inputs, with an amber border.
 
 ### Named Rules
-**The Soft Lift Rule.** Shadows are always offset and blurred, and only ever lift by 1px. No hard-edged block shadows, no coloured glows.
+**The Soft Lift Rule.** Shadows are always offset and blurred, and only buttons lift (by 1px). Cards stay still: no hover jumps, no looping shimmer or sheen. No hard-edged block shadows, no coloured glows.
 
 ## Shapes
 

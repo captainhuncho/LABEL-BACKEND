@@ -87,7 +87,7 @@ export const GLOBAL_STYLES = `
 
 .rounded.border {
   box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.22) !important;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
 /* Artist portal */
 .imss-portal ::selection { background: ${C.amber}; color: #1A1500; }
@@ -180,20 +180,11 @@ table th:not(:last-child), table td:not(:last-child) { border-right: 1px solid $
 table thead th { background: rgba(255,255,255,0.04); }
 table tbody tr:last-child td { border-bottom: none !important; }
 button.rounded.border:hover {
-  transform: translateY(-2px) !important;
   box-shadow: 0 4px 10px rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.28) !important;
   border-color: rgba(231,162,61,0.6) !important;
 }
-button.rounded.border:active { transform: translateY(0) !important; box-shadow: 0 1px 2px rgba(0,0,0,0.25) !important; }
+button.rounded.border:active { box-shadow: 0 1px 2px rgba(0,0,0,0.25) !important; }
 
-.imss-kpi { position: relative; overflow: hidden; }
-.imss-kpi::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.05), transparent);
-  transform: translateX(-120%);
-  animation: imssSheen 6s ease-in-out infinite;
-}
-@keyframes imssSheen { 0%,100% { transform: translateX(-120%); } 50% { transform: translateX(120%); } }
 
 .imss-btn {
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, border-color 0.18s ease !important;

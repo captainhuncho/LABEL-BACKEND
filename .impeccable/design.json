@@ -276,7 +276,7 @@
       },
       {
         "name": "The Soft Lift Rule",
-        "body": "Shadows are always offset and blurred, and only ever lift by 1px. No hard-edged block shadows, no coloured glows.",
+        "body": "Shadows are always offset and blurred, and only buttons lift (by 1px). Cards stay still: no hover jumps, no looping shimmer or sheen. No hard-edged block shadows, no coloured glows.",
         "section": "elevation"
       }
     ],
