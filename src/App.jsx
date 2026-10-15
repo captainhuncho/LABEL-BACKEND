@@ -81,7 +81,7 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
   );
 }
 
-function Overview({ roster, catalog, revenue, masterGross = [], streams, artistMap, releaseMap, notices = [], staff = [], sessionName = '', canViewRoyalties = true }) {
+function Overview({ roster, catalog, revenue, masterGross = [], streams, artistMap, releaseMap, notices = [], staff = [], sessionName = '', canViewRoyalties = true, attention = [], onOpen }) {
   const [filters, setFilters] = useState({ startDate: '', endDate: '' });
   // The range only takes effect on Generate — until then the dashboard shows
   // all time, so landing here is never a blank screen.
@@ -168,6 +168,28 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
   return (
     <div>
       <SectionHeader title="Overview" description="Label performance at a glance — roster health, release activity, revenue, and stream volume." />
+
+      <section aria-labelledby="attn-h" className="rounded border mb-6" style={{ background: C.panel, borderColor: attention.length ? C.amber : C.border }}>
+        <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+          <h2 id="attn-h" style={{ fontWeight: 600, fontSize: 15 }}>Needs your attention</h2>
+          {attention.length > 0 && <Badge tone="amber">{attention.length}</Badge>}
+        </div>
+        {attention.length === 0 ? (
+          <div className="flex items-center gap-2 px-4 pb-4 text-sm" style={{ color: C.textDim }}><CheckCircle2 size={15} color={C.teal} /> You’re all caught up. Nothing is waiting on you.</div>
+        ) : (
+          <ul>
+            {attention.map(n => (
+              <li key={n.id} style={{ borderTop: '1px solid ' + C.border }}>
+                <button onClick={() => onOpen && onOpen(n.tab)} className="flex items-center gap-3 w-full text-left px-4 py-3 text-sm hover:bg-white/5">
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 999, flexShrink: 0, background: n.tone === 'red' ? C.red : C.amber }} />
+                  <span className="flex-1">{n.text}</span>
+                  <ChevronRight size={15} color={C.textDim} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {myTeamNotices.length > 0 && (
         <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
@@ -6669,7 +6691,84 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   );
 }
 
-function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', setActive }) {
+// Everything waiting on this team member: shown on the Overview and in Alerts.
+function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, isAdmin = false, sessionName = '' }) {
+  const items = [];
+  const today = todayStr();
+  roster.forEach(a => {
+    if (!a.contractExpiration) return;
+    const st = expirationStatus(a.contractExpiration);
+    if (st && st.label !== 'Active') items.push({ id: 'contract-' + a.id, tone: st.tone, text: a.name + "'s contract " + st.label.toLowerCase(), tab: 'roster' });
+  });
+  catalog.forEach(c => {
+    if (!c.licenseExpiration) return;
+    const st = expirationStatus(c.licenseExpiration);
+    if (st && st.label !== 'Active') items.push({ id: 'license-' + c.id, tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase(), tab: 'catalog' });
+  });
+  catalog.forEach(c => {
+    if (c.status === 'Released') return;
+    const missing = missingRequiredDocs(c.distributionDocs);
+    if (missing > 0) items.push({ id: 'missing-docs-' + c.id, tone: 'amber', text: c.title + ' missing ' + missing + ' required distribution document' + (missing === 1 ? '' : 's'), tab: 'catalog' });
+  });
+  staff.forEach(s => {
+    if ((s.status || 'Active') !== 'Onboarding') return;
+    const prog = onboardingProgress(s);
+    items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team' });
+  });
+  catalog.forEach(c => {
+    if (!c.releaseDate || c.status === 'Released') return;
+    const days = Math.round((new Date(c.releaseDate) - new Date(today)) / 86400000);
+    if (days < 0 || days > 14) return;
+    const prog = checklistProgress(c.checklist);
+    const dueText = days === 0 ? 'releases today' : days === 1 ? 'releases tomorrow' : 'releases in ' + days + ' days';
+    if (prog.total > 0 && prog.pct < 100 && days <= 7) {
+      items.push({ id: 'release-risk-' + c.id, tone: 'red', text: c.title + ' ' + dueText + ' — checklist only ' + prog.pct + '% done', tab: 'catalog' });
+    } else {
+      items.push({ id: 'release-' + c.id, tone: days <= 3 ? 'red' : 'amber', text: c.title + ' ' + dueText, tab: 'calendar' });
+    }
+  });
+  tasks.forEach(t => {
+    if (t.status !== 'Open' || !t.dueDate || t.dueDate >= today) return;
+    items.push({ id: 'task-' + t.id, tone: 'red', text: 'Overdue: "' + t.title + '" (' + t.assignee + ')', tab: 'tasks' });
+  });
+  if (isAdmin) {
+    const pendingCount = revenue.filter(x => x.approvalStatus === 'Pending').length;
+    if (pendingCount > 0) {
+      items.push({ id: 'pending-earnings', tone: 'amber', text: pendingCount + ' revenue ' + (pendingCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'revenue' });
+    }
+    const pendingExpenseCount = ledger.filter(x => x.approvalStatus === 'Pending').length;
+    if (pendingExpenseCount > 0) {
+      items.push({ id: 'pending-expenses', tone: 'amber', text: pendingExpenseCount + ' ledger ' + (pendingExpenseCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'ledger' });
+    }
+    const pendingAccess = accessRequests.filter(r => r.status === 'Pending').length;
+    if (pendingAccess > 0) {
+      items.push({ id: 'pending-access', tone: 'red', text: pendingAccess + ' access ' + (pendingAccess === 1 ? 'change' : 'changes') + ' from Legal waiting on your approval', tab: 'access-requests' });
+    }
+    const pendingProfileCount = profileRequests.filter(r => r.status === 'Pending').length;
+    if (pendingProfileCount > 0) {
+      items.push({ id: 'pending-profile', tone: 'amber', text: pendingProfileCount + ' artist profile ' + (pendingProfileCount === 1 ? 'change' : 'changes') + ' waiting on review', tab: 'roster' });
+    }
+    const openRequestCount = artistRequests.filter(r => r.status === 'Open').length;
+    if (openRequestCount > 0) {
+      items.push({ id: 'open-artist-requests', tone: 'amber', text: openRequestCount + ' artist ' + (openRequestCount === 1 ? 'request' : 'requests') + ' waiting on a response', tab: 'artist-requests' });
+    }
+  }
+  const myPendingSubmissions = releaseSubmissions.filter(s => s.status === 'Pending' && (isAdmin || s.sentTo === sessionName));
+  if (myPendingSubmissions.length > 0) {
+    items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'submissions' });
+  }
+  // Invoices sitting in a queue this person handles (Admins also share PM Approval).
+  const me = staff.find(m => m.name === sessionName);
+  const workflow = labelSettings.invoiceWorkflow || {};
+  const myInvoices = invoices.filter(i => { const st = invoiceStage(i); return st && me && (invoiceReviewers(i, roster, staff, workflow).some(m => m.id === me.id) || (isAdmin && st.who === 'pm')); });
+  if (myInvoices.length > 0) {
+    const total = myInvoices.reduce((t, i) => t + (Number(i.amount) || 0), 0);
+    items.push({ id: 'my-invoices', tone: 'amber', text: myInvoices.length + ' ' + (myInvoices.length === 1 ? 'invoice' : 'invoices') + ' waiting on your approval (' + formatCurrency(total) + ')', tab: 'invoices' });
+  }
+  return items.sort((a, b) => (a.tone === 'red' ? 0 : 1) - (b.tone === 'red' ? 0 : 1));
+}
+
+function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', notifications = [], setActive }) {
   const [query, setQuery] = useState('');
   const [showNotifs, setShowNotifs] = useState(false);
 
@@ -6687,73 +6786,6 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
     return out.slice(0, 8);
   }, [query, roster, catalog, staff, tasks, notices]);
 
-  const notifications = useMemo(() => {
-    const items = [];
-    const today = todayStr();
-    roster.forEach(a => {
-      if (!a.contractExpiration) return;
-      const st = expirationStatus(a.contractExpiration);
-      if (st && st.label !== 'Active') items.push({ id: 'contract-' + a.id, tone: st.tone, text: a.name + "'s contract " + st.label.toLowerCase(), tab: 'roster' });
-    });
-    catalog.forEach(c => {
-      if (!c.licenseExpiration) return;
-      const st = expirationStatus(c.licenseExpiration);
-      if (st && st.label !== 'Active') items.push({ id: 'license-' + c.id, tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase(), tab: 'catalog' });
-    });
-    catalog.forEach(c => {
-      if (c.status === 'Released') return;
-      const missing = missingRequiredDocs(c.distributionDocs);
-      if (missing > 0) items.push({ id: 'missing-docs-' + c.id, tone: 'amber', text: c.title + ' missing ' + missing + ' required distribution document' + (missing === 1 ? '' : 's'), tab: 'catalog' });
-    });
-    staff.forEach(s => {
-      if ((s.status || 'Active') !== 'Onboarding') return;
-      const prog = onboardingProgress(s);
-      items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team' });
-    });
-    catalog.forEach(c => {
-      if (!c.releaseDate || c.status === 'Released') return;
-      const days = Math.round((new Date(c.releaseDate) - new Date(today)) / 86400000);
-      if (days < 0 || days > 14) return;
-      const prog = checklistProgress(c.checklist);
-      const dueText = days === 0 ? 'releases today' : days === 1 ? 'releases tomorrow' : 'releases in ' + days + ' days';
-      if (prog.total > 0 && prog.pct < 100 && days <= 7) {
-        items.push({ id: 'release-risk-' + c.id, tone: 'red', text: c.title + ' ' + dueText + ' — checklist only ' + prog.pct + '% done', tab: 'catalog' });
-      } else {
-        items.push({ id: 'release-' + c.id, tone: days <= 3 ? 'red' : 'amber', text: c.title + ' ' + dueText, tab: 'calendar' });
-      }
-    });
-    tasks.forEach(t => {
-      if (t.status !== 'Open' || !t.dueDate || t.dueDate >= today) return;
-      items.push({ id: 'task-' + t.id, tone: 'red', text: 'Overdue: "' + t.title + '" (' + t.assignee + ')', tab: 'tasks' });
-    });
-    if (isAdmin) {
-      const pendingCount = revenue.filter(x => x.approvalStatus === 'Pending').length;
-      if (pendingCount > 0) {
-        items.push({ id: 'pending-earnings', tone: 'amber', text: pendingCount + ' revenue ' + (pendingCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'revenue' });
-      }
-      const pendingExpenseCount = ledger.filter(x => x.approvalStatus === 'Pending').length;
-      if (pendingExpenseCount > 0) {
-        items.push({ id: 'pending-expenses', tone: 'amber', text: pendingExpenseCount + ' ledger ' + (pendingExpenseCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'ledger' });
-      }
-      const pendingAccess = accessRequests.filter(r => r.status === 'Pending').length;
-      if (pendingAccess > 0) {
-        items.push({ id: 'pending-access', tone: 'red', text: pendingAccess + ' access ' + (pendingAccess === 1 ? 'change' : 'changes') + ' from Legal waiting on your approval', tab: 'access-requests' });
-      }
-      const pendingProfileCount = profileRequests.filter(r => r.status === 'Pending').length;
-      if (pendingProfileCount > 0) {
-        items.push({ id: 'pending-profile', tone: 'amber', text: pendingProfileCount + ' artist profile ' + (pendingProfileCount === 1 ? 'change' : 'changes') + ' waiting on review', tab: 'roster' });
-      }
-      const openRequestCount = artistRequests.filter(r => r.status === 'Open').length;
-      if (openRequestCount > 0) {
-        items.push({ id: 'open-artist-requests', tone: 'amber', text: openRequestCount + ' artist ' + (openRequestCount === 1 ? 'request' : 'requests') + ' waiting on a response', tab: 'artist-requests' });
-      }
-    }
-    const myPendingSubmissions = releaseSubmissions.filter(s => s.status === 'Pending' && (isAdmin || s.sentTo === sessionName));
-    if (myPendingSubmissions.length > 0) {
-      items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'catalog' });
-    }
-    return items.sort((a, b) => (a.tone === 'red' ? 0 : 1) - (b.tone === 'red' ? 0 : 1));
-  }, [roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, isAdmin, sessionName]);
 
   return (
     <div className="imss-print-hide flex items-center justify-between gap-3 mb-6 flex-wrap">
@@ -6973,6 +7005,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const pendingAccessCount = accessRequests.filter(r => r.status === 'Pending').length;
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
+  const attention = useMemo(() => (session && session.mode === 'team'
+    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, isAdmin, sessionName: session.name })
+    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, isAdmin]);
 
   // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
   const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
@@ -7057,12 +7092,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
-        <TopBar roster={roster} catalog={catalog} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} setActive={setActive} />
+        <TopBar roster={roster} catalog={catalog} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} />
         {error && (
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
         )}
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
-        {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={masterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} />}
+        {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={masterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
         {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={masterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
         {active === 'roster' && <RosterSection statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
