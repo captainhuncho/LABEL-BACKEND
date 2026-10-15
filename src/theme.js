@@ -174,6 +174,8 @@ export const GLOBAL_STYLES = `
   .imss-dash-retail li { grid-template-columns: minmax(0, 1fr) 92px; }
   .imss-dash-retail .imss-ledger-bar { display: none; }
 }
+.imss-split-add { display: grid; grid-template-columns: minmax(0, 1fr) 150px 150px auto; gap: 8px; padding: 10px 12px; align-items: center; }
+@media (max-width: 640px) { .imss-split-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .imss-split-add > :first-child { grid-column: 1 / -1; } }
 /* Tables: a full grid. Rows already have bottom borders (Td/Th); add column
    lines, a header band, and drop the last row's line where the card border sits. */
 table th:not(:last-child), table td:not(:last-child) { border-right: 1px solid ${C.border}; }

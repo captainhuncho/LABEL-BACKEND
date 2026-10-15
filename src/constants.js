@@ -10,7 +10,9 @@ export const EXPLICIT_OPTIONS = ['Not Set', 'Explicit', 'Clean'];
 export function emptyCredits() {
   return { performedBy: '', writtenBy: '', producedBy: '', recordingEngineer: '', mixingEngineer: '', masteringEngineer: '', dolbyEngineer: '' };
 }
-export const COLLABORATOR_ROLES = ['Feature', 'Co-Writer', 'Producer', 'Remixer', 'Other'];
+export const COLLABORATOR_ROLES = ['Feature', 'Producer', 'Songwriter', 'Co-Writer', 'Remixer', 'Other'];
+// Roles that take a share of the song: a split % is required when one is listed.
+export const SPLIT_REQUIRED_ROLES = ['Feature', 'Producer', 'Songwriter', 'Co-Writer'];
 export const RELEASE_STATUSES = ['Processing', 'In Production', 'Upcoming', 'Released'];
 export function releaseStatusTone(status) {
   if (status === 'Released') return 'teal';

@@ -338,8 +338,14 @@ Releases, Requests (with an open count), Profile — and Sign out.
 - **Payouts** — earnings accrued, unrecouped balance, paid to date, balance
   due, and payout history.
 - **Releases** — their catalog, plus a form to submit a new release (title,
-  type, collaborators and splits, track metadata, credits, lyrics, a
-  distribution-doc checklist) which goes to their PM for review.
+  type, splits, track metadata, credits, lyrics, a distribution-doc checklist)
+  which goes to their PM for review. **Splits are required:** every featured
+  artist, producer, songwriter and co-writer taking a share is listed with
+  their split %, the artist keeps the remainder (total can't exceed 100%), a
+  **signed split sheet** (PDF or photo, up to 2 MB) must be uploaded, and the
+  artist confirms everyone listed signed it. The team sees the splits and can
+  download the split sheet in the Catalog review queue; both carry over onto
+  the release.
 - **Requests** — raise a request by category; see responses.
 - **Profile** — request changes to photo, bio, email; goes to PM for approval.
 

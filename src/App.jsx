@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
-import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
+import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueRowSplit, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { supabase } from './storage.js';
@@ -1613,7 +1613,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
 
   function openAdd() { setForm({ ...empty, artistId: visibleRoster[0] ? visibleRoster[0].id : '', enteredBy: lastEnteredBy, checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs() }); setEditing(null); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
   function openFromSubmission(sub) {
-    setForm({ ...empty, artistId: sub.artistId, title: sub.title, type: sub.type, genre: sub.genre || '', releaseDate: sub.proposedDate || todayStr(), artworkUrl: sub.artworkUrl || '', collaborators: sub.collaborators || [], primaryArtists: sub.primaryArtists || [], enteredBy: sessionName, checklist: makeReleaseChecklist(), distributionDocs: sub.distributionDocs && sub.distributionDocs.length ? sub.distributionDocs : makeDistributionDocs(), explicit: sub.explicit || 'Not Set', dolbyAtmos: !!sub.dolbyAtmos, lyrics: sub.lyrics || '', duration: sub.duration || '', credits: sub.credits ? { ...emptyCredits(), ...sub.credits } : emptyCredits() });
+    setForm({ ...empty, artistId: sub.artistId, title: sub.title, type: sub.type, genre: sub.genre || '', releaseDate: sub.proposedDate || todayStr(), artworkUrl: sub.artworkUrl || '', collaborators: sub.collaborators || [], primaryArtists: sub.primaryArtists || [], enteredBy: sessionName, checklist: makeReleaseChecklist(), distributionDocs: sub.distributionDocs && sub.distributionDocs.length ? sub.distributionDocs : makeDistributionDocs(), explicit: sub.explicit || 'Not Set', dolbyAtmos: !!sub.dolbyAtmos, lyrics: sub.lyrics || '', duration: sub.duration || '', credits: sub.credits ? { ...emptyCredits(), ...sub.credits } : emptyCredits(), splitSheet: sub.splitSheet || '', splitSheetName: sub.splitSheetName || '' });
     setEditing(null);
     setNewCollab({ name: '', role: 'Feature', splitPercent: '' });
     setDistributorEmail('');
@@ -1750,8 +1750,12 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
                     <ArtworkThumb release={{ title: sub.title, artworkUrl: sub.artworkUrl }} size={32} />
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{sub.title} <span style={{ color: C.textFaint, fontWeight: 400 }}>({sub.type}{sub.genre ? ' · ' + sub.genre : ''})</span></div>
-                      <div className="text-xs" style={{ color: C.textFaint }}>{artist ? artist.name : 'Unknown'}{sub.proposedDate ? ' · proposed ' + formatDate(sub.proposedDate) : ''}{sub.collaborators && sub.collaborators.length > 0 ? ' · feat. ' + sub.collaborators.map(c => c.name).join(', ') : ''}{sub.notes ? ' · "' + sub.notes + '"' : ''}</div>
+                      <div className="text-xs" style={{ color: C.textFaint }}>{artist ? artist.name : 'Unknown'}{sub.proposedDate ? ' · proposed ' + formatDate(sub.proposedDate) : ''}{(sub.collaborators || []).some(c => c.role === 'Feature') ? ' · feat. ' + sub.collaborators.filter(c => c.role === 'Feature').map(c => c.name).join(', ') : ''}{sub.notes ? ' · "' + sub.notes + '"' : ''}</div>
                       <div className="text-xs mt-0.5" style={{ color: missing > 0 ? C.amber : C.teal }}>{missing > 0 ? missing + ' required doc' + (missing === 1 ? '' : 's') + ' still marked not-ready' : 'All required docs marked ready'}</div>
+                      <div className="text-xs mt-0.5" style={{ color: C.textDim }}>
+                        Splits: {(sub.collaborators || []).length ? sub.collaborators.map(c => c.name + ' (' + c.role + ') ' + c.splitPercent + '%').join(' · ') + ' · ' : ''}{artist ? artist.name : 'Artist'} {Math.max(0, 100 - (sub.collaborators || []).reduce((t, c) => t + (Number(c.splitPercent) || 0), 0))}%
+                        {' · '}{sub.splitSheet ? <a href={sub.splitSheet} download={sub.splitSheetName || 'split-sheet'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download split sheet</a> : <span style={{ color: C.amber }}>No split sheet</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -1872,6 +1876,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
           </Field>
           <div className="imss-span-2">
             <div className="text-xs mb-2" style={{ color: C.textFaint }}>Collaborators &amp; splits — {roster.find(a => a.id === form.artistId) ? roster.find(a => a.id === form.artistId).name : 'Primary artist'} keeps the remainder ({Math.max(0, 100 - form.collaborators.reduce((s, c) => s + c.splitPercent, 0))}%)</div>
+            {form.splitSheet && <div className="text-xs mb-2"><a href={form.splitSheet} download={form.splitSheetName || 'split-sheet'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download signed split sheet{form.splitSheetName ? ' (' + form.splitSheetName + ')' : ''}</a></div>}
             <div className="rounded border p-3 mb-1" style={{ borderColor: C.border, background: C.bg }}>
               {form.collaborators.length > 0 && (
                 <div className="flex flex-col gap-2 mb-3">
@@ -4962,8 +4967,20 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
   const mySubmissions = useMemo(() => [...releaseSubmissions.filter(s => s.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [releaseSubmissions, artist.id]);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
-  const emptySubmitForm = { title: '', type: 'Single', genre: artist.genre || '', proposedDate: '', artworkUrl: '', notes: '', collaborators: [], primaryArtists: [], distributionDocs: makeDistributionDocs(), explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits() };
+  const emptySubmitForm = { title: '', type: 'Single', genre: artist.genre || '', proposedDate: '', artworkUrl: '', notes: '', collaborators: [], primaryArtists: [], distributionDocs: makeDistributionDocs(), explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits(), splitSheet: '', splitSheetName: '', splitsConfirmed: false };
   const [submitForm, setSubmitForm] = useState(emptySubmitForm);
+  const [collabError, setCollabError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const splitSheetRef = useRef(null);
+  const splitsTotal = submitForm.collaborators.reduce((t, c) => t + (Number(c.splitPercent) || 0), 0);
+  function handleSplitSheet(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setSubmitError('That split sheet is over 2 MB. Upload a smaller PDF or photo.'); e.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = () => { setSubmitForm(f => ({ ...f, splitSheet: reader.result, splitSheetName: file.name })); setSubmitError(''); };
+    reader.readAsDataURL(file);
+  }
   const [newSubmitCollab, setNewSubmitCollab] = useState({ name: '', role: 'Feature', splitPercent: '' });
   const [newSubmitPrimaryArtist, setNewSubmitPrimaryArtist] = useState('');
   const submitArtworkRef = useRef(null);
@@ -4976,9 +4993,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   function toggleSubmitDoc(docId) { setSubmitForm(f => ({ ...f, distributionDocs: f.distributionDocs.map(d => d.id === docId ? { ...d, attached: !d.attached } : d) })); }
   function setSubmitDocNote(docId, note) { setSubmitForm(f => ({ ...f, distributionDocs: f.distributionDocs.map(d => d.id === docId ? { ...d, note } : d) })); }
   function addSubmitCollaborator() {
-    if (!newSubmitCollab.name.trim()) return;
-    setSubmitForm(f => ({ ...f, collaborators: [...f.collaborators, { ...newSubmitCollab, splitPercent: Number(newSubmitCollab.splitPercent) || 0 }] }));
+    const name = newSubmitCollab.name.trim();
+    const raw = String(newSubmitCollab.splitPercent).trim();
+    const pct = Number(raw);
+    if (!name) { setCollabError('Enter the person’s name.'); return; }
+    if (SPLIT_REQUIRED_ROLES.includes(newSubmitCollab.role) && raw === '') { setCollabError('Enter the split % signed to this ' + newSubmitCollab.role.toLowerCase() + '.'); return; }
+    if (raw !== '' && (isNaN(pct) || pct < 0 || pct > 100)) { setCollabError('Split % must be between 0 and 100.'); return; }
+    if (splitsTotal + (pct || 0) > 100) { setCollabError('That takes the splits over 100%. You have ' + (100 - splitsTotal) + '% left.'); return; }
+    setSubmitForm(f => ({ ...f, collaborators: [...f.collaborators, { name, role: newSubmitCollab.role, splitPercent: pct || 0 }] }));
     setNewSubmitCollab({ name: '', role: 'Feature', splitPercent: '' });
+    setCollabError('');
   }
   function removeSubmitCollaborator(idx) { setSubmitForm(f => ({ ...f, collaborators: f.collaborators.filter((_, i) => i !== idx) })); }
   function addSubmitPrimaryArtist() {
@@ -4989,11 +5013,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   function removeSubmitPrimaryArtist(idx) { setSubmitForm(f => ({ ...f, primaryArtists: f.primaryArtists.filter((_, i) => i !== idx) })); }
   function submitReleaseSubmission() {
     if (!submitForm.title.trim()) return;
+    if (splitsTotal > 100) { setSubmitError('Splits add up to ' + splitsTotal + '%. They can’t be more than 100%.'); return; }
+    if (!submitForm.splitSheet) { setSubmitError('Upload the signed split sheet before sending.'); return; }
+    if (!submitForm.splitsConfirmed) { setSubmitError('Confirm that everyone listed has signed the split sheet.'); return; }
+    setSubmitError('');
     const submission = { id: uid(), artistId: artist.id, ...submitForm, sentTo: sendsTo, status: 'Pending', submittedAt: new Date().toISOString(), reviewedBy: '', reviewedAt: '' };
     updateReleaseSubmissions([submission, ...releaseSubmissions]);
     setSubmitForm(emptySubmitForm);
     setNewSubmitCollab({ name: '', role: 'Feature', splitPercent: '' });
     if (submitArtworkRef.current) submitArtworkRef.current.value = '';
+    if (splitSheetRef.current) splitSheetRef.current.value = '';
     setShowSubmitForm(false);
   }
 
@@ -5280,29 +5309,52 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   <input ref={submitArtworkRef} type="file" accept="image/*" onChange={handleSubmitArtwork} className="text-xs" style={{ color: C.textDim }} />
                 </Field>
 
-                <div className="imss-span-2">
-                  <div className="text-xs mb-2" style={{ color: C.textFaint }}>Collaborators &amp; splits — you keep the remainder ({Math.max(0, 100 - submitForm.collaborators.reduce((s, c) => s + c.splitPercent, 0))}%)</div>
-                  <div className="rounded border p-3" style={{ borderColor: C.border, background: C.bg }}>
-                    {submitForm.collaborators.length > 0 && (
-                      <div className="flex flex-col gap-1.5 mb-2">
+                <section className="imss-span-2" aria-labelledby="splits-h">
+                  <h3 id="splits-h" style={{ fontWeight: 600, fontSize: 15 }}>Splits <span style={{ color: C.red }} aria-hidden="true">*</span></h3>
+                  <p className="text-xs mt-1 mb-3" style={{ color: C.textDim, maxWidth: '70ch' }}>List everyone taking a share of this song. Featured artists, producers and songwriters must have their split % entered, and it has to match the signed split sheet.</p>
+                  <div className="rounded border overflow-hidden" style={{ borderColor: C.border, background: C.bg }}>
+                    <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                      <colgroup><col /><col style={{ width: '28%' }} /><col style={{ width: 96 }} /><col style={{ width: 44 }} /></colgroup>
+                      <thead><tr><Th>Name</Th><Th>Role</Th><Th align="right">Split</Th><Th align="right"></Th></tr></thead>
+                      <tbody>
                         {submitForm.collaborators.map((c, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm">
-                            <span>{c.name} <span style={{ color: C.textFaint }}>· {c.role} · {c.splitPercent}%</span></span>
-                            <button type="button" onClick={() => removeSubmitCollaborator(i)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
-                          </div>
+                          <tr key={i}>
+                            <Td><span style={{ overflowWrap: 'anywhere' }}>{c.name}</span></Td>
+                            <Td>{c.role}</Td>
+                            <Td align="right" mono>{c.splitPercent}%</Td>
+                            <Td align="right"><button type="button" onClick={() => removeSubmitCollaborator(i)} aria-label={'Remove ' + c.name} style={{ color: C.textDim }}><Trash2 size={14} /></button></Td>
+                          </tr>
                         ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2 flex-wrap">
-                      <Input value={newSubmitCollab.name} onChange={e => setNewSubmitCollab({ ...newSubmitCollab, name: e.target.value })} placeholder="Name" style={{ flex: 1, minWidth: 120 }} />
-                      <Select value={newSubmitCollab.role} onChange={e => setNewSubmitCollab({ ...newSubmitCollab, role: e.target.value })} style={{ width: 130 }}>
+                        <tr>
+                          <Td><span style={{ fontWeight: 600 }}>{artist.name}</span> <span className="text-xs" style={{ color: C.textDim }}>(you, remainder)</span></Td>
+                          <Td>Primary artist</Td>
+                          <Td align="right" mono><span style={{ color: splitsTotal > 100 ? C.red : C.teal, fontWeight: 600 }}>{Math.max(0, 100 - splitsTotal)}%</span></Td>
+                          <Td>{''}</Td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="imss-split-add" style={{ borderTop: '1px solid ' + C.border }}>
+                      <Input aria-label="Name" value={newSubmitCollab.name} onChange={e => { setNewSubmitCollab({ ...newSubmitCollab, name: e.target.value }); setCollabError(''); }} placeholder="Name" />
+                      <Select aria-label="Role" value={newSubmitCollab.role} onChange={e => { setNewSubmitCollab({ ...newSubmitCollab, role: e.target.value }); setCollabError(''); }}>
                         {COLLABORATOR_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                       </Select>
-                      <Input type="number" min="0" max="100" value={newSubmitCollab.splitPercent} onChange={e => setNewSubmitCollab({ ...newSubmitCollab, splitPercent: e.target.value })} placeholder="Split %" style={{ width: 90 }} />
-                      <Btn variant="ghost" type="button" onClick={addSubmitCollaborator}>Add</Btn>
+                      <Input aria-label="Split %" type="number" min="0" max="100" step="0.01" value={newSubmitCollab.splitPercent} onChange={e => { setNewSubmitCollab({ ...newSubmitCollab, splitPercent: e.target.value }); setCollabError(''); }} placeholder={SPLIT_REQUIRED_ROLES.includes(newSubmitCollab.role) ? 'Split % (required)' : 'Split %'} />
+                      <Btn variant="ghost" type="button" onClick={addSubmitCollaborator}><Plus size={14} /> Add</Btn>
                     </div>
                   </div>
-                </div>
+                  {collabError && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{collabError}</div>}
+
+                  <div className="imss-form-grid gap-3 mt-4">
+                    <Field label="Signed split sheet (PDF or photo, up to 2 MB) *" full>
+                      <input ref={splitSheetRef} type="file" accept="application/pdf,image/*" onChange={handleSplitSheet} className="text-sm" style={{ color: C.textDim }} />
+                      {submitForm.splitSheetName && <span className="text-xs" style={{ color: C.teal }}>Attached: {submitForm.splitSheetName}</span>}
+                    </Field>
+                  </div>
+                  <label className="flex items-start gap-2 text-sm mt-3" style={{ color: C.text, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={submitForm.splitsConfirmed} onChange={e => { setSubmitForm({ ...submitForm, splitsConfirmed: e.target.checked }); setSubmitError(''); }} style={{ marginTop: 3, accentColor: C.amber }} />
+                    Everyone listed above has signed the split sheet, and the percentages match it.
+                  </label>
+                </section>
 
                 <div className="imss-span-2">
                   <div className="text-xs mb-2" style={{ color: C.textFaint }}>Track metadata (for the distributor sheet)</div>
@@ -5351,6 +5403,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   </div>
                 </div>
 
+                {submitError && <div className="imss-span-2 text-sm" role="alert" style={{ color: C.red }}>{submitError}</div>}
                 <div className="imss-span-2 flex items-center gap-3 mt-1 flex-wrap">
                   <Btn variant="primary" type="submit">Send package to {sendsTo}</Btn>
                   <Btn variant="ghost" onClick={() => setShowSubmitForm(false)}>Cancel</Btn>
