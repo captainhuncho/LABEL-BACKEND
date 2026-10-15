@@ -180,6 +180,25 @@ export const GLOBAL_STYLES = `
 .imss-people-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 10px; border-radius: 9999px; background: rgba(255,255,255,0.08); border: 1px solid ${C.border}; color: ${C.text}; font-size: 13px; font-weight: 500; }
 .imss-people-chip button { display: inline-flex; padding: 3px; border-radius: 9999px; color: ${C.textDim}; }
 .imss-people-chip button:hover { color: ${C.text}; background: rgba(255,255,255,0.08); }
+.imss-sub-review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; padding: 20px; background: rgba(255,255,255,0.02); }
+.imss-sub-wide { grid-column: 1 / -1; border-top: 1px solid ${C.border}; padding-top: 18px; }
+.imss-sub-h { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.imss-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.imss-checks li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px; }
+.imss-checks li.is-ok { color: ${C.text}; } .imss-checks li.is-ok svg { color: ${C.teal}; }
+.imss-checks li.is-miss { color: ${C.amber}; }
+.imss-check-miss { width: 14px; height: 14px; border-radius: 9999px; border: 2px solid ${C.amber}; margin-left: 1px; }
+.imss-sub-dl { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 12px; font-size: 14px; margin: 0; }
+.imss-sub-dl dt { color: ${C.textDim}; } .imss-sub-dl dd { margin: 0; overflow-wrap: anywhere; }
+.imss-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.imss-thread li { border: 1px solid ${C.border}; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.imss-thread li.is-label { background: ${C.amberSoft}; border-color: rgba(231,162,61,0.4); }
+.imss-thread li.is-artist { background: rgba(255,255,255,0.04); margin-left: 32px; }
+.imss-thread-meta { font-size: 12px; color: ${C.textDim}; margin-bottom: 4px; }
+@media (max-width: 900px) { .imss-sub-review { grid-template-columns: minmax(0, 1fr); } .imss-thread li.is-artist { margin-left: 16px; } }
+.imss-my-subs { list-style: none; margin: 0; padding: 0; border-top: 1px solid ${C.border}; }
+.imss-my-subs > li { padding: 14px 16px; }
+.imss-my-subs > li + li { border-top: 1px solid ${C.border}; }
 .imss-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9999px; border: 1px solid; font-size: 13px; font-weight: 600; }
 .imss-chip small { font-size: 11px; font-weight: 500; opacity: 0.85; }
 .imss-chip button { display: inline-flex; margin-left: 2px; color: inherit; opacity: 0.8; }

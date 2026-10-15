@@ -40,7 +40,11 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   reach their browser. `artist_add()` lets them add a profile change, request, release submission
   or invoice only; it forces the item's `artistId` to theirs and resets any
   status or review fields. Invoices must be an `expense` or `service` with a
-  positive numeric amount. Attachments are stored inline (limit ~2 MB).
+  positive numeric amount. Release submissions must include a split sheet and
+  start with an empty message thread. Attachments are stored inline (items up
+  to ~6 MB). `artist_reply_submission()` lets an artist add a reply only to
+  their own submission while it's Waiting review or Needs info, and puts it
+  back to Waiting review.
 - Internal helpers (`section()`, `my_artist()`, `js_slug()`) are not callable
   from the API. Default privileges in `public` grant no API access to new
   functions; every function exposed to the API is granted explicitly.

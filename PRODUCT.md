@@ -267,9 +267,20 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
   recent expenses, payout history. Earnings panels gate on `royalties`,
   spend panels on `spend`.
 - **Artist Requests** — requests artists raised from the portal, with responses.
+- **Submissions** — artist release submissions for anyone with `catalog`
+  (PMs see only their artists). Tabs: Waiting review, Needs info, Accepted,
+  Rejected. Each row shows how complete it is (12 checks: date, artwork,
+  splits ≤100%, split % for features/producers/songwriters, signed split
+  sheet, confirmation, written/produced credits, duration, explicit, lyrics,
+  required docs). Review shows the checks, splits, split sheet, credits and the
+  message thread. Actions: **Accept to catalog** (opens the Catalog release
+  form pre-filled for the PM to add UPC, ISRCs and the rest; the submission
+  only becomes Accepted when that release is saved), **Request more info**
+  (message to the artist, status Needs info), **Email artist** (opens the
+  reviewer's email with the message pre-written), **Reject** (with a reason).
 - **Catalog** — releases with artwork, type, dates, ISRC/UPC, status, licence
   expiry, a production checklist and distribution-doc checklist. Grid, table
-  and pipeline views. Review queue for artist-submitted releases.
+  and pipeline views. A banner links to Submissions when any are waiting.
 - **Release Calendar** — month grid with releases, task due dates, expiries.
 - **Import** — CSV import of distributor statements (§6).
 
@@ -345,7 +356,9 @@ Releases, Requests (with an open count), Profile — and Sign out.
   **signed split sheet** (PDF or photo, up to 2 MB) must be uploaded, and the
   artist confirms everyone listed signed it. The team sees the splits and can
   download the split sheet in the Catalog review queue; both carry over onto
-  the release.
+  the release. Their submissions list shows each status and the message thread
+  with the label; when the label asks for more info they reply there, which
+  sends it back to Waiting review.
 - **Requests** — raise a request by category; see responses.
 - **Profile** — request changes to photo, bio, email; goes to PM for approval.
 

@@ -1587,7 +1587,7 @@ function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', a
   );
 }
 
-function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '' }) {
+function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '', incomingSubmission = null, clearIncoming, onOpenSubmissions }) {
   const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
   const visibleArtistIds = new Set(visibleRoster.map(a => a.id));
   const visibleCatalog = pmScope ? catalog.filter(c => visibleArtistIds.has(c.artistId)) : catalog;
@@ -1595,6 +1595,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
 
   const empty = { artistId: visibleRoster[0] ? visibleRoster[0].id : '', title: '', type: 'Single', genre: '', releaseDate: todayStr(), isrc: '', upc: '', status: 'Processing', artworkUrl: '', enteredBy: '', hasVideo: false, licenseExpiration: '', collaborators: [], primaryArtists: [], primaryMarket: '', secondaryMarket: '', checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs(), label: '', explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits() };
   const [distributorEmail, setDistributorEmail] = useState('');
+  const [fromSubmissionId, setFromSubmissionId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
@@ -1611,19 +1612,24 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
   const artworkInputRef = useRef(null);
   const lastEnteredBy = catalog.length ? (catalog[catalog.length - 1].enteredBy || '') : '';
 
-  function openAdd() { setForm({ ...empty, artistId: visibleRoster[0] ? visibleRoster[0].id : '', enteredBy: lastEnteredBy, checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs() }); setEditing(null); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
+  function openAdd() { setFromSubmissionId(null); setForm({ ...empty, artistId: visibleRoster[0] ? visibleRoster[0].id : '', enteredBy: lastEnteredBy, checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs() }); setEditing(null); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
   function openFromSubmission(sub) {
     setForm({ ...empty, artistId: sub.artistId, title: sub.title, type: sub.type, genre: sub.genre || '', releaseDate: sub.proposedDate || todayStr(), artworkUrl: sub.artworkUrl || '', collaborators: sub.collaborators || [], primaryArtists: sub.primaryArtists || [], enteredBy: sessionName, checklist: makeReleaseChecklist(), distributionDocs: sub.distributionDocs && sub.distributionDocs.length ? sub.distributionDocs : makeDistributionDocs(), explicit: sub.explicit || 'Not Set', dolbyAtmos: !!sub.dolbyAtmos, lyrics: sub.lyrics || '', duration: sub.duration || '', credits: sub.credits ? { ...emptyCredits(), ...sub.credits } : emptyCredits(), splitSheet: sub.splitSheet || '', splitSheetName: sub.splitSheetName || '' });
     setEditing(null);
     setNewCollab({ name: '', role: 'Feature', splitPercent: '' });
     setDistributorEmail('');
     setShowForm(true);
-    if (updateReleaseSubmissions) updateReleaseSubmissions(releaseSubmissions.map(s => s.id === sub.id ? { ...s, status: 'Approved', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : s));
+    setFromSubmissionId(sub.id); // marked Accepted only when this release is saved
   }
+  // Accepted from the Submissions screen: open the release form pre-filled once.
+  useEffect(() => {
+    if (incomingSubmission) { openFromSubmission(incomingSubmission); if (clearIncoming) clearIncoming(); }
+    // eslint-disable-next-line
+  }, [incomingSubmission]);
   function rejectSubmission(sub) {
     if (updateReleaseSubmissions) updateReleaseSubmissions(releaseSubmissions.map(s => s.id === sub.id ? { ...s, status: 'Rejected', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : s));
   }
-  function openEdit(r) { setForm({ ...empty, ...r, collaborators: r.collaborators || [], primaryArtists: r.primaryArtists || [], checklist: r.checklist && r.checklist.length ? r.checklist : makeReleaseChecklist(), distributionDocs: r.distributionDocs && r.distributionDocs.length ? r.distributionDocs : makeDistributionDocs(), credits: r.credits ? { ...emptyCredits(), ...r.credits } : emptyCredits() }); setEditing(r.id); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
+  function openEdit(r) { setFromSubmissionId(null); setForm({ ...empty, ...r, collaborators: r.collaborators || [], primaryArtists: r.primaryArtists || [], checklist: r.checklist && r.checklist.length ? r.checklist : makeReleaseChecklist(), distributionDocs: r.distributionDocs && r.distributionDocs.length ? r.distributionDocs : makeDistributionDocs(), credits: r.credits ? { ...emptyCredits(), ...r.credits } : emptyCredits() }); setEditing(r.id); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditing(null); setNewChecklistLabel(''); if (artworkInputRef.current) artworkInputRef.current.value = ''; }
   function addCollaborator() {
     if (!newCollab.name.trim()) return;
@@ -1701,6 +1707,10 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
     if (!form.title.trim()) return;
     if (editing) update(catalog.map(r => r.id === editing ? { ...form, id: editing } : r));
     else update([...catalog, { ...form, id: uid() }]);
+    if (fromSubmissionId && updateReleaseSubmissions) {
+      updateReleaseSubmissions(releaseSubmissions.map(x => x.id === fromSubmissionId ? { ...x, status: 'Approved', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : x));
+    }
+    setFromSubmissionId(null);
     closeForm();
   }
   function remove(id) { update(catalog.filter(r => r.id !== id)); setConfirmId(null); }
@@ -1737,36 +1747,10 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
     <div>
       <SectionHeader title="Catalog" description="Every release across the roster — singles, EPs, and albums." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add release</Btn>} />
 
-      {canEdit && visibleSubmissions.length > 0 && (
-        <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
-          <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>Artists have submitted {visibleSubmissions.length} new release{visibleSubmissions.length === 1 ? '' : 's'} for review</div>
-          <div className="flex flex-col gap-2">
-            {visibleSubmissions.map(sub => {
-              const artist = roster.find(a => a.id === sub.artistId);
-              const missing = missingRequiredDocs(sub.distributionDocs);
-              return (
-                <div key={sub.id} className="rounded p-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: C.panel, border: '1px solid ' + C.border }}>
-                  <div className="flex items-center gap-2">
-                    <ArtworkThumb release={{ title: sub.title, artworkUrl: sub.artworkUrl }} size={32} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{sub.title} <span style={{ color: C.textFaint, fontWeight: 400 }}>({sub.type}{sub.genre ? ' · ' + sub.genre : ''})</span></div>
-                      <div className="text-xs" style={{ color: C.textFaint }}>{artist ? artist.name : 'Unknown'}{sub.proposedDate ? ' · proposed ' + formatDate(sub.proposedDate) : ''}{(sub.collaborators || []).some(c => c.role === 'Feature') ? ' · feat. ' + sub.collaborators.filter(c => c.role === 'Feature').map(c => c.name).join(', ') : ''}{sub.notes ? ' · "' + sub.notes + '"' : ''}</div>
-                      <div className="text-xs mt-0.5" style={{ color: missing > 0 ? C.amber : C.teal }}>{missing > 0 ? missing + ' required doc' + (missing === 1 ? '' : 's') + ' still marked not-ready' : 'All required docs marked ready'}</div>
-                      <div className="text-xs mt-0.5" style={{ color: C.textDim }}>
-                        Splits: {(sub.collaborators || []).length ? sub.collaborators.map(c => c.name + ' (' + c.role + ') ' + c.splitPercent + '%').join(' · ') + ' · ' : ''}{artist ? artist.name : 'Artist'} {Math.max(0, 100 - (sub.collaborators || []).reduce((t, c) => t + (Number(c.splitPercent) || 0), 0))}%
-                        {' · '}{sub.splitSheet ? <a href={sub.splitSheet} download={sub.splitSheetName || 'split-sheet'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download split sheet</a> : <span style={{ color: C.amber }}>No split sheet</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Btn variant="primary" onClick={() => openFromSubmission(sub)}>Review &amp; add</Btn>
-                    <Btn variant="ghost" onClick={() => rejectSubmission(sub)}>Reject</Btn>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {canEdit && visibleSubmissions.length > 0 && onOpenSubmissions && (
+        <button onClick={onOpenSubmissions} className="w-full text-left rounded border px-4 py-3 mb-6 text-sm" style={{ background: C.amberSoft, borderColor: C.amber, color: C.text }}>
+          <span style={{ color: C.amber, fontWeight: 600 }}>{visibleSubmissions.length} release submission{visibleSubmissions.length === 1 ? '' : 's'} waiting for review</span> · open Submissions
+        </button>
       )}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
@@ -3248,6 +3232,161 @@ function BackupSection({ allData, updaters, dataVersion }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// What a release submission needs before it can go to Catalog.
+function submissionChecks(sub) {
+  const collabs = sub.collaborators || [];
+  const total = collabs.reduce((t, c) => t + (Number(c.splitPercent) || 0), 0);
+  const credits = sub.credits || {};
+  return [
+    { label: 'Title and type', ok: !!(sub.title && sub.type) },
+    { label: 'Proposed release date', ok: !!sub.proposedDate },
+    { label: 'Artwork attached', ok: !!sub.artworkUrl },
+    { label: 'Splits add up to 100% or less', ok: total <= 100 },
+    { label: 'Every feature, producer and songwriter has a split %', ok: collabs.filter(c => SPLIT_REQUIRED_ROLES.includes(c.role)).every(c => c.splitPercent !== '' && c.splitPercent !== null && c.splitPercent !== undefined) },
+    { label: 'Signed split sheet uploaded', ok: !!sub.splitSheet },
+    { label: 'Artist confirmed everyone signed', ok: !!sub.splitsConfirmed },
+    { label: 'Written by and produced by credited', ok: !!(credits.writtenBy && credits.producedBy) },
+    { label: 'Duration', ok: !!sub.duration },
+    { label: 'Explicit / clean set', ok: !!sub.explicit && sub.explicit !== 'Not Set' },
+    { label: 'Lyrics', ok: !!(sub.lyrics || '').trim() },
+    { label: 'Required distribution docs ready', ok: missingRequiredDocs(sub.distributionDocs) === 0 },
+  ];
+}
+const SUBMISSION_LABELS = { Pending: 'Waiting review', 'Needs info': 'Needs info', Approved: 'Accepted', Rejected: 'Rejected' };
+const SUBMISSION_TONES = { Pending: 'amber', 'Needs info': 'amber', Approved: 'teal', Rejected: 'red' };
+
+function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null, canEdit = true, sessionName = '', onAccept }) {
+  const [status, setStatus] = useState('Pending');
+  const [openId, setOpenId] = useState(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const artistOf = id => roster.find(a => a.id === id) || {};
+  const scoped = releaseSubmissions.filter(sub => !pmScope || artistOf(sub.artistId).productManager === pmScope);
+  const shown = scoped.filter(sub => status === 'all' || sub.status === status).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  const count = st => scoped.filter(sub => sub.status === st).length;
+
+  function setSub(sub, patch) { update(releaseSubmissions.map(x => x.id === sub.id ? { ...x, ...patch } : x)); }
+  function addMessage(sub, nextStatus) {
+    const text = message.trim();
+    if (!text) { setError(nextStatus === 'Rejected' ? 'Say why it’s being rejected so the artist knows what to fix.' : 'Write what you need from the artist.'); return; }
+    const stamp = new Date().toISOString();
+    setSub(sub, { status: nextStatus, reviewedBy: sessionName, reviewedAt: stamp, messages: [...(sub.messages || []), { from: 'label', by: sessionName, at: stamp, text }] });
+    setMessage(''); setError('');
+  }
+  function mailto(sub) {
+    const a = artistOf(sub.artistId);
+    const last = [...(sub.messages || [])].reverse().find(m => m.from === 'label');
+    const body = 'Hi ' + (a.name || '') + ',\n\nAbout your release submission “' + sub.title + '”:\n\n' + (message.trim() || (last ? last.text : '')) + '\n\nYou can reply in your IMSS Records portal under Releases.\n\n' + sessionName;
+    return 'mailto:' + encodeURIComponent(a.email || '') + '?subject=' + encodeURIComponent('IMSS Records: more info needed for “' + sub.title + '”') + '&body=' + encodeURIComponent(body);
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Release submissions" description="New releases artists have sent in. Check each one is complete, ask for anything missing, then accept it into Catalog to add the UPC, ISRCs and the rest." />
+      <div className="flex gap-1 mb-4 flex-wrap" role="tablist" aria-label="Filter by status">
+        {[['Pending', 'Waiting review'], ['Needs info', 'Needs info'], ['Approved', 'Accepted'], ['Rejected', 'Rejected'], ['all', 'All']].map(([st, label]) => (
+          <button key={st} role="tab" aria-selected={status === st} onClick={() => { setStatus(st); setOpenId(null); }} className="text-sm px-3 py-1.5 rounded inline-flex items-center gap-1.5"
+            style={{ background: status === st ? C.amberSoft : 'transparent', color: status === st ? C.amber : C.textDim, border: '1px solid ' + (status === st ? 'transparent' : C.border), fontWeight: status === st ? 600 : 500 }}>
+            {label}{st !== 'all' && count(st) > 0 && <span style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{count(st)}</span>}
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 ? (
+        <EmptyState icon={Disc3} title={status === 'Pending' ? 'Nothing waiting for review' : 'Nothing here'} description="When an artist submits a release from their portal, it arrives here for review." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 820 }}>
+            <thead><tr><Th>Submitted</Th><Th>Artist</Th><Th>Release</Th><Th>Proposed date</Th><Th>Complete</Th><Th>Status</Th><Th align="right"></Th></tr></thead>
+            <tbody>
+              {shown.map(sub => {
+                const checks = submissionChecks(sub), passed = checks.filter(c => c.ok).length, a = artistOf(sub.artistId), isOpen = openId === sub.id;
+                const collabs = sub.collaborators || [], artistPct = Math.max(0, 100 - collabs.reduce((t, c) => t + (Number(c.splitPercent) || 0), 0));
+                return (
+                  <React.Fragment key={sub.id}>
+                    <tr>
+                      <Td mono>{formatDate((sub.submittedAt || '').slice(0, 10))}</Td>
+                      <Td>{a.name || 'Unknown artist'}</Td>
+                      <Td><span style={{ fontWeight: 600 }}>{sub.title}</span><div className="text-xs" style={{ color: C.textDim }}>{sub.type}{sub.genre ? ' · ' + sub.genre : ''}</div></Td>
+                      <Td mono>{sub.proposedDate ? formatDate(sub.proposedDate) : '—'}</Td>
+                      <Td><span style={{ fontFamily: MONO_FONT, color: passed === checks.length ? C.teal : C.amber, fontWeight: 600 }}>{passed}/{checks.length}</span></Td>
+                      <Td><Badge tone={SUBMISSION_TONES[sub.status]}>{SUBMISSION_LABELS[sub.status] || sub.status}</Badge></Td>
+                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : sub.id); setMessage(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : 'Review'}</button></Td>
+                    </tr>
+                    {isOpen && (
+                      <tr><td colSpan={7} style={{ padding: 0, borderBottom: '1px solid ' + C.border }}>
+                        <div className="imss-sub-review">
+                          <section>
+                            <h3 className="imss-sub-h">Completeness check · {passed} of {checks.length}</h3>
+                            <ul className="imss-checks">
+                              {checks.map(c => (
+                                <li key={c.label} className={c.ok ? 'is-ok' : 'is-miss'}>{c.ok ? <CheckCircle2 size={15} aria-hidden="true" /> : <span className="imss-check-miss" aria-hidden="true" />}<span>{c.label}</span><span className="sr-only">{c.ok ? ' — done' : ' — missing'}</span></li>
+                              ))}
+                            </ul>
+                          </section>
+                          <section>
+                            <h3 className="imss-sub-h">Splits</h3>
+                            <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                              <colgroup><col /><col style={{ width: '34%' }} /><col style={{ width: 72 }} /></colgroup>
+                              <tbody>
+                                {collabs.map((c, i) => <tr key={i}><Td>{c.name}</Td><Td>{c.role}</Td><Td align="right" mono>{c.splitPercent}%</Td></tr>)}
+                                <tr><Td><span style={{ fontWeight: 600 }}>{a.name || 'Artist'}</span></Td><Td>Primary artist</Td><Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{artistPct}%</span></Td></tr>
+                              </tbody>
+                            </table>
+                            <div className="text-sm mt-3">{sub.splitSheet ? <a href={sub.splitSheet} download={sub.splitSheetName || 'split-sheet'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download signed split sheet{sub.splitSheetName ? ' (' + sub.splitSheetName + ')' : ''}</a> : <span style={{ color: C.red }}>No split sheet uploaded</span>}</div>
+                            <h3 className="imss-sub-h mt-5">Credits</h3>
+                            <dl className="imss-sub-dl">
+                              {[['Performed by', 'performedBy'], ['Written by', 'writtenBy'], ['Produced by', 'producedBy'], ['Recording', 'recordingEngineer'], ['Mixing', 'mixingEngineer'], ['Mastering', 'masteringEngineer'], ['Dolby', 'dolbyEngineer']].map(([l, k]) => (
+                                <React.Fragment key={k}><dt>{l}</dt><dd>{(sub.credits || {})[k] || '—'}</dd></React.Fragment>
+                              ))}
+                              <dt>Primary artists</dt><dd>{[a.name, ...(sub.primaryArtists || [])].filter(Boolean).join(', ')}</dd>
+                              <dt>Duration</dt><dd>{sub.duration || '—'}</dd>
+                              <dt>Explicit</dt><dd>{sub.explicit || '—'}</dd>
+                              <dt>Notes</dt><dd>{sub.notes || '—'}</dd>
+                            </dl>
+                          </section>
+                          <section className="imss-sub-wide">
+                            <h3 className="imss-sub-h">Messages with the artist</h3>
+                            {(sub.messages || []).length === 0 ? <div className="text-sm" style={{ color: C.textDim }}>No messages yet.</div> : (
+                              <ol className="imss-thread">
+                                {sub.messages.map((m, i) => (
+                                  <li key={i} className={m.from === 'artist' ? 'is-artist' : 'is-label'}>
+                                    <div className="imss-thread-meta">{m.from === 'artist' ? (m.by || a.name) : (m.by || 'Label')} · {formatDate(String(m.at || '').slice(0, 10))}</div>
+                                    <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                            {canEdit && (sub.status === 'Pending' || sub.status === 'Needs info') && (
+                              <div className="mt-4">
+                                <Field label="Message to the artist">
+                                  <TextArea rows={3} value={message} onChange={e => { setMessage(e.target.value); setError(''); }} placeholder={'e.g. The split sheet is missing ' + ((collabs[0] || {}).name || 'a collaborator') + '’s signature. Please upload a signed copy.'} />
+                                </Field>
+                                {error && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{error}</div>}
+                                <div className="flex gap-2 flex-wrap mt-3">
+                                  <Btn variant="primary" onClick={() => onAccept(sub)}><CheckCircle2 size={14} /> Accept to catalog</Btn>
+                                  <Btn variant="ghost" onClick={() => addMessage(sub, 'Needs info')}><MessageSquare size={14} /> Request more info</Btn>
+                                  <a href={mailto(sub)} className="imss-btn rounded inline-flex items-center gap-1.5 text-sm px-3.5 py-2" style={{ background: 'rgba(255,255,255,0.04)', color: C.text, border: '1px solid rgba(255,255,255,0.12)', fontWeight: 500 }}><Mail size={14} /> Email artist</a>
+                                  <Btn variant="danger" onClick={() => addMessage(sub, 'Rejected')}>Reject</Btn>
+                                </div>
+                                {passed < checks.length && <div className="text-xs mt-2" style={{ color: C.amber }}>{checks.length - passed} check{checks.length - passed === 1 ? '' : 's'} not passing. You can still accept, or ask the artist first.</div>}
+                                {!a.email && <div className="text-xs mt-1" style={{ color: C.textDim }}>This artist has no email on the Roster yet, so Email artist opens a blank message.</div>}
+                              </div>
+                            )}
+                          </section>
+                        </div>
+                      </td></tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -4737,7 +4876,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
   );
 }
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, labelSettings, onLogout }) {
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -4965,6 +5104,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     setRequestForm({ category: REQUEST_CATEGORIES[0], title: '', message: '' });
   }
 
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replyError, setReplyError] = useState({});
+  async function sendSubmissionReply(sub) {
+    const text = (replyDrafts[sub.id] || '').trim();
+    if (!text) { setReplyError(e => ({ ...e, [sub.id]: 'Write a reply first.' })); return; }
+    setReplyError(e => ({ ...e, [sub.id]: '' }));
+    if (replyToSubmission) await replyToSubmission(sub.id, text);
+    else updateReleaseSubmissions(releaseSubmissions.map(x => x.id !== sub.id ? x : { ...x, status: 'Pending', messages: [...(x.messages || []), { from: 'artist', by: artist.name, at: new Date().toISOString(), text }] }));
+    setReplyDrafts(d => ({ ...d, [sub.id]: '' }));
+  }
   const mySubmissions = useMemo(() => [...releaseSubmissions.filter(s => s.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [releaseSubmissions, artist.id]);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const emptySubmitForm = { title: '', type: 'Single', genre: artist.genre || '', proposedDate: '', artworkUrl: '', notes: '', collaborators: [], primaryArtists: [], distributionDocs: makeDistributionDocs(), explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits(), splitSheet: '', splitSheetName: '', splitsConfirmed: false };
@@ -5442,19 +5591,44 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             )}
 
             {mySubmissions.length > 0 && (
-              <div className="rounded border mb-6" style={{ background: C.panel, borderColor: C.border }}>
-                <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Your submissions</div>
-                <table className="w-full">
-                  <tbody>
-                    {mySubmissions.map(s => (
-                      <tr key={s.id}>
-                        <Td>{s.title}<div className="text-xs" style={{ color: C.textFaint }}>{s.type}{s.proposedDate ? ' · ' + formatDate(s.proposedDate) : ''}{s.sentTo ? ' · sent to ' + s.sentTo : ''}</div></Td>
-                        <Td align="right"><Badge tone={s.status === 'Approved' ? 'teal' : s.status === 'Rejected' ? 'red' : 'amber'}>{s.status}</Badge></Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <section aria-labelledby="my-subs-h" className="rounded border mb-6 overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-ph"><h2 id="my-subs-h">Your submissions</h2></div>
+                <ul className="imss-my-subs">
+                  {mySubmissions.map(sub => {
+                    const msgs = sub.messages || [], needs = sub.status === 'Needs info';
+                    return (
+                      <li key={sub.id}>
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{sub.title}</div>
+                            <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{sub.type}{sub.proposedDate ? ' · ' + formatDate(sub.proposedDate) : ''}{sub.sentTo ? ' · sent to ' + sub.sentTo : ''}</div>
+                          </div>
+                          <Badge tone={SUBMISSION_TONES[sub.status]}>{SUBMISSION_LABELS[sub.status] || sub.status}</Badge>
+                        </div>
+                        {msgs.length > 0 && (
+                          <ol className="imss-thread mt-3">
+                            {msgs.map((m, i) => (
+                              <li key={i} className={m.from === 'artist' ? 'is-artist' : 'is-label'}>
+                                <div className="imss-thread-meta">{m.from === 'artist' ? 'You' : (m.by || 'IMSS Records')} · {formatDate(String(m.at || '').slice(0, 10))}</div>
+                                <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                        {needs && (
+                          <form className="mt-3" onSubmit={e => { e.preventDefault(); sendSubmissionReply(sub); }}>
+                            <Field label="Your reply">
+                              <TextArea rows={3} value={replyDrafts[sub.id] || ''} onChange={e => setReplyDrafts(d => ({ ...d, [sub.id]: e.target.value }))} placeholder="Answer the label’s question. If they need a new file, say where it is or email it to your PM." />
+                            </Field>
+                            {replyError[sub.id] && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{replyError[sub.id]}</div>}
+                            <div className="mt-2"><Btn variant="primary" type="submit"><MessageSquare size={14} /> Send reply</Btn></div>
+                          </form>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             )}
 
             <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Title', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'Has Video', 'Collaborators']} rows={artistCatalog.map(r => [
@@ -6217,6 +6391,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [accessRequests, setAccessRequests] = useState(SEED_ACCESS_REQUESTS);
   const [artistRequests, setArtistRequests] = useState(SEED_ARTIST_REQUESTS);
   const [invoices, setInvoices] = useState(SEED_INVOICES);
+  const [acceptingSubmission, setAcceptingSubmission] = useState(null);
   const [releaseSubmissions, setReleaseSubmissions] = useState(SEED_RELEASE_SUBMISSIONS);
   const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
   const [loading, setLoading] = useState(true);
@@ -6366,6 +6541,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.roster && { id: 'roster', label: 'Roster', icon: Users, group: 'Artists & Catalog' },
     perms.roster && { id: 'artist-requests', label: 'Artist Requests', icon: MessageSquare, group: 'Artists & Catalog' },
     perms.catalog && { id: 'catalog', label: 'Catalog', icon: Disc3, group: 'Artists & Catalog' },
+    perms.catalog && { id: 'submissions', label: 'Submissions', icon: Upload, group: 'Artists & Catalog' },
     session && session.mode === 'team' && { id: 'calendar', label: 'Release Calendar', icon: Calendar, group: 'Artists & Catalog' },
     perms.edits && perms.catalog && { id: 'import', label: 'Import', icon: Upload, group: 'Artists & Catalog' },
 
@@ -6454,11 +6630,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}
           dataVersion={DATA_VERSION}
         />}
-        {active === 'catalog' && <CatalogSection catalog={catalog} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name} />}
+        {active === 'catalog' && <CatalogSection catalog={catalog} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
         {active === 'calendar' && <ReleaseCalendarSection catalog={catalog} roster={roster} artistMap={artistMap} tasks={tasks} />}
         {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
         {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalog} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
+        {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} canEdit={canEdit} sessionName={session.name} pmScope={pmScope} />}
         {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={masterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
