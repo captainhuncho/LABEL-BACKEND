@@ -28,8 +28,14 @@ handles HTTPS.
 - Access: row-level security lets a signed-in user read/write only if their
   email is on the `staff` list (`is_team_member()`). Role permissions are still
   enforced in the app, not the database.
-- Sign-in: `src/AuthGate.jsx` (email link). The signed-in email picks the staff
-  record; there is no name picker in Supabase mode.
+- Sign-in: `src/AuthGate.jsx` (email link). `my_access()` says whether the
+  email is `team` (on the staff list) or `artist` (the email on a roster entry).
+- Artists never read `app_data`. `src/ArtistApp.jsx` calls `artist_portal()`,
+  which returns only that artist's rows, with each month's swift fee already
+  split to their share (label totals stay in the database). New requests go
+  through `artist_add()`, which stamps them as that artist's and unreviewed.
+- `section()`, `my_artist()` and `js_slug()` are internal: API roles must not
+  have EXECUTE on them. New functions get no API access unless granted.
 - With Supabase, a `DATA_VERSION` bump does **not** reseed; only an empty
   database gets seed data. Shape changes need a migration of `app_data`.
 - Production builds leave the real roster/catalog/revenue/master gross out of

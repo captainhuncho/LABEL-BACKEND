@@ -7,6 +7,8 @@ import { Btn, Field, Input } from './ui.jsx';
 
 export default function AuthGate({ children }) {
   const [authEmail, setAuthEmail] = useState(null);
+  // 'team', 'artist', or null (signed in but on neither list); undefined while checking.
+  const [access, setAccess] = useState(undefined);
   const [checking, setChecking] = useState(!!supabase);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
@@ -24,9 +26,26 @@ export default function AuthGate({ children }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  if (!supabase) return children({ authEmail: null, signOut: null });
+  useEffect(() => {
+    if (!supabase || !authEmail) return;
+    setAccess(undefined);
+    supabase.rpc('my_access').then(({ data, error: err }) => setAccess(err ? null : data));
+  }, [authEmail]);
+
+  if (!supabase) return children({ authEmail: null, access: 'team', signOut: null });
   if (checking) return null;
-  if (authEmail) return children({ authEmail, signOut: () => supabase.auth.signOut() });
+  const signOut = () => supabase.auth.signOut();
+  if (authEmail && access === undefined) return null;
+  if (authEmail && access) return children({ authEmail, access, signOut });
+  if (authEmail) {
+    return (
+      <div className="p-8 text-sm" style={{ color: C.text, fontFamily: HEADING_FONT }} role="alert">
+        <style>{GLOBAL_STYLES}</style>
+        <p className="mb-3">{authEmail} isn't set up for IMSS Records yet. Ask the label to add this email to your artist profile or the team list.</p>
+        <Btn variant="ghost" onClick={signOut}>Sign out</Btn>
+      </div>
+    );
+  }
 
   async function sendLink(e) {
     e.preventDefault();
@@ -52,8 +71,8 @@ export default function AuthGate({ children }) {
           </div>
         ) : (
           <form onSubmit={sendLink} className="rounded border p-4" style={{ background: C.panel, borderColor: C.borderLight }}>
-            <Field label="Work email">
-              <Input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@imssrecords.co" />
+            <Field label="Email">
+              <Input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
             </Field>
             {error && <div className="text-xs mt-2" style={{ color: C.red }} role="alert">{error}</div>}
             <div className="mt-3"><Btn variant="primary" type="submit">Email me a sign-in link</Btn></div>

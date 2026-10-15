@@ -889,7 +889,7 @@ function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope
           )}
           <Field label="Signed date"><Input type="date" value={form.signedDate} onChange={e => setForm({ ...form, signedDate: e.target.value })} /></Field>
           <Field label="Contract expiration"><Input type="date" value={form.contractExpiration} onChange={e => setForm({ ...form, contractExpiration: e.target.value })} /></Field>
-          <Field label="Contact email"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Email (also their portal sign-in)"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label="Dropbox / Drive folder" full><Input type="url" value={form.driveFolder} onChange={e => setForm({ ...form, driveFolder: e.target.value })} placeholder="https://drive.google.com/... or Dropbox link" /></Field>
           <Field label="Product Manager">
             <Select value={form.productManager} onChange={e => setForm({ ...form, productManager: e.target.value })}>
@@ -4606,7 +4606,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
   );
 }
 
-function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, labelSettings, onLogout }) {
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -5865,15 +5865,6 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     );
   }
 
-  if (authEmail && !authMember && !loading) {
-    return (
-      <div className="p-8 text-sm" style={{ color: C.text, fontFamily: HEADING_FONT }} role="alert">
-        <style>{GLOBAL_STYLES}</style>
-        <p className="mb-3">{authEmail} isn't on the IMSS Records team list. Ask an Admin to add this email on the Team screen.</p>
-        <Btn variant="ghost" onClick={signOut}>Sign out</Btn>
-      </div>
-    );
-  }
   if (authEmail && !session) return null;
 
   if (!session) {
