@@ -3563,6 +3563,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
   const [moveTo, setMoveTo] = useState('');
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
   const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
+  const pmOf = inv => (roster.find(a => a.id === inv.artistId) || {}).productManager || '';
   const reviewersOf = inv => invoiceReviewers(inv, roster, staff, workflow);
   const canAct = inv => canEdit && !!invoiceStage(inv) && (isAdmin || reviewersOf(inv).some(m => me && m.id === me.id));
   // Admins can approve at PM Approval too, so those also sit in an Admin's queue.
@@ -3664,7 +3665,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 860 }}>
-            <thead><tr><Th>Submitted</Th><Th>Artist</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Stage</Th><Th>With</Th><Th align="right"></Th></tr></thead>
+            <thead><tr><Th>Submitted</Th><Th>Artist</Th><Th>PM</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Stage</Th><Th>With</Th><Th align="right"><span className="sr-only">Actions</span></Th></tr></thead>
             <tbody>
               {shown.map(inv => {
                 const st = invoiceStatus(inv), stage = invoiceStage(inv), reviewers = reviewersOf(inv), isOpen = openId === inv.id, idx = INVOICE_STAGES.findIndex(x => x.status === st);
@@ -3673,15 +3674,16 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
                     <tr>
                       <Td mono>{formatDate((inv.submittedAt || '').slice(0, 10))}</Td>
                       <Td>{artistName(inv.artistId)}</Td>
+                      <Td>{pmOf(inv) || <span style={{ color: C.amber }}>No PM set</span>}</Td>
                       <Td>{INVOICE_KINDS[inv.kind] || inv.kind}</Td>
                       <Td>{inv.title}</Td>
                       <Td align="right" mono>{formatCents(inv.amount)}</Td>
                       <Td><Badge tone={INVOICE_TONES[st]}>{st}</Badge></Td>
                       <Td>{stage ? (reviewers.length ? reviewers.map(m => m.name).join(', ') : <span style={{ color: C.amber }}>Unassigned</span>) : '—'}</Td>
-                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setMessage(''); setMoveTo(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : canAct(inv) ? 'Review' : 'Open'}</button></Td>
+                      <Td align="right"><Btn variant={!isOpen && canAct(inv) ? 'primary' : 'ghost'} onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setMessage(''); setMoveTo(''); setError(''); }}>{isOpen ? <><ChevronDown size={14} /> Close</> : canAct(inv) ? <><CheckCircle2 size={14} /> Review</> : <><Eye size={14} /> View</>}</Btn></Td>
                     </tr>
                     {isOpen && (
-                      <tr><td colSpan={8} style={{ padding: 0, borderBottom: '1px solid ' + C.border }}>
+                      <tr><td colSpan={9} style={{ padding: 0, borderBottom: '1px solid ' + C.border }}>
                         <div className="imss-sub-review">
                           <section className="imss-sub-wide" style={{ borderTop: 'none', paddingTop: 0 }}>
                             <ol className="imss-steps" aria-label="Approval progress">
@@ -3697,6 +3699,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
                             <h3 className="imss-sub-h">Invoice</h3>
                             <dl className="imss-sub-dl">
                               <dt>Artist</dt><dd>{artistName(inv.artistId)}</dd>
+                              <dt>Product Manager</dt><dd>{pmOf(inv) || <span style={{ color: C.amber }}>None set on the Roster</span>}</dd>
                               <dt>Type</dt><dd>{INVOICE_KINDS[inv.kind] || inv.kind}</dd>
                               <dt>Amount</dt><dd style={{ fontFamily: MONO_FONT }}>{formatCents(inv.amount)}</dd>
                               <dt>Invoice date</dt><dd>{formatDate(inv.invoiceDate)}</dd>
