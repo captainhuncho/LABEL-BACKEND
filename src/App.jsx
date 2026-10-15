@@ -3560,6 +3560,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
   const [error, setError] = useState('');
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [message, setMessage] = useState('');
+  const [moveTo, setMoveTo] = useState('');
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
   const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
   const reviewersOf = inv => invoiceReviewers(inv, roster, staff, workflow);
@@ -3586,6 +3587,19 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
       ...(to === 'Paid' ? { paidAt: stamp } : {}),
     }));
     setNote(''); setError('');
+  }
+  // Admin override: put an invoice straight into any queue when the people
+  // assigned to it aren't available. Logged in history like any other move.
+  function adminMove(inv) {
+    const from = invoiceStatus(inv);
+    if (!moveTo || moveTo === from) return;
+    const stamp = new Date().toISOString();
+    const entry = { at: stamp, by: session.name, action: 'moved by Admin', from, to: moveTo, note: note.trim() };
+    update(invoices.map(i => i.id !== inv.id ? i : {
+      ...i, status: moveTo, history: [...(i.history || []), entry], reviewedBy: session.name, reviewedAt: stamp,
+      ...(moveTo === 'Paid' ? { paidAt: stamp } : {}),
+    }));
+    setMoveTo(''); setNote(''); setError('');
   }
   function sendMessage(inv) {
     const text = message.trim();
@@ -3664,7 +3678,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
                       <Td align="right" mono>{formatCents(inv.amount)}</Td>
                       <Td><Badge tone={INVOICE_TONES[st]}>{st}</Badge></Td>
                       <Td>{stage ? (reviewers.length ? reviewers.map(m => m.name).join(', ') : <span style={{ color: C.amber }}>Unassigned</span>) : '—'}</Td>
-                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setMessage(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : canAct(inv) ? 'Review' : 'Open'}</button></Td>
+                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setMessage(''); setMoveTo(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : canAct(inv) ? 'Review' : 'Open'}</button></Td>
                     </tr>
                     {isOpen && (
                       <tr><td colSpan={8} style={{ padding: 0, borderBottom: '1px solid ' + C.border }}>
@@ -3701,6 +3715,19 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
                               ))}
                             </ol>
                           </section>
+                          {isAdmin && canEdit && st !== 'Rejected' && (
+                            <section className="imss-sub-wide">
+                              <h3 className="imss-sub-h">Admin: move to a queue</h3>
+                              <p className="text-xs mb-2" style={{ color: C.textDim }}>Use this when the people on the current queue aren’t available. It skips the normal order; the move is kept in History and whoever holds the new queue is emailed.</p>
+                              <div className="flex gap-2 flex-wrap items-center">
+                                <Select value={moveTo} onChange={e => setMoveTo(e.target.value)} aria-label="Move invoice to" style={{ maxWidth: 240 }}>
+                                  <option value="">Choose a queue…</option>
+                                  {[...INVOICE_STAGES.map(x => x.status), 'Paid'].filter(x => x !== st).map(x => <option key={x} value={x}>{x}</option>)}
+                                </Select>
+                                <Btn variant="ghost" onClick={() => adminMove(inv)} disabled={!moveTo}><ChevronRight size={14} /> Move{moveTo ? ' to ' + moveTo : ''}</Btn>
+                              </div>
+                            </section>
+                          )}
                           <section className="imss-sub-wide">
                             <h3 className="imss-sub-h">Messages with the artist</h3>
                             <InvoiceThread inv={inv} artistLabel={artistName(inv.artistId)} />
