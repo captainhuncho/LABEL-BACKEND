@@ -18,7 +18,7 @@ export default function ArtistApp({ signOut }) {
 
   // The portal hands back the whole list; only the items it just added are sent.
   const adder = (section) => async (next) => {
-    const known = new Set(data[section].map(x => x.id));
+    const known = new Set((data[section] || []).map(x => x.id));
     for (const item of next.filter(x => !known.has(x.id))) {
       const { error: err } = await supabase.rpc('artist_add', { section_key: section, item });
       if (err) { setError('Could not send that. Please try again.'); return; }
@@ -37,6 +37,7 @@ export default function ArtistApp({ signOut }) {
       profileRequests={data.profileRequests} updateProfileRequests={adder('profileRequests')}
       artistRequests={data.artistRequests} updateArtistRequests={adder('artistRequests')}
       releaseSubmissions={data.releaseSubmissions} updateReleaseSubmissions={adder('releaseSubmissions')}
+      invoices={data.invoices || []} updateInvoices={adder('invoices')}
       onLogout={signOut}
     />
   );

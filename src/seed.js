@@ -804,6 +804,9 @@ export const REQUEST_CATEGORIES = ['Payout', 'Marketing Support', 'Studio Time',
 export const REQUEST_STATUSES = ['Open', 'In Progress', 'Resolved'];
 export const SEED_ARTIST_REQUESTS = [];
 
+// Artist invoices: expense claims and service fees, reviewed by the label.
+export const SEED_INVOICES = [];
+
 export const SEED_RELEASE_SUBMISSIONS = [];
 
 export const SEED_NOTICES = [

@@ -1,11 +1,11 @@
 import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
 import Papa from 'papaparse';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueRowSplit, slug, swiftShareFor } from './finance.js';
-import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
+import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
 import { ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
@@ -3143,7 +3143,7 @@ function BackupSection({ allData, updaters, dataVersion }) {
   const [restored, setRestored] = useState(false);
   const fileInputRef = useRef(null);
 
-  const BACKUP_KEYS = ['roster', 'catalog', 'revenue', 'streams', 'payouts', 'masterGross', 'labelSettings', 'staff', 'tasks', 'ledger', 'accessRequests'];
+  const BACKUP_KEYS = ['roster', 'catalog', 'revenue', 'streams', 'payouts', 'masterGross', 'labelSettings', 'staff', 'tasks', 'ledger', 'accessRequests', 'invoices'];
 
   function downloadBackup() {
     const payload = { exportedAt: new Date().toISOString(), dataVersion, source: 'IMSS Records Dashboard' };
@@ -3243,6 +3243,94 @@ function BackupSection({ allData, updaters, dataVersion }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+const INVOICE_KINDS = { expense: 'Expense claim', service: 'Services / fee' };
+const INVOICE_TONES = { Pending: 'amber', Approved: 'teal', Paid: 'teal', Rejected: 'red' };
+
+function InvoicesSection({ invoices, update, roster, canEdit = true, sessionName = '', pmScope = null }) {
+  const [status, setStatus] = useState('Pending');
+  const [openId, setOpenId] = useState(null);
+  const [note, setNote] = useState('');
+  const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
+  const scoped = invoices.filter(i => !pmScope || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
+  const shown = scoped.filter(i => status === 'all' || i.status === status).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  const sum = st => scoped.filter(i => i.status === st).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  function decide(inv, next) {
+    const stamp = new Date().toISOString();
+    update(invoices.map(i => i.id !== inv.id ? i : {
+      ...i, status: next,
+      ...(next === 'Paid' ? { paidAt: stamp } : { reviewedBy: sessionName, reviewedAt: stamp, reviewNote: note.trim() || i.reviewNote || '' }),
+    }));
+    setNote('');
+    if (next !== 'Approved') setOpenId(null);
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Invoices" description="Expense claims and service fees artists have submitted. Approve, reject, then mark paid once the money has gone out." />
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={FileText} label="Waiting for review" value={formatCurrency(sum('Pending'))} tone="amber" sub={scoped.filter(i => i.status === 'Pending').length + ' invoices'} />
+        <KPICard icon={Wallet} label="Approved, not yet paid" value={formatCurrency(sum('Approved'))} />
+        <KPICard icon={CheckCircle2} label="Paid" value={formatCurrency(sum('Paid'))} tone="teal" />
+      </div>
+      <div className="flex gap-1 mb-4 flex-wrap">
+        {['Pending', 'Approved', 'Paid', 'Rejected', 'all'].map(s => (
+          <button key={s} onClick={() => setStatus(s)} className="text-sm px-3 py-1.5 rounded"
+            style={{ background: status === s ? C.amberSoft : 'transparent', color: status === s ? C.amber : C.textDim, border: '1px solid ' + (status === s ? 'transparent' : C.border), fontWeight: status === s ? 600 : 500 }}>
+            {s === 'all' ? 'All' : s}
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 ? (
+        <EmptyState icon={FileText} title={status === 'all' ? 'No invoices yet' : 'Nothing ' + status.toLowerCase()} description="When an artist submits an expense claim or a service invoice from their portal, it lands here." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 760 }}>
+            <thead><tr><Th>Submitted</Th><Th>Artist</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Status</Th><Th align="right"></Th></tr></thead>
+            <tbody>
+              {shown.map(inv => (
+                <React.Fragment key={inv.id}>
+                  <tr>
+                    <Td mono>{formatDate((inv.submittedAt || '').slice(0, 10))}</Td>
+                    <Td>{artistName(inv.artistId)}</Td>
+                    <Td>{INVOICE_KINDS[inv.kind] || inv.kind}</Td>
+                    <Td>{inv.title}</Td>
+                    <Td align="right" mono>{formatCents(inv.amount)}</Td>
+                    <Td><Badge tone={INVOICE_TONES[inv.status]}>{inv.status}</Badge></Td>
+                    <Td align="right"><button onClick={() => { setOpenId(openId === inv.id ? null : inv.id); setNote(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{openId === inv.id ? 'Close' : 'Open'}</button></Td>
+                  </tr>
+                  {openId === inv.id && (
+                    <tr><td colSpan={7} style={{ padding: 16, borderBottom: '1px solid ' + C.border }}>
+                      <div className="imss-form-grid gap-3 text-sm" style={{ color: C.textDim }}>
+                        <div><b style={{ color: C.text }}>Invoice date</b><br />{formatDate(inv.invoiceDate)}</div>
+                        <div><b style={{ color: C.text }}>Invoice number</b><br />{inv.invoiceNumber || '—'}</div>
+                        <div><b style={{ color: C.text }}>Pay to</b><br />{inv.payTo || '—'}</div>
+                        <div className="imss-span-2"><b style={{ color: C.text }}>Details</b><br /><span style={{ whiteSpace: 'pre-wrap' }}>{inv.details || '—'}</span></div>
+                        {inv.attachment && <div className="imss-span-2"><b style={{ color: C.text }}>Attachment</b><br /><a href={inv.attachment} download={inv.attachmentName || 'invoice'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download {inv.attachmentName || 'file'}</a></div>}
+                        {inv.reviewedBy && <div className="imss-span-2"><b style={{ color: C.text }}>Reviewed</b><br />{inv.reviewedBy} · {formatDate((inv.reviewedAt || '').slice(0, 10))}{inv.reviewNote ? ' · “' + inv.reviewNote + '”' : ''}{inv.paidAt ? ' · paid ' + formatDate(inv.paidAt.slice(0, 10)) : ''}</div>}
+                      </div>
+                      {canEdit && (inv.status === 'Pending' || inv.status === 'Approved') && (
+                        <div className="mt-4 flex flex-col gap-2" style={{ maxWidth: 560 }}>
+                          {inv.status === 'Pending' && <Field label="Note to the artist (optional)"><Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Approved, paying with the March statement" /></Field>}
+                          <div className="flex gap-2 flex-wrap">
+                            {inv.status === 'Pending' && <Btn variant="primary" onClick={() => decide(inv, 'Approved')}><CheckCircle2 size={14} /> Approve</Btn>}
+                            {inv.status === 'Pending' && <Btn variant="danger" onClick={() => decide(inv, 'Rejected')}>Reject</Btn>}
+                            {inv.status === 'Approved' && <Btn variant="primary" onClick={() => decide(inv, 'Paid')}><Wallet size={14} /> Mark paid</Btn>}
+                          </div>
+                        </div>
+                      )}
+                    </td></tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -4640,7 +4728,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
   );
 }
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, labelSettings, onLogout }) {
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -4649,7 +4737,6 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const myRevenue = useMemo(() => revenue.filter(r => r.artistSlug === aSlug), [revenue, aSlug]);
   const myStreams = useMemo(() => streams.filter(s => releaseIds.has(s.releaseId)), [streams, releaseIds]);
 
-  const totalRevenue = myRevenue.reduce((s, r) => s + r.earning, 0);
   const totalStreams = myStreams.reduce((s, r) => s + r.count, 0);
 
   const lifetime = useMemo(() => artistLifetime(artist, revenue, masterGross), [artist, revenue, masterGross]);
@@ -4678,27 +4765,11 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
   }, [myExpenses]);
 
-  const monthlyRevenue = useMemo(() => {
-    const map = {};
-    myRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + r.earning; });
-    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
-  }, [myRevenue]);
-
   const platformTotals = useMemo(() => {
     const map = {};
     myStreams.forEach(s => { map[s.platform] = (map[s.platform] || 0) + s.count; });
     return Object.keys(map).map(k => ({ name: k, value: map[k] }));
   }, [myStreams]);
-
-  const topSongs = useMemo(() => {
-    const map = {};
-    myRevenue.forEach(r => {
-      if (!map[r.title]) map[r.title] = { id: r.title, title: r.title, value: 0, rows: [] };
-      map[r.title].value += r.earning;
-      map[r.title].rows.push(r);
-    });
-    return Object.values(map).sort((a, b) => b.value - a.value).slice(0, 5);
-  }, [myRevenue]);
 
   const sortedMyRevenue = [...myRevenue].sort((a, b) => (b.month || '').localeCompare(a.month || ''));
 
@@ -4753,15 +4824,48 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   }, [artistCatalog, myRevenue, revenue, masterGross, myPct]);
   const topEarned = releaseLedger.length ? Math.max(releaseLedger[0].earned, 0.01) : 1;
 
-  const monthlyEarnings = useMemo(() => {
-    const map = {};
-    myRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + splitOf(r).artistShare; });
-    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
-  }, [myRevenue, revenue, masterGross, myPct]);
-
   function openReleaseRevenue(title) {
     const f = { ...EMPTY_REV_FILTERS, product: title };
     setRevFilters(f); setRevGenerated(f); setRevError(''); setRevGroupBy('none'); setTab('revenue');
+  }
+
+  // Earnings: each month's totals, newest first, with a running total.
+  const earningsByMonth = useMemo(() => {
+    const map = {};
+    myRevenue.forEach(r => {
+      const x = splitOf(r), m = map[r.month] || (map[r.month] = { month: r.month, gross: 0, charge: 0, labelShare: 0, artistShare: 0 });
+      m.gross += x.gross; m.charge += x.charge; m.labelShare += x.labelShare; m.artistShare += x.artistShare;
+    });
+    let running = 0;
+    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month)).map(m => ({ ...m, running: (running += m.artistShare) })).reverse();
+  }, [myRevenue, revenue, masterGross, myPct]);
+
+  // Invoices and expenses the artist paid themselves.
+  const myInvoices = useMemo(() => [...invoices.filter(i => i.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [invoices, artist.id]);
+  const myExpenseClaims = myInvoices.filter(i => i.kind === 'expense');
+  const invoicesDue = myInvoices.filter(i => i.status === 'Approved').reduce((t, i) => t + (Number(i.amount) || 0), 0);
+  const emptyInvoice = { kind: 'expense', title: '', invoiceNumber: '', invoiceDate: todayStr(), amount: '', payTo: '', details: '', attachment: '', attachmentName: '' };
+  const [invoiceForm, setInvoiceForm] = useState(emptyInvoice);
+  const [invoiceError, setInvoiceError] = useState('');
+  const [invoiceSent, setInvoiceSent] = useState(false);
+  const invoiceFileRef = useRef(null);
+  function handleInvoiceFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setInvoiceError('That file is over 2 MB. Attach a smaller PDF or photo.'); e.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = () => setInvoiceForm(f => ({ ...f, attachment: reader.result, attachmentName: file.name }));
+    reader.readAsDataURL(file);
+  }
+  function submitInvoice(e) {
+    e.preventDefault();
+    const amount = Math.round(parseFloat(invoiceForm.amount) * 100) / 100;
+    if (!invoiceForm.title.trim()) { setInvoiceError('Add a short description of what the invoice is for.'); return; }
+    if (!(amount > 0)) { setInvoiceError('Enter the amount in USD, for example 120.50.'); return; }
+    const invoice = { id: uid(), artistId: artist.id, ...invoiceForm, title: invoiceForm.title.trim(), amount, status: 'Pending', submittedAt: new Date().toISOString() };
+    updateInvoices([invoice, ...invoices]);
+    setInvoiceForm(emptyInvoice); setInvoiceError(''); setInvoiceSent(true);
+    if (invoiceFileRef.current) invoiceFileRef.current.value = '';
   }
   const revTypes = useMemo(() => Array.from(new Set(myRevenue.map(r => r.type).filter(Boolean))), [myRevenue]);
   function revPeriodLabel() {
@@ -4794,11 +4898,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
 
   const TABS = [
-    { id: 'overview', label: 'Earnings', icon: LayoutDashboard, group: 'Money' },
-    { id: 'revenue', label: 'Revenue detail', icon: DollarSign, group: 'Money' },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Money' },
+    { id: 'revenue', label: 'Royalties', icon: Disc3, group: 'Money' },
+    { id: 'earnings', label: 'Earnings', icon: TrendingUp, group: 'Money' },
+    { id: 'expenses', label: 'Expenses', icon: Coins, group: 'Money' },
+    { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Money' },
     { id: 'statements', label: 'Statements', icon: Eye, group: 'Money' },
     { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Money' },
-    isFunded && { id: 'budget', label: 'Budget & Expenses', icon: ClipboardList, group: 'Money' },
+    isFunded && { id: 'budget', label: 'Budget', icon: ClipboardList, group: 'Money' },
     { id: 'releases', label: 'Releases', icon: Disc3, group: 'Music & you' },
     { id: 'requests', label: 'Requests', icon: MessageSquare, group: 'Music & you' },
     { id: 'profile', label: 'Profile', icon: UserCog, group: 'Music & you' },
@@ -4978,6 +5085,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </ol>
             </section>
 
+            {invoicesDue > 0 && (
+              <button onClick={() => setTab('invoices')} className="w-full text-left rounded border px-4 py-3 mb-6 text-sm" style={{ borderColor: C.border, background: C.panel, color: C.text }}>
+                Approved invoices waiting to be paid: <span style={{ fontFamily: MONO_FONT, color: C.amber, fontWeight: 600 }}>{formatCents(invoicesDue)}</span> <span style={{ color: C.textDim }}>· see Invoices</span>
+              </button>
+            )}
+
             {(myNotices.length > 0 || needsToKnow.length > 0) && (
               <section aria-label="Notices" className="mb-6 flex flex-col gap-2">
                 {needsToKnow.map((n, i) => (
@@ -5027,25 +5140,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               )}
             </section>
 
-            <div className={'gap-4 mb-6 ' + (platformTotals.length ? 'imss-grid-2' : '')}>
-              <section aria-labelledby="months-h" className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
-                <h2 id="months-h" className="text-sm mb-3" style={{ fontWeight: 600 }}>Your earnings by month</h2>
-                <div style={{ height: 220 }}>
-                  {monthlyEarnings.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textDim }}>No earnings yet</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyEarnings}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                        <XAxis dataKey="month" tick={{ fill: C.textDim, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                        <YAxis tick={{ fill: C.textDim, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => [formatCents(v), 'Your earnings']} />
-                        <Bar dataKey="value" fill={C.teal} radius={[3, 3, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </section>
+            <div className="mb-6">
               {platformTotals.length > 0 && (
                 <section aria-labelledby="streams-h" className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
                   <h2 id="streams-h" className="text-sm mb-3" style={{ fontWeight: 600 }}>Streams by platform · {formatNumber(totalStreams)}</h2>
@@ -5637,6 +5732,176 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           </div>
         )}
 
+        {tab === 'earnings' && (
+          <div>
+            <p className="text-sm mb-5" style={{ color: C.textDim, maxWidth: '70ch' }}>What you made each month across all your songs, after the Inbound Banking Charge and the label’s share.</p>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <KPICard icon={DollarSign} label="Your earnings, all time" value={formatCents(lifetime.artistShare)} tone="teal" />
+              <KPICard icon={TrendingUp} label={earningsByMonth[0] ? 'Latest month · ' + monthLabel(earningsByMonth[0].month) : 'Latest month'} value={formatCents(earningsByMonth[0] ? earningsByMonth[0].artistShare : 0)} />
+              <KPICard icon={Calendar} label="Months with earnings" value={earningsByMonth.length} />
+            </div>
+            {earningsByMonth.length === 0 ? (
+              <EmptyState icon={TrendingUp} title="No earnings yet" description="Once revenue for your songs is recorded, each month’s total shows here." />
+            ) : (
+              <>
+                <section aria-label="Your earnings by month chart" className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+                  <div style={{ height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[...earningsByMonth].reverse().map(m => ({ month: monthLabel(m.month), value: m.artistShare }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                        <XAxis dataKey="month" tick={{ fill: C.textDim, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                        <YAxis tick={{ fill: C.textDim, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => [formatCents(v), 'Your earnings']} />
+                        <Bar dataKey="value" fill={C.teal} radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </section>
+                <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-earnings-by-month'} headers={['Month', 'Gross', 'Inbound Banking Charge', 'Label share', 'Your earnings', 'Running total']} rows={earningsByMonth.map(m => [m.month, m.gross, m.charge, m.labelShare, m.artistShare, m.running])} />
+                <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                  <table className="w-full" style={{ minWidth: 720 }}>
+                    <thead><tr><Th>Month</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Label share</Th><Th align="right">Your earnings</Th><Th align="right">Running total</Th></tr></thead>
+                    <tbody>
+                      {earningsByMonth.map(m => (
+                        <tr key={m.month}>
+                          <Td mono>{monthLabel(m.month)}</Td>
+                          <Td align="right" mono>{formatCents(m.gross)}</Td>
+                          <Td align="right" mono>−{formatCents(m.charge)}</Td>
+                          <Td align="right" mono>−{formatCents(m.labelShare)}</Td>
+                          <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(m.artistShare)}</span></Td>
+                          <Td align="right" mono>{formatCents(m.running)}</Td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <Td><span style={{ fontWeight: 600 }}>Total</span></Td>
+                        <Td align="right" mono><span style={{ fontWeight: 600 }}>{formatCents(lifetime.gross)}</span></Td>
+                        <Td align="right" mono><span style={{ fontWeight: 600 }}>−{formatCents(lifetime.swift)}</span></Td>
+                        <Td align="right" mono><span style={{ fontWeight: 600 }}>−{formatCents(lifetime.labelShare)}</span></Td>
+                        <Td align="right" mono><span style={{ color: C.teal, fontWeight: 700 }}>{formatCents(lifetime.artistShare)}</span></Td>
+                        <Td>{''}</Td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === 'expenses' && (
+          <div>
+            <p className="text-sm mb-5" style={{ color: C.textDim, maxWidth: '70ch' }}>Money spent on your career, by the label and by you. Label spend marked “recoupable” comes back out of your royalties before payouts.</p>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <KPICard icon={Wallet} label="Spent by the label" value={formatCents(myExpenses.reduce((t, x) => t + x.amount, 0))} />
+              <KPICard icon={Wallet} label="Still being recouped" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />
+              <KPICard icon={FileText} label="Claimed by you" value={formatCents(myExpenseClaims.reduce((t, i) => t + (Number(i.amount) || 0), 0))} sub={formatCents(myExpenseClaims.filter(i => i.status === 'Paid').reduce((t, i) => t + (Number(i.amount) || 0), 0)) + ' paid back'} />
+            </div>
+
+            <h2 className="mb-3" style={{ fontWeight: 600, fontSize: 17 }}>Paid by the label</h2>
+            {myExpenses.length === 0 ? (
+              <div className="mb-8"><EmptyState icon={Wallet} title="Nothing spent yet" description="Advances, marketing and other costs the label pays for you will be listed here." /></div>
+            ) : (
+              <div className="rounded border overflow-x-auto mb-8" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 620 }}>
+                  <thead><tr><Th>Date</Th><Th>Category</Th><Th>Description</Th><Th>Recoupable</Th><Th align="right">Amount</Th></tr></thead>
+                  <tbody>
+                    {myExpenses.map(x => (
+                      <tr key={x.id}>
+                        <Td mono>{formatDate(x.date)}</Td>
+                        <Td>{x.category}</Td>
+                        <Td>{x.description || '—'}</Td>
+                        <Td>{x.recoupable ? <Badge tone="amber">Recoupable</Badge> : <Badge>Label cost</Badge>}</Td>
+                        <Td align="right" mono>{formatCents(x.amount)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+              <h2 style={{ fontWeight: 600, fontSize: 17 }}>Paid by you</h2>
+              <Btn variant="ghost" onClick={() => { setInvoiceForm({ ...emptyInvoice, kind: 'expense' }); setInvoiceSent(false); setTab('invoices'); }}><Plus size={14} /> Claim an expense</Btn>
+            </div>
+            {myExpenseClaims.length === 0 ? (
+              <EmptyState icon={FileText} title="No expense claims" description="Spent your own money on something the label agreed to cover? Submit an expense claim from Invoices." />
+            ) : (
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 560 }}>
+                  <thead><tr><Th>Date</Th><Th>Description</Th><Th>Status</Th><Th align="right">Amount</Th></tr></thead>
+                  <tbody>
+                    {myExpenseClaims.map(i => (
+                      <tr key={i.id}>
+                        <Td mono>{formatDate(i.invoiceDate)}</Td>
+                        <Td>{i.title}</Td>
+                        <Td><Badge tone={INVOICE_TONES[i.status]}>{i.status}</Badge></Td>
+                        <Td align="right" mono>{formatCents(i.amount)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'invoices' && (
+          <div>
+            <p className="text-sm mb-5" style={{ color: C.textDim, maxWidth: '70ch' }}>Send the label an invoice to claim back money you spent, or to bill for paid work like a feature or a show. Your Product Manager or an Admin reviews it; you’ll see the decision here.</p>
+
+            <form onSubmit={submitInvoice} className="rounded border p-5 mb-8" style={{ background: C.panel, borderColor: C.border }}>
+              <h2 className="mb-4" style={{ fontWeight: 600, fontSize: 17 }}>New invoice</h2>
+              <fieldset className="mb-4">
+                <legend className="text-xs mb-2" style={{ color: C.textDim }}>What is it for?</legend>
+                <div className="flex gap-2 flex-wrap" role="radiogroup">
+                  {Object.entries(INVOICE_KINDS).map(([k, label]) => (
+                    <label key={k} className="rounded border px-3 py-2 text-sm inline-flex items-center gap-2" style={{ cursor: 'pointer', borderColor: invoiceForm.kind === k ? C.amber : C.border, background: invoiceForm.kind === k ? C.amberSoft : 'transparent', color: invoiceForm.kind === k ? C.amber : C.text }}>
+                      <input type="radio" name="invoice-kind" value={k} checked={invoiceForm.kind === k} onChange={() => setInvoiceForm(f => ({ ...f, kind: k }))} style={{ accentColor: C.amber }} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="imss-form-grid gap-3">
+                <Field label="Description" full><Input required value={invoiceForm.title} onChange={e => setInvoiceForm(f => ({ ...f, title: e.target.value }))} placeholder={invoiceForm.kind === 'expense' ? 'e.g. Studio session, 12 March' : 'e.g. Feature verse on “Wave”'} /></Field>
+                <Field label="Amount (USD)"><Input required inputMode="decimal" value={invoiceForm.amount} onChange={e => setInvoiceForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" /></Field>
+                <Field label="Invoice date"><Input type="date" value={invoiceForm.invoiceDate} onChange={e => setInvoiceForm(f => ({ ...f, invoiceDate: e.target.value }))} /></Field>
+                <Field label="Invoice number (optional)"><Input value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="e.g. AC-2026-004" /></Field>
+                <Field label="Pay to (name on the account)"><Input value={invoiceForm.payTo} onChange={e => setInvoiceForm(f => ({ ...f, payTo: e.target.value }))} placeholder="Your name or company" /></Field>
+                <Field label="Details (optional)" full><TextArea rows={3} value={invoiceForm.details} onChange={e => setInvoiceForm(f => ({ ...f, details: e.target.value }))} placeholder="Anything the label needs to know: who agreed it, what it covers." /></Field>
+                <Field label={invoiceForm.kind === 'expense' ? 'Receipt (PDF or photo, up to 2 MB)' : 'Invoice file (PDF or photo, up to 2 MB, optional)'} full>
+                  <input ref={invoiceFileRef} type="file" accept="application/pdf,image/*" onChange={handleInvoiceFile} className="text-sm" style={{ color: C.textDim }} />
+                </Field>
+              </div>
+              {invoiceError && <div className="text-sm mt-3" role="alert" style={{ color: C.red }}>{invoiceError}</div>}
+              {invoiceSent && !invoiceError && <div className="text-sm mt-3" role="status" style={{ color: C.teal }}>Invoice sent. It’s listed below while the label reviews it.</div>}
+              <div className="mt-4"><Btn variant="primary" type="submit"><FileText size={14} /> Submit invoice</Btn></div>
+            </form>
+
+            <h2 className="mb-3" style={{ fontWeight: 600, fontSize: 17 }}>Your invoices</h2>
+            {myInvoices.length === 0 ? (
+              <EmptyState icon={FileText} title="No invoices yet" description="Invoices you submit show here with their status: pending, approved, paid or rejected." />
+            ) : (
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 620 }}>
+                  <thead><tr><Th>Date</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Status</Th></tr></thead>
+                  <tbody>
+                    {myInvoices.map(i => (
+                      <tr key={i.id}>
+                        <Td mono>{formatDate(i.invoiceDate)}</Td>
+                        <Td>{INVOICE_KINDS[i.kind] || i.kind}</Td>
+                        <Td>{i.title}{i.reviewNote ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>Label: {i.reviewNote}</div> : null}</Td>
+                        <Td align="right" mono>{formatCents(i.amount)}</Td>
+                        <Td><Badge tone={INVOICE_TONES[i.status]}>{i.status}</Badge></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'statements' && (
           <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
         )}
@@ -5788,6 +6053,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [profileRequests, setProfileRequests] = useState(SEED_PROFILE_REQUESTS);
   const [accessRequests, setAccessRequests] = useState(SEED_ACCESS_REQUESTS);
   const [artistRequests, setArtistRequests] = useState(SEED_ARTIST_REQUESTS);
+  const [invoices, setInvoices] = useState(SEED_INVOICES);
   const [releaseSubmissions, setReleaseSubmissions] = useState(SEED_RELEASE_SUBMISSIONS);
   const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
   const [loading, setLoading] = useState(true);
@@ -5825,6 +6091,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['profileRequests', setProfileRequests, SEED_PROFILE_REQUESTS],
         ['accessRequests', setAccessRequests, SEED_ACCESS_REQUESTS],
         ['artistRequests', setArtistRequests, SEED_ARTIST_REQUESTS],
+        ['invoices', setInvoices, SEED_INVOICES],
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
       ];
@@ -5896,6 +6163,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   function updateProfileRequests(next) { logChange('Profile requests', profileRequests, next); setProfileRequests(next); persist('profileRequests', next); }
   function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
   function updateArtistRequests(next) { logChange('Artist requests', artistRequests, next); setArtistRequests(next); persist('artistRequests', next); }
+  function updateInvoices(next) { logChange('Invoices', invoices, next); setInvoices(next); persist('invoices', next); }
   function updateReleaseSubmissions(next) { logChange('Release submissions', releaseSubmissions, next); setReleaseSubmissions(next); persist('releaseSubmissions', next); }
 
   function clearAll() {
@@ -5942,6 +6210,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.royalties && { id: 'mastergross', label: 'Master Gross', icon: Coins, group: 'Finance' },
     perms.spend && { id: 'ledger', label: 'Ledger', icon: Wallet, group: 'Finance' },
     perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Finance' },
+    perms.spend && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Finance' },
     perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Finance' },
     perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Finance' },
 
@@ -5993,7 +6262,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   if (session.mode === 'artist') {
     const artist = roster.find(a => a.id === session.artistId);
     if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (
@@ -6018,8 +6287,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
         {active === 'backup' && <BackupSection
-          allData={{ roster, catalog, revenue, streams, payouts, masterGross, labelSettings, staff, tasks, ledger, accessRequests }}
-          updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests }}
+          allData={{ roster, catalog, revenue, streams, payouts, masterGross, labelSettings, staff, tasks, ledger, accessRequests, invoices }}
+          updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}
           dataVersion={DATA_VERSION}
         />}
         {active === 'catalog' && <CatalogSection catalog={catalog} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name} />}
@@ -6027,6 +6296,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
         {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalog} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
+        {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} canEdit={canEdit} sessionName={session.name} pmScope={pmScope} />}
         {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={masterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}

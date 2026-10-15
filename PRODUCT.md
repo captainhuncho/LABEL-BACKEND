@@ -282,6 +282,10 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 - **Ledger** — non-royalty income and expenses. Filters by type and artist.
   Recoupment-status table per artist (spent / earned / balance). PM-scoped.
 - **Budget** — label-wide category allocations vs actual spend. Hidden for PMs.
+- **Invoices** — artists' expense claims and service invoices. Filter by
+  status, open one to see its details and attachment, approve or reject with an
+  optional note to the artist, then mark paid. Gated on `spend`; PMs see only
+  their artists.
 - **Payouts** — pick artist + period → generates a statement live from the
   formulas; save as draft or mark paid. Label P&L KPIs. Recoupment table.
 - **Statements** — pick an artist, choose a period, Generate → month-by-month
@@ -301,18 +305,29 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 ### Artist portal
 
 Built around what the artist is owed. Sidebar navigation (a swipeable strip on
-phones) in two groups — **Money:** Earnings, Revenue detail, Statements,
-Payouts, Budget & Expenses (funded artists only); **Music & you:** Releases,
-Requests (with an open count), Profile — and Sign out.
+phones) in two groups — **Money:** Overview, Royalties, Earnings, Expenses,
+Invoices, Statements, Payouts, Budget (funded artists only); **Music & you:**
+Releases, Requests (with an open count), Profile — and Sign out.
 
-- **Earnings** (home) — "You're owed" balance, with the arithmetic beside it:
+- **Overview** (home) — "You're owed" balance, with the arithmetic beside it:
   gross − Inbound Banking Charge − label share = their earnings − recouped
   expenses − paid = owed. Then notices, then every release ranked by what it
-  has earned them (tap one to open its months in Revenue detail), then their
-  earnings by month, and streams by platform when there is stream data.
-- **Revenue detail** — period + type + product filters, **Generate** → their
+  has earned them (tap one to open its months in Royalties), approved invoices
+  waiting to be paid, and streams by platform when there is stream data.
+- **Royalties** — song by song: period + type + product filters, **Generate** → their
   rows with gross, Inbound Banking Charge, label share and their earnings per
   row and in total; groupable flat / by type / by product, with export.
+- **Earnings** — what they made in total each month: gross, Inbound Banking
+  Charge, label share, their earnings and a running total, with a chart and
+  export.
+- **Expenses** — money spent on their career in both directions: **paid by the
+  label** (ledger expenses, marked recoupable or label cost) and **paid by
+  them** (their expense-claim invoices and whether each was paid back).
+- **Invoices** — submit an invoice (expense claim or services / fee) with
+  description, amount in USD, date, number, pay-to name, details and a receipt
+  or invoice file (PDF or photo, up to 2 MB); see each one's status (Pending,
+  Approved, Paid, Rejected) and the label's note. Approved invoices are owed
+  separately from royalties; they don't change the royalty balance.
 - **Statements** — period chooser, **Generate** → the statement.
 - **Payouts** — earnings accrued, unrecouped balance, paid to date, balance
   due, and payout history.

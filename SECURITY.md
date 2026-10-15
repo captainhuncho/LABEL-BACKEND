@@ -37,9 +37,10 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - **Artists** never read `app_data` directly. `artist_portal()` returns only
   their own catalog, revenue, payouts, expenses and requests, with each month's
   Inbound Banking Charge pre-split to their share, so label-wide totals never
-  reach their browser. `artist_add()` lets them add a profile change, request or
-  release submission only; it forces the item's `artistId` to theirs and resets
-  any status or review fields.
+  reach their browser. `artist_add()` lets them add a profile change, request, release submission
+  or invoice only; it forces the item's `artistId` to theirs and resets any
+  status or review fields. Invoices must be an `expense` or `service` with a
+  positive numeric amount. Attachments are stored inline (limit ~2 MB).
 - Internal helpers (`section()`, `my_artist()`, `js_slug()`) are not callable
   from the API. Default privileges in `public` grant no API access to new
   functions; every function exposed to the API is granted explicitly.
