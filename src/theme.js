@@ -140,7 +140,8 @@ export const GLOBAL_STYLES = `
 .imss-dash-preset { height: 38px; padding: 0 12px; border-radius: 14px; border: 1px solid ${C.border}; color: ${C.textDim}; font-size: 13px; font-weight: 500; transition: background-color 160ms cubic-bezier(0.16,1,0.3,1), color 160ms; }
 .imss-dash-preset:hover { color: ${C.text}; background: rgba(255,255,255,0.05); }
 .imss-dash-preset.is-on { color: ${C.amber}; background: ${C.amberSoft}; border-color: transparent; font-weight: 600; }
-.imss-dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.imss-dash-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .imss-dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .imss-dash-stat { padding: 16px 18px; display: flex; flex-direction: column; min-width: 0; }
 .imss-dash-lab { font-size: 12px; color: ${C.textDim}; margin-bottom: 10px; }
 .imss-dash-fig { font-family: ${MONO_FONT}; font-size: 26px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }

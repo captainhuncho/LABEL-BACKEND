@@ -42,3 +42,23 @@ const supabaseStorage = {
     return true;
   },
 };
+
+// Original statement files. With Supabase they live in the private
+// `statements` bucket under <artistId>/; locally they're kept as data URLs.
+export async function saveStatementFile(artistId, fileId, file) {
+  if (!supabase) {
+    const dataUrl = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+    return { dataUrl };
+  }
+  const path = artistId + '/' + fileId + '.csv';
+  const { error } = await supabase.storage.from('statements').upload(path, file, { contentType: 'text/csv', upsert: true });
+  if (error) throw error;
+  return { path };
+}
+
+export async function statementFileUrl(record) {
+  if (record.dataUrl) return record.dataUrl;
+  const { data, error } = await supabase.storage.from('statements').createSignedUrl(record.path, 120, { download: record.name || true });
+  if (error) throw error;
+  return data.signedUrl;
+}

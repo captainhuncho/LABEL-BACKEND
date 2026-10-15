@@ -136,6 +136,24 @@ export function revenueRowSplit(row, revenue, masterGross, artistPct) {
   return { gross: row.earning, charge, net, artistShare: net * artistPct, labelShare: net * (1 - artistPct) };
 }
 
+// g3) Breakdown of revenue rows by one detail map (stores, countries, types,
+// models, salesMonths), each part getting its proportional slice of the row's
+// artist earnings. Rows without that detail land in "Not broken down".
+export function revenueBreakdown(rows, field, splitOf) {
+  const map = {};
+  rows.forEach(r => {
+    const detail = r[field] && Object.keys(r[field]).length ? r[field] : { 'Not broken down': r.earning };
+    const yours = splitOf(r).artistShare;
+    Object.entries(detail).forEach(([key, gross]) => {
+      const m = map[key] || (map[key] = { key, gross: 0, yours: 0 });
+      m.gross += gross;
+      m.yours += r.earning ? yours * gross / r.earning : 0;
+    });
+  });
+  // Undetailed money goes last so the real breakdown leads.
+  return Object.values(map).sort((a, b) => (a.key === 'Not broken down') - (b.key === 'Not broken down') || b.gross - a.gross);
+}
+
 // h) Label P&L (all-time)
 export function labelPnL(roster, revenue, masterGross, ledger) {
   const totals = companyFinanceTotals(roster, revenue, masterGross);

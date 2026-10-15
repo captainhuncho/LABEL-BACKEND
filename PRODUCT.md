@@ -297,7 +297,8 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 **Finance**
 - **Revenue** — one row per track per month. CRUD, filters (month range with
   Generate, artist, search), approve/reject pending rows, CSV export.
-- **Master Gross** — one row per month: total gross received, swift fee, net,
+- **Money received** (the `masterGross` collection, shown as "Money received")
+  — one row per month: money that actually landed in the bank, swift fee, net,
   and tracked revenue with the variance. KPI row showing total gross, total
   swift, tracked gross and untracked gap. Default swift fee setting.
 - **Ledger** — non-royalty income and expenses. Filters by type and artist.
@@ -433,8 +434,20 @@ Imported revenue rows also record how much each retailer paid (`stores`, e.g.
 this. Revenue recorded before this was added has no retailer split.
 
 
-Two modes:
+Three modes:
 
+0. **EMPIRE detailed royalty report** (`src/empire.js`,
+   `src/sections/EmpireImport.jsx`). Figures are the artist's **gross**, not
+   money received. Revenue is booked under the **Statement Date** (when IMSS
+   received it) using unrounded "Net (Raw)"; the Approx. Sales Date (when EMPIRE
+   collected it) is kept as `salesMonths` detail. Each song-month also keeps
+   `stores`, `countries`, `types`, `typeQty`, `models`, `isrc`, `upc`. The
+   preview checks the file's Totals row and each month against Money received;
+   re-importing a month replaces it. The original file is saved on each
+   artist's profile (`statementFiles`) and downloadable from the team artist
+   panel and the portal Statements tab. Artists see Royalties grouped by song,
+   release type, platform, country, format, model or month earned; rows without
+   detail show last as "Not broken down (older statements)".
 1. **Per-product detail report** — each row is one product's earnings
    (DistroKid/CD Baby/TuneCore style). Auto-detect column meanings from header
    aliases, let the user correct the mapping, match rows to existing artists and

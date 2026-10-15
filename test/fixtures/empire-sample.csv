@@ -1,0 +1,14 @@
+EMPIRE Detailed Royalty Report
+,Qty,Net
+Track,2,1.20
+"Audio Streaming","1,500",3.50
+"Video Streaming",300,0.75
+
+Totals,"1,802",5.45
+
+"Empire enabled more detailed reporting",,,,,,,,,,,,,"Enhanced Product Type","Enhanced Product Type","Enhanced Product Type",,,,
+"Statement Date","Approx. Sales Date","Service Group",Service,Label,UPC_EAN,"Catalog #","Product Title","Product Artist",ISRC,"Track Title","Track Artist",Type,"Commercial Model","Usage Type","Product Type Code",Country,Quantity,Net,"Net (Raw)"
+"Jun 2026","Apr 2026",Spotify,Spotify,"TEST LABEL",111,CAT1,"⁠⁠Demo Song (Not Explicit)","Test Artist",QZTEST000001,"Demo Song","Test Artist","Audio Stream",Subscription,"On Demand Stream","Audio Track",ZA,"1,000",$2.00,2.004
+"Jun 2026","Apr 2026",YouTube,YouTube,"TEST LABEL",111,CAT1,"⁠⁠Demo Song (Not Explicit)","Test Artist",QZTEST000001,"Demo Song","Test Artist","Video Stream","Ad Funded",UGC,"Video Track",US,300,$0.75,0.7496
+"May 2026","Mar 2026",Spotify,Spotify,"TEST LABEL",111,CAT1,"⁠⁠Demo Song (Not Explicit)","Test Artist",QZTEST000001,"Demo Song","Test Artist","Audio Stream","Ad Funded","On Demand Stream","Audio Track",ZA,500,$1.50,1.4964
+"May 2026","Mar 2026",iTunes,iTunes,"TEST LABEL",111,CAT1,"⁠⁠Demo Song (Not Explicit)","Test Artist",,,"Test Artist",Track,"A La Carte",Download,"Audio Track",GB,2,$1.20,1.2

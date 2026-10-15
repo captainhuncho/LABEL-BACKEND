@@ -45,6 +45,9 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   to ~6 MB). `artist_reply_submission()` lets an artist add a reply only to
   their own submission while it's Waiting review or Needs info, and puts it
   back to Waiting review.
+- **Statement files** live in the private Storage bucket `statements` under
+  `<artistId>/`. The team can manage every file; an artist can only read files
+  in their own folder. Downloads use short-lived (2 min) signed URLs.
 - Internal helpers (`section()`, `my_artist()`, `js_slug()`) are not callable
   from the API. Default privileges in `public` grant no API access to new
   functions; every function exposed to the API is granted explicitly.

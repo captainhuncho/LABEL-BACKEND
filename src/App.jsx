@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueRowSplit, slug, swiftShareFor } from './finance.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
-import { supabase } from './storage.js';
+import { statementFileUrl, supabase } from './storage.js';
+import EmpireImport from './sections/EmpireImport.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
 import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
@@ -316,7 +317,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
         <div className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
           <div className="text-xs mb-3" style={{ color: C.textFaint }}>Label finance snapshot</div>
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Distributor gross (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalGross)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Money received (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalGross)}</span></div>
             <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Inbound Banking Charges (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalSwift)}</span></div>
             <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Artist share</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.artistEarn)}</span></div>
             <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Label share</span><span style={{ fontFamily: MONO_FONT, color: C.teal }}>{formatCurrency(finance.labelEarn)}</span></div>
@@ -370,7 +371,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
   );
 }
 
-function ArtistDetailPanel({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
   const aSlug = useMemo(() => slug(artist.name), [artist.name]);
@@ -705,6 +706,7 @@ function ArtistDetailPanel({ artist, roster, catalog, revenue, streams, masterGr
             )}
           </div>
           )}
+          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
           {canViewRoyalties && (
           <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
             <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
@@ -761,7 +763,7 @@ function SendLinkButton({ email, labeled = false }) {
   );
 }
 
-function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function RosterSection({ statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '' };
   const [showForm, setShowForm] = useState(false);
@@ -824,6 +826,7 @@ function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope
 
       {detailId && roster.find(a => a.id === detailId) ? (
         <ArtistDetailPanel
+          statementFiles={statementFiles}
           artist={roster.find(a => a.id === detailId)}
           roster={roster} catalog={catalog} revenue={revenue} streams={streams} masterGross={masterGross}
           payouts={payouts} ledger={ledger} labelSettings={labelSettings} staff={staff}
@@ -2889,7 +2892,7 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 
   return (
     <div>
-      <SectionHeader title="Master Gross" description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
+      <SectionHeader title="Money received" description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Total gross (all months)" value={formatCurrency(totals.totalGross)} tone="teal" />
@@ -3245,6 +3248,81 @@ function BackupSection({ allData, updaters, dataVersion }) {
         )}
       </div>
     </div>
+  );
+}
+
+// Royalty breakdowns (EMPIRE detail on each revenue row).
+const BREAKDOWN_FIELDS = { stores: 'Platform', countries: 'Country', types: 'Format', models: 'Model', salesMonths: 'Month earned' };
+const regionNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { return null; } })();
+function breakdownLabel(format, key) {
+  if (key === 'Not broken down') return 'Not broken down (older statements)';
+  if (format === 'countries' && /^[A-Z]{2}$/.test(key) && regionNames) { try { return regionNames.of(key); } catch (e) { return key; } }
+  if (format === 'salesMonths') return monthLabel(key);
+  return key;
+}
+function RevenueBreakdownTable({ parts, label, format }) {
+  const total = parts.reduce((t, p) => t + p.gross, 0) || 1;
+  const top = parts.length ? parts[0].gross || 1 : 1;
+  const yoursTotal = parts.reduce((t, p) => t + p.yours, 0);
+  return (
+    <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+      <table className="w-full" style={{ minWidth: 620, tableLayout: 'fixed' }}>
+        <colgroup><col style={{ width: '30%' }} /><col /><col style={{ width: 120 }} /><col style={{ width: 80 }} /><col style={{ width: 130 }} /></colgroup>
+        <thead><tr><Th>{label}</Th><Th>{''}</Th><Th align="right">Gross</Th><Th align="right">Share</Th><Th align="right">Your earnings</Th></tr></thead>
+        <tbody>
+          {parts.map(p => (
+            <tr key={p.key}>
+              <Td><span style={{ overflowWrap: 'anywhere' }}>{breakdownLabel(format, p.key)}</span></Td>
+              <Td><span className="imss-ledger-bar" aria-hidden="true" style={{ display: 'block' }}><span style={{ width: Math.max(2, p.gross / top * 100) + '%' }}></span></span></Td>
+              <Td align="right" mono>{formatCents(p.gross)}</Td>
+              <Td align="right" mono>{Math.round(p.gross / total * 1000) / 10}%</Td>
+              <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(p.yours)}</span></Td>
+            </tr>
+          ))}
+          <tr>
+            <Td><span style={{ fontWeight: 600 }}>Total</span></Td><Td>{''}</Td>
+            <Td align="right" mono><span style={{ fontWeight: 600 }}>{formatCents(total === 1 && !parts.length ? 0 : total)}</span></Td><Td>{''}</Td>
+            <Td align="right" mono><span style={{ color: C.teal, fontWeight: 700 }}>{formatCents(yoursTotal)}</span></Td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Original royalty statement files kept on an artist's profile.
+function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.' }) {
+  const [error, setError] = useState('');
+  const sorted = [...files].sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
+  async function open(f) {
+    setError('');
+    try {
+      const url = await statementFileUrl(f);
+      const a = document.createElement('a'); a.href = url; a.download = f.name || 'statement.csv'; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (err) { setError('Could not download that file. Try again in a moment.'); }
+  }
+  return (
+    <section aria-label={title} className="rounded border overflow-x-auto" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="imss-dash-ph"><h2>{title}</h2><span className="text-xs" style={{ color: C.textDim }}>{files.length} file{files.length === 1 ? '' : 's'}</span></div>
+      {sorted.length === 0 ? <div className="px-4 pb-4 text-sm" style={{ color: C.textDim }}>{empty}</div> : (
+        <table className="w-full" style={{ minWidth: 560 }}>
+          <thead><tr><Th>Statement months</Th><Th>Songs</Th><Th align="right">Gross</Th><Th>Uploaded</Th><Th align="right">File</Th></tr></thead>
+          <tbody>
+            {sorted.map(f => (
+              <tr key={f.id}>
+                <Td>{(f.months || []).map(monthLabel).join(', ') || '—'}<div className="text-xs" style={{ color: C.textDim }}>{f.source || 'Statement'}</div></Td>
+                <Td>{(f.songs || []).join(', ') || '—'}</Td>
+                <Td align="right" mono>{formatCents(f.gross)}</Td>
+                <Td><span className="text-xs">{formatDate(String(f.uploadedAt || '').slice(0, 10))}{f.uploadedBy ? ' · ' + f.uploadedBy : ''}</span></Td>
+                <Td align="right"><button onClick={() => open(f)} className="inline-flex items-center gap-1" style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}><Download size={13} aria-hidden="true" /> Download</button></Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {error && <div className="px-4 pb-3 text-sm" role="alert" style={{ color: C.red }}>{error}</div>}
+    </section>
   );
 }
 
@@ -3986,7 +4064,7 @@ function StatementsSection({ roster, revenue, masterGross, ledger, payouts }) {
 
   return (
     <div>
-      <SectionHeader title="Statements" description="A per-artist royalty statement, generated on demand from revenue and master gross." />
+      <SectionHeader title="Statements" description="A per-artist royalty statement, generated on demand from revenue and money received." />
       <div className="rounded border p-4 mb-6 imss-print-hide" style={{ background: C.panel, borderColor: C.border }}>
         <Field label="Artist">
           <Select value={selectedArtist} onChange={e => setSelectedArtist(e.target.value)}>
@@ -4354,7 +4432,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
 
   return (
     <div>
-      <SectionHeader title="Payouts" description="Generate a payout statement for an artist over any period — computed live from revenue and master gross, per the inbound banking charge split formula." />
+      <SectionHeader title="Payouts" description="Generate a payout statement for an artist over any period — computed live from revenue and money received, per the inbound banking charge split formula." />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Label earnings (lifetime)" value={formatCurrency(pnl.labelEarn)} tone="teal" />
@@ -4470,7 +4548,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
   );
 }
 
-function ImportSection({ roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams }) {
+function ImportSection({ roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams, masterGross = [], statementFiles = [], updateStatementFiles, sessionName = '' }) {
   const [mode, setMode] = useState(null);
   const [step, setStep] = useState('choose');
   const [fileName, setFileName] = useState('');
@@ -4746,8 +4824,16 @@ function ImportSection({ roster, catalog, revenue, streams, updateRoster, update
     <div>
       <SectionHeader title="Import" description="Upload a royalty statement CSV from a distributor or DSP. IMSS Records matches it to your roster and catalog, and logs the earnings automatically — including the store-by-store breakdown artists see." />
 
+      {mode === 'empire' && (
+        <EmpireImport roster={roster} catalog={catalog} revenue={revenue} masterGross={masterGross} updateRevenue={updateRevenue} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} onDone={reset} />
+      )}
+
       {step === 'choose' && (
         <div className="imss-form-grid gap-4">
+          <button onClick={() => { setMode('empire'); setStep('empire'); }} className="text-left rounded border p-5" style={{ background: C.amberSoft, borderColor: C.amber }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>EMPIRE detailed royalty report</div>
+            <div className="text-sm" style={{ color: C.textDim }}>The “royalties_detailed” CSV from EMPIRE. Books gross by statement month with platform, country and type detail, and saves the file on the artist’s profile.</div>
+          </button>
           <button onClick={() => { setMode('detail'); setStep('upload'); }} className="text-left rounded border p-5" style={{ background: C.panel, borderColor: C.borderLight }}>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Per-product detail report</div>
             <div className="text-sm" style={{ color: C.textDim }}>Each row is one product's earnings — DistroKid, CD Baby, or TuneCore-style exports with a title, ISRC, and amount per line.</div>
@@ -5071,7 +5157,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
   );
 }
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, statementFiles = [], labelSettings, onLogout }) {
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -5194,6 +5280,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((x, y) => y.value - x.value);
   }, [dashRevenue]);
   const dashGross = dashRevenue.reduce((t, r) => t + r.earning, 0);
+  const dashCountries = useMemo(() => {
+    const map = {};
+    dashRevenue.forEach(r => Object.entries(r.countries || {}).forEach(([k, v]) => { map[k] = (map[k] || 0) + v; }));
+    return Object.entries(map).map(([code, value]) => ({ code, value })).sort((x, y) => y.value - x.value);
+  }, [dashRevenue]);
+  const dashUnits = dashRevenue.reduce((t, r) => t + (Number(r.quantity) || 0), 0);
 
   const dashBestMonth = useMemo(() => {
     const map = {};
@@ -5546,7 +5638,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
             </form>
             {dashError && <div className="text-sm mb-3" role="alert" style={{ color: C.red }}>{dashError}</div>}
-            <p className="text-sm mb-4" style={{ color: C.textDim }}>Balance is all time. Everything below shows <span style={{ color: C.text, fontWeight: 600 }}>{dashLabel}</span>.</p>
+            <p className="text-sm mb-4" style={{ color: C.textDim }}>Balance is all time. Everything below shows <span style={{ color: C.text, fontWeight: 600 }}>{dashLabel}</span>.{dashRetailers[0] && dashCountries[0] ? <> Most of your money came from <span style={{ color: C.text }}>{dashRetailers[0].name}</span> in <span style={{ color: C.text }}>{breakdownLabel('countries', dashCountries[0].code)}</span>{dashUnits > 0 ? <>, across <span style={{ color: C.text }}>{Math.round(dashUnits).toLocaleString('en-US')}</span> streams and sales</> : null}.</> : null}</p>
 
             <div className="imss-dash-stats mb-6">
               <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
@@ -5558,6 +5650,11 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <div className="imss-dash-lab">Top earning retailer</div>
                 <div className="imss-dash-fig imss-dash-fig-text">{dashRetailers[0] ? dashRetailers[0].name : '—'}</div>
                 <div className="imss-dash-sub">{dashRetailers[0] ? formatCents(dashRetailers[0].value) + ' gross' + (dashGross > 0 ? ' · ' + Math.round(dashRetailers[0].value / dashGross * 100) + '% of your revenue' : '') : 'No retailer breakdown yet'}</div>
+              </div>
+              <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-lab">Top country</div>
+                <div className="imss-dash-fig imss-dash-fig-text">{dashCountries[0] ? breakdownLabel('countries', dashCountries[0].code) : '—'}</div>
+                <div className="imss-dash-sub">{dashCountries[0] ? formatCents(dashCountries[0].value) + ' gross' + (dashGross > 0 ? ' · ' + Math.round(dashCountries[0].value / dashGross * 100) + '%' : '') + ' · ' + dashCountries.length + ' countries' : 'No country breakdown yet'}</div>
               </div>
               <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="imss-dash-lab">Best month</div>
@@ -6091,8 +6188,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div className="text-xs" style={{ color: C.textFaint }}>Showing {filteredMyRevenue.length} of {myRevenue.length} entries</div>
             </div>
 
-            <div className="imss-print-hide flex items-center gap-1 mb-4">
-              {[['none', 'Flat'], ['source', 'By type'], ['product', 'By product']].map(([id, label]) => (
+            <div className="imss-print-hide flex items-center gap-1 mb-4 flex-wrap">
+              {[['none', 'Flat'], ['product', 'By song'], ['source', 'By release type'], ['stores', 'By platform'], ['countries', 'By country'], ['types', 'By format'], ['models', 'By model'], ['salesMonths', 'By month earned']].map(([id, label]) => (
                 <button key={id} onClick={() => setRevGroupBy(id)} className="text-sm px-3 py-1.5 rounded"
                   style={{ background: revGroupBy === id ? C.amberSoft : 'transparent', color: revGroupBy === id ? C.amber : C.textDim, border: '1px solid ' + (revGroupBy === id ? 'transparent' : C.border), fontWeight: revGroupBy === id ? 600 : 500 }}>
                   {label}
@@ -6123,6 +6220,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   </tbody>
                 </table>
               </div>
+            ) : BREAKDOWN_FIELDS[revGroupBy] ? (
+              <RevenueBreakdownTable parts={revenueBreakdown(filteredMyRevenue, revGroupBy, splitOf)} label={BREAKDOWN_FIELDS[revGroupBy]} format={revGroupBy} />
             ) : revGroupBy === 'source' ? (
               <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                 <table className="w-full" style={{ minWidth: 320 }}>
@@ -6467,6 +6566,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           </div>
         )}
 
+        {tab === 'statements' && <div className="mb-6"><StatementFilesList title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
         {tab === 'statements' && (
           <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
         )}
@@ -6619,6 +6719,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [accessRequests, setAccessRequests] = useState(SEED_ACCESS_REQUESTS);
   const [artistRequests, setArtistRequests] = useState(SEED_ARTIST_REQUESTS);
   const [invoices, setInvoices] = useState(SEED_INVOICES);
+  const [statementFiles, setStatementFiles] = useState([]);
   const [acceptingSubmission, setAcceptingSubmission] = useState(null);
   const [releaseSubmissions, setReleaseSubmissions] = useState(SEED_RELEASE_SUBMISSIONS);
   const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
@@ -6658,6 +6759,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['accessRequests', setAccessRequests, SEED_ACCESS_REQUESTS],
         ['artistRequests', setArtistRequests, SEED_ARTIST_REQUESTS],
         ['invoices', setInvoices, SEED_INVOICES],
+        ['statementFiles', setStatementFiles, []],
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
       ];
@@ -6719,7 +6821,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   function updateRevenue(next) { logChange('Revenue', revenue, next); setRevenue(next); persist('revenue', next); }
   function updateStreams(next) { logChange('Streams', streams, next); setStreams(next); persist('streams', next); }
   function updatePayouts(next) { logChange('Payouts', payouts, next); setPayouts(next); persist('payouts', next); }
-  function updateMasterGross(next) { logChange('Master gross', masterGross, next); setMasterGross(next); persist('masterGross', next); }
+  function updateMasterGross(next) { logChange('Money received', masterGross, next); setMasterGross(next); persist('masterGross', next); }
   function updateLabelSettings(next) { setLabelSettings(next); persist('labelSettings', next); }
   function updateStaff(next) { logChange('Team', staff, next); setStaff(next); persist('staff', next); }
   function updateTasks(next) { logChange('Tasks', tasks, next); setTasks(next); persist('tasks', next); }
@@ -6729,6 +6831,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   function updateProfileRequests(next) { logChange('Profile requests', profileRequests, next); setProfileRequests(next); persist('profileRequests', next); }
   function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
   function updateArtistRequests(next) { logChange('Artist requests', artistRequests, next); setArtistRequests(next); persist('artistRequests', next); }
+  function updateStatementFiles(next) { logChange('Statement files', statementFiles, next); setStatementFiles(next); persist('statementFiles', next); }
   function updateInvoices(next) { logChange('Invoices', invoices, next); setInvoices(next); persist('invoices', next); }
   function updateReleaseSubmissions(next) { logChange('Release submissions', releaseSubmissions, next); setReleaseSubmissions(next); persist('releaseSubmissions', next); }
 
@@ -6777,7 +6880,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.edits && perms.catalog && { id: 'import', label: 'Import', icon: Upload, group: 'Artists & Catalog' },
 
     perms.royalties && { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'Finance' },
-    perms.royalties && { id: 'mastergross', label: 'Master Gross', icon: Coins, group: 'Finance' },
+    perms.royalties && { id: 'mastergross', label: 'Money received', icon: Coins, group: 'Finance' },
     perms.spend && { id: 'ledger', label: 'Ledger', icon: Wallet, group: 'Finance' },
     perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Finance' },
     (perms.spend || inInvoiceWorkflow) && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Finance' },
@@ -6832,7 +6935,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   if (session.mode === 'artist') {
     const artist = roster.find(a => a.id === session.artistId);
     if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={statementFiles} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (
@@ -6851,8 +6954,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         )}
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
         {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={masterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} />}
-        {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} />}
-        {active === 'roster' && <RosterSection roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={masterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
+        {active === 'roster' && <RosterSection statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
