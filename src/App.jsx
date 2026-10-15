@@ -3274,7 +3274,7 @@ const SUBMISSION_LABELS = { Pending: 'Waiting review', 'Needs info': 'Needs info
 const SUBMISSION_TONES = { Pending: 'amber', 'Needs info': 'amber', Approved: 'teal', Rejected: 'red' };
 
 function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null, canEdit = true, sessionName = '', onAccept }) {
-  const [status, setStatus] = useState('Pending');
+  const [status, setStatus] = useState('all');
   const [openId, setOpenId] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -3302,10 +3302,10 @@ function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null
     <div>
       <SectionHeader title="Release submissions" description="New releases artists have sent in. Check each one is complete, ask for anything missing, then accept it into Catalog to add the UPC, ISRCs and the rest." />
       <div className="flex gap-1 mb-4 flex-wrap" role="tablist" aria-label="Filter by status">
-        {[['Pending', 'Waiting review'], ['Needs info', 'Needs info'], ['Approved', 'Accepted'], ['Rejected', 'Rejected'], ['all', 'All']].map(([st, label]) => (
+        {[['all', 'All'], ['Pending', 'Waiting review'], ['Needs info', 'Needs info'], ['Approved', 'Accepted'], ['Rejected', 'Rejected']].map(([st, label]) => (
           <button key={st} role="tab" aria-selected={status === st} onClick={() => { setStatus(st); setOpenId(null); }} className="text-sm px-3 py-1.5 rounded inline-flex items-center gap-1.5"
             style={{ background: status === st ? C.amberSoft : 'transparent', color: status === st ? C.amber : C.textDim, border: '1px solid ' + (status === st ? 'transparent' : C.border), fontWeight: status === st ? 600 : 500 }}>
-            {label}{st !== 'all' && count(st) > 0 && <span style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{count(st)}</span>}
+            {label}{(st === 'all' ? scoped.length : count(st)) > 0 && <span style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{st === 'all' ? scoped.length : count(st)}</span>}
           </button>
         ))}
       </div>
@@ -3460,7 +3460,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
   const isAdmin = session.role === 'Admin';
   const me = staff.find(m => m.name === session.name);
   const assignedSomewhere = !!me && Object.values(workflow).some(ids => (ids || []).includes(me.id));
-  const [tab, setTab] = useState('mine');
+  const [tab, setTab] = useState('all');
   const [openId, setOpenId] = useState(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
@@ -3496,7 +3496,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
     const next = { ...workflow, [key]: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
     updateLabelSettings({ ...labelSettings, invoiceWorkflow: next });
   }
-  const tabs = [['mine', 'My queue', mine.length], ...INVOICE_STAGES.map(st => [st.status, st.status, scoped.filter(i => invoiceStatus(i) === st.status).length]), ['Paid', 'Paid', 0], ['Rejected', 'Rejected', 0], ['all', 'All', 0]];
+  const tabs = [['all', 'All', scoped.length], ['mine', 'My queue', mine.length], ...INVOICE_STAGES.map(st => [st.status, st.status, scoped.filter(i => invoiceStatus(i) === st.status).length]), ['Paid', 'Paid', 0], ['Rejected', 'Rejected', 0]];
   const activeStaff = staff.filter(m => (m.status || 'Active') !== 'Inactive');
 
   return (
