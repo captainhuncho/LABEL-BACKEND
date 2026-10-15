@@ -60,6 +60,7 @@ handles HTTPS.
 | `src/storage.js` | `window.storage` adapter: Supabase or localStorage | ~45 lines |
 | `src/AuthGate.jsx` | Email-link sign-in; routes to team or artist via `my_access()` | ~85 lines |
 | `src/ArtistApp.jsx` | Loads `artist_portal()` and renders the artist portal | ~50 lines |
+| `supabase/functions/notify/index.ts` | Email out (Resend) and replies in; deployed to Supabase | ~260 lines |
 | `test/finance.test.js` | Finance baseline and per-row split tests (`npm test`) | ~55 lines |
 
 `App.jsx` is still large. When you touch a screen, consider lifting that one

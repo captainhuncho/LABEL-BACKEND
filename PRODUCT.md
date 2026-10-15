@@ -14,7 +14,17 @@ the browser's localStorage otherwise (local development only).
 sign-in), `recharts` (charts), `lucide-react` (icons), `papaparse` (CSV
 import), `xlsx` (Excel export, SheetJS CDN build), `tailwindcss`.
 
-**Sign-in email** is sent through Resend from `noreply@imssrecords.com`.
+**Email** goes through Resend from `noreply@imssrecords.com`:
+- An artist's PM, A&R and every Admin are emailed when that artist sends a
+  request, release submission or invoice, or replies on a thread.
+- Artists are emailed when the label replies to their request or submission,
+  and when a royalty statement is sent to them.
+- Replies to those emails land in the matching thread in the app (marked
+  "by email"); a submission goes back to Waiting review when the artist
+  replies.
+- Payouts: each statement has **Send to artist** (now) or **Schedule** (a date
+  and time; sent within 10 minutes of it). Artists only see statements that
+  were sent or paid.
 
 ---
 
@@ -349,7 +359,9 @@ Releases, Requests (with an open count), Profile — and Sign out.
 - **Payouts** — earnings accrued, unrecouped balance, paid to date, balance
   due, and payout history.
 - **Releases** — their catalog, plus a form to submit a new release (title,
-  type, splits, track metadata, credits, lyrics, a distribution-doc checklist)
+  type, splits, track metadata, credits, lyrics or "Instrumental", an "about
+  the song or project" note of up to 700 characters, a marketing and rollout
+  plan, a distribution-doc checklist)
   which goes to their PM for review. **Splits are required:** every featured
   artist, producer, songwriter and co-writer taking a share is listed with
   their split %, the artist keeps the remainder (total can't exceed 100%), a

@@ -51,6 +51,24 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - A team member can't remove their own email from the staff list (the update
   check would lock them out, so the database refuses it).
 
+## Email
+
+- Supabase Edge Function `notify` (`supabase/functions/notify/index.ts`) sends
+  and receives email through Resend. It runs with the service role, so it can
+  read and write `app_data`.
+- A trigger on `app_data` (`private.app_data_events`) posts small event
+  descriptors to it via `pg_net`; a `pg_cron` job (`send-due-statements`) calls
+  it every 10 minutes for scheduled statements. Both send a shared secret kept
+  in `private.config` (schema not exposed to the API); the function checks it
+  with `notify_secret_ok()`, callable only by the service role.
+- Resend's inbound webhook is verified with its signing secret (Svix HMAC,
+  5-minute window). A reply is only added to a thread if it comes from that
+  artist's email or a staff member's email.
+- Secrets live in Supabase → Edge Functions → Secrets: `RESEND_API_KEY`,
+  `RESEND_WEBHOOK_SECRET`, `RECEIVE_DOMAIN`. Never in the repo.
+- Receiving uses Resend's `entuurboou.resend.app` address, so the main
+  `imssrecords.com` MX records (your normal email) are untouched.
+
 ## Known limitations
 
 These are real and accepted for now. Don't treat them as protected.

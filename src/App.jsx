@@ -8,7 +8,7 @@ import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutSta
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
-import { ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
+import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
 function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmReset, onReseed, confirmReseed, setConfirmReseed, sessionName, onLogout }) {
   return (
@@ -1614,7 +1614,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
 
   function openAdd() { setFromSubmissionId(null); setForm({ ...empty, artistId: visibleRoster[0] ? visibleRoster[0].id : '', enteredBy: lastEnteredBy, checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs() }); setEditing(null); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
   function openFromSubmission(sub) {
-    setForm({ ...empty, artistId: sub.artistId, title: sub.title, type: sub.type, genre: sub.genre || '', releaseDate: sub.proposedDate || todayStr(), artworkUrl: sub.artworkUrl || '', collaborators: sub.collaborators || [], primaryArtists: sub.primaryArtists || [], enteredBy: sessionName, checklist: makeReleaseChecklist(), distributionDocs: sub.distributionDocs && sub.distributionDocs.length ? sub.distributionDocs : makeDistributionDocs(), explicit: sub.explicit || 'Not Set', dolbyAtmos: !!sub.dolbyAtmos, lyrics: sub.lyrics || '', duration: sub.duration || '', credits: sub.credits ? { ...emptyCredits(), ...sub.credits } : emptyCredits(), splitSheet: sub.splitSheet || '', splitSheetName: sub.splitSheetName || '' });
+    setForm({ ...empty, artistId: sub.artistId, title: sub.title, type: sub.type, genre: sub.genre || '', releaseDate: sub.proposedDate || todayStr(), artworkUrl: sub.artworkUrl || '', collaborators: sub.collaborators || [], primaryArtists: sub.primaryArtists || [], enteredBy: sessionName, checklist: makeReleaseChecklist(), distributionDocs: sub.distributionDocs && sub.distributionDocs.length ? sub.distributionDocs : makeDistributionDocs(), explicit: sub.explicit || 'Not Set', dolbyAtmos: !!sub.dolbyAtmos, lyrics: sub.lyrics || '', duration: sub.duration || '', credits: sub.credits ? { ...emptyCredits(), ...sub.credits } : emptyCredits(), splitSheet: sub.splitSheet || '', splitSheetName: sub.splitSheetName || '', instrumental: !!sub.instrumental, about: sub.about || '', rollout: sub.rollout || null });
     setEditing(null);
     setNewCollab({ name: '', role: 'Feature', splitPercent: '' });
     setDistributorEmail('');
@@ -3252,7 +3252,9 @@ function submissionChecks(sub) {
     { label: 'Written by and produced by credited', ok: !!(credits.writtenBy && credits.producedBy) },
     { label: 'Duration', ok: !!sub.duration },
     { label: 'Explicit / clean set', ok: !!sub.explicit && sub.explicit !== 'Not Set' },
-    { label: 'Lyrics', ok: !!(sub.lyrics || '').trim() },
+    { label: sub.instrumental ? 'Lyrics (instrumental, none needed)' : 'Lyrics', ok: !!sub.instrumental || !!(sub.lyrics || '').trim() },
+    { label: 'About the song', ok: !!(sub.about || '').trim() },
+    { label: 'Marketing and rollout plan', ok: !!((sub.rollout || {}).plan || '').trim() },
     { label: 'Required distribution docs ready', ok: missingRequiredDocs(sub.distributionDocs) === 0 },
   ];
 }
@@ -3345,6 +3347,12 @@ function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null
                               <dt>Primary artists</dt><dd>{[a.name, ...(sub.primaryArtists || [])].filter(Boolean).join(', ')}</dd>
                               <dt>Duration</dt><dd>{sub.duration || '—'}</dd>
                               <dt>Explicit</dt><dd>{sub.explicit || '—'}</dd>
+                              <dt>Lyrics</dt><dd>{sub.instrumental ? 'Instrumental' : (sub.lyrics ? <span style={{ whiteSpace: 'pre-wrap' }}>{sub.lyrics}</span> : '—')}</dd>
+                              <dt>About</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{sub.about || '—'}</dd>
+                              <dt>Rollout plan</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{(sub.rollout || {}).plan || '—'}</dd>
+                              <dt>Content</dt><dd>{(sub.rollout || {}).content || '—'}</dd>
+                              <dt>Shows / events</dt><dd>{(sub.rollout || {}).events || '—'}</dd>
+                              <dt>Socials</dt><dd>{(sub.rollout || {}).socials || '—'}</dd>
                               <dt>Notes</dt><dd>{sub.notes || '—'}</dd>
                             </dl>
                           </section>
@@ -3354,7 +3362,7 @@ function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null
                               <ol className="imss-thread">
                                 {sub.messages.map((m, i) => (
                                   <li key={i} className={m.from === 'artist' ? 'is-artist' : 'is-label'}>
-                                    <div className="imss-thread-meta">{m.from === 'artist' ? (m.by || a.name) : (m.by || 'Label')} · {formatDate(String(m.at || '').slice(0, 10))}</div>
+                                    <div className="imss-thread-meta">{m.from === 'artist' ? (m.by || a.name) : (m.by || 'Label')} · {formatDate(String(m.at || '').slice(0, 10))}{m.via === 'email' ? ' · by email' : ''}</div>
                                     <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
                                   </li>
                                 ))}
@@ -3565,6 +3573,16 @@ function ArtistRequestsSection({ artistRequests, update, roster, sessionName, pm
                 {expanded && (
                   <div className="px-4 pb-4">
                     <div className="rounded p-3 text-sm mb-3" style={{ background: C.bg, color: C.textDim }}>{r.message}</div>
+                    {(r.messages || []).length > 0 && (
+                            <ol className="imss-thread mb-3">
+                              {r.messages.map((m, i) => (
+                                <li key={i} className={m.from === 'artist' ? 'is-artist' : 'is-label'}>
+                                  <div className="imss-thread-meta">{m.from === 'artist' ? (m.by || 'Artist') : (m.by || 'IMSS Records')} · {formatDate(String(m.at || '').slice(0, 10))}{m.via === 'email' ? ' · by email' : ''}</div>
+                                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
                     <Field label="Response" full><TextArea rows={3} value={responseText} onChange={e => setResponseText(e.target.value)} placeholder="Reply to the artist…" /></Field>
                     <div className="flex gap-2 flex-wrap mt-2">
                       <Btn variant="primary" onClick={() => submitResponse(r.id)}>Send response</Btn>
@@ -4174,6 +4192,20 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
     setForm({ ...empty, artistId: form.artistId });
   }
   function markPaid(id) { update(payouts.map(p => p.id === id ? { ...p, status: 'paid' } : p)); }
+  // Sending publishes the statement to the artist's portal and emails them;
+  // a scheduled one goes out within 10 minutes of its time.
+  const [scheduleId, setScheduleId] = useState(null);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
+  function sendNow(id) { update(payouts.map(p => p.id === id ? { ...p, sentAt: new Date().toISOString(), scheduledFor: '' } : p)); }
+  function schedule(id) {
+    const when = Date.parse(scheduleAt);
+    if (!scheduleAt || isNaN(when) || when <= Date.now()) { setScheduleError('Pick a date and time in the future.'); return; }
+    update(payouts.map(p => p.id === id ? { ...p, scheduledFor: new Date(when).toISOString() } : p));
+    setScheduleId(null); setScheduleAt(''); setScheduleError('');
+  }
+  function cancelSchedule(id) { update(payouts.map(p => p.id === id ? { ...p, scheduledFor: '' } : p)); }
+  const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   function remove(id) { update(payouts.filter(p => p.id !== id)); setConfirmId(null); }
 
   const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, ledger, revenue, masterGross) })), [roster, ledger, revenue, masterGross]);
@@ -4246,8 +4278,8 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
         <EmptyState icon={Wallet} title="No payout statements yet" description="Generate one above to see it here." />
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
-          <table className="w-full" style={{ minWidth: 800 }}>
-            <thead><tr><Th>Period</Th><Th>Artist</Th><Th align="right">Gross</Th><Th align="right">Net</Th><Th align="right">Artist share</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
+          <table className="w-full" style={{ minWidth: 1000 }}>
+            <thead><tr><Th>Period</Th><Th>Artist</Th><Th align="right">Gross</Th><Th align="right">Net</Th><Th align="right">Artist share</Th><Th>Status</Th><Th>Artist</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sortedPayouts.map(p => (
                 <tr key={p.id}>
@@ -4257,6 +4289,29 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
                   <Td align="right" mono>{formatCurrency(p.netAfterSwift)}</Td>
                   <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
                   <Td><Badge tone={p.status === 'paid' ? 'teal' : 'amber'}>{p.status}</Badge></Td>
+                  <Td>
+                    {p.sentAt ? (
+                      <span className="text-xs" style={{ color: C.teal }}>Sent {fmtWhen(p.sentAt)}</span>
+                    ) : p.scheduledFor ? (
+                      <span className="text-xs" style={{ color: C.amber }}>Scheduled {fmtWhen(p.scheduledFor)}{canEdit && <> · <button onClick={() => cancelSchedule(p.id)} style={{ color: C.textDim, textDecoration: 'underline', textUnderlineOffset: 3 }}>cancel</button></>}</span>
+                    ) : canEdit ? (
+                      scheduleId === p.id ? (
+                        <span className="inline-flex flex-col gap-1">
+                          <span className="inline-flex items-center gap-2">
+                            <input type="datetime-local" aria-label="Send at" value={scheduleAt} onChange={e => { setScheduleAt(e.target.value); setScheduleError(''); }} style={{ ...inputStyle, height: 32, colorScheme: 'dark' }} />
+                            <button onClick={() => schedule(p.id)} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>Schedule</button>
+                            <button onClick={() => { setScheduleId(null); setScheduleError(''); }} style={{ color: C.textDim, fontSize: 13 }}>Cancel</button>
+                          </span>
+                          {scheduleError && <span className="text-xs" role="alert" style={{ color: C.red }}>{scheduleError}</span>}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-3 text-sm whitespace-nowrap">
+                          <button onClick={() => sendNow(p.id)} style={{ color: C.amber, fontWeight: 600 }}><Mail size={13} style={{ display: 'inline', verticalAlign: -2, marginRight: 4 }} />Send to artist</button>
+                          <button onClick={() => { setScheduleId(p.id); setScheduleAt(''); }} style={{ color: C.textDim }}>Schedule</button>
+                        </span>
+                      )
+                    ) : <span className="text-xs" style={{ color: C.textDim }}>Not sent</span>}
+                  </Td>
                   <Td align="right">
                     {confirmId === p.id ? <ConfirmInline onConfirm={() => remove(p.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                       <span className="inline-flex gap-3 justify-end">
@@ -5116,7 +5171,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   }
   const mySubmissions = useMemo(() => [...releaseSubmissions.filter(s => s.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [releaseSubmissions, artist.id]);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
-  const emptySubmitForm = { title: '', type: 'Single', genre: artist.genre || '', proposedDate: '', artworkUrl: '', notes: '', collaborators: [], primaryArtists: [], distributionDocs: makeDistributionDocs(), explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits(), splitSheet: '', splitSheetName: '', splitsConfirmed: false };
+  const emptySubmitForm = { title: '', type: 'Single', genre: artist.genre || '', proposedDate: '', artworkUrl: '', notes: '', collaborators: [], primaryArtists: [], distributionDocs: makeDistributionDocs(), explicit: 'Not Set', dolbyAtmos: false, lyrics: '', instrumental: false, about: '', rollout: { plan: '', content: '', events: '', socials: '' }, duration: '', credits: emptyCredits(), splitSheet: '', splitSheetName: '', splitsConfirmed: false };
   const [submitForm, setSubmitForm] = useState(emptySubmitForm);
   const [collabError, setCollabError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -5555,9 +5610,32 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                     <Field label="Mixing engineer"><PeopleInput label="Mixing engineer" value={submitForm.credits.mixingEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, mixingEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
                     <Field label="Mastering engineer"><PeopleInput label="Mastering engineer" value={submitForm.credits.masteringEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, masteringEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
                     <Field label="Dolby engineer"><PeopleInput label="Dolby engineer" value={submitForm.credits.dolbyEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, dolbyEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
-                    <Field label="Lyrics" full><TextArea rows={3} value={submitForm.lyrics} onChange={e => setSubmitForm({ ...submitForm, lyrics: e.target.value })} placeholder="Paste lyrics, or note where they're stored" /></Field>
+                    <fieldset className="imss-span-2">
+                      <legend className="text-xs mb-2" style={{ color: C.textDim }}>Does this song have lyrics?</legend>
+                      <div className="imss-seg" role="radiogroup" aria-label="Lyrics or instrumental">
+                        {[['lyrics', 'Has lyrics'], ['instrumental', 'Instrumental']].map(([k, label]) => (
+                          <button key={k} type="button" role="radio" aria-checked={(k === 'instrumental') === !!submitForm.instrumental} className={(k === 'instrumental') === !!submitForm.instrumental ? 'is-on' : ''}
+                            onClick={() => setSubmitForm(f => ({ ...f, instrumental: k === 'instrumental', lyrics: k === 'instrumental' ? '' : f.lyrics }))}>{label}</button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    {!submitForm.instrumental && <Field label="Lyrics" full><TextArea rows={4} value={submitForm.lyrics} onChange={e => setSubmitForm({ ...submitForm, lyrics: e.target.value })} placeholder="Paste the full lyrics, or note where they’re stored" /></Field>}
+                    <Field label={'About the song or project · ' + (submitForm.about || '').length + ' / 700'} full>
+                      <TextArea rows={4} maxLength={700} value={submitForm.about || ''} onChange={e => setSubmitForm({ ...submitForm, about: e.target.value.slice(0, 700) })} placeholder="The story behind it, the sound, who it’s for. This helps the label pitch it to playlists and press." />
+                    </Field>
                   </div>
                 </div>
+
+                <section className="imss-span-2" aria-labelledby="rollout-h">
+                  <h3 id="rollout-h" style={{ fontWeight: 600, fontSize: 15 }}>Marketing and rollout</h3>
+                  <p className="text-xs mt-1 mb-3" style={{ color: C.textDim, maxWidth: '70ch' }}>What you’re planning to promote this release, so the label can line up with it.</p>
+                  <div className="imss-form-grid gap-3">
+                    <Field label="Rollout plan" full><TextArea rows={4} value={(submitForm.rollout || {}).plan || ''} onChange={e => setSubmitForm(f => ({ ...f, rollout: { ...(f.rollout || {}), plan: e.target.value } }))} placeholder="e.g. Teasers two weeks out, pre-save link, release-week live session, TikTok challenge" /></Field>
+                    <Field label="Content you’ll make"><Input value={(submitForm.rollout || {}).content || ''} onChange={e => setSubmitForm(f => ({ ...f, rollout: { ...(f.rollout || {}), content: e.target.value } }))} placeholder="Music video, visualiser, behind the scenes" /></Field>
+                    <Field label="Shows or events"><Input value={(submitForm.rollout || {}).events || ''} onChange={e => setSubmitForm(f => ({ ...f, rollout: { ...(f.rollout || {}), events: e.target.value } }))} placeholder="Launch party, radio tour, festival slot" /></Field>
+                    <Field label="Social handles to tag"><Input value={(submitForm.rollout || {}).socials || ''} onChange={e => setSubmitForm(f => ({ ...f, rollout: { ...(f.rollout || {}), socials: e.target.value } }))} placeholder="@yourname on Instagram, TikTok, X" /></Field>
+                  </div>
+                </section>
 
                 <Field label="Notes for the label" full><TextArea rows={3} value={submitForm.notes} onChange={e => setSubmitForm({ ...submitForm, notes: e.target.value })} placeholder="Anything else your PM should know?" /></Field>
 
@@ -5796,6 +5874,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       {expanded && (
                         <div className="px-4 pb-4">
                           <div className="rounded p-3 text-sm" style={{ background: C.bg, color: C.textDim }}>{r.message}</div>
+                          {(r.messages || []).length > 0 && (
+                            <ol className="imss-thread mt-2">
+                              {r.messages.map((m, i) => (
+                                <li key={i} className={m.from === 'artist' ? 'is-artist' : 'is-label'}>
+                                  <div className="imss-thread-meta">{m.from === 'artist' ? 'You' : (m.by || 'IMSS Records')} · {formatDate(String(m.at || '').slice(0, 10))}{m.via === 'email' ? ' · by email' : ''}</div>
+                                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
                           {r.response ? (
                             <div className="rounded p-3 text-sm mt-2" style={{ background: C.tealSoft, border: '1px solid ' + C.teal }}>
                               <div className="text-xs mb-1" style={{ color: C.teal, fontWeight: 600 }}>Response from {r.respondedBy || 'the label'}</div>
