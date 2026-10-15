@@ -5,3 +5,4 @@ dist/
 .env
 .env.*
 ops-upload.zip
+.impeccable/

@@ -89,6 +89,48 @@ export const GLOBAL_STYLES = `
   box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.22) !important;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
+/* Artist portal */
+.imss-portal ::selection { background: ${C.amber}; color: #1A1500; }
+.imss-portal :focus-visible { outline: 2px solid ${C.amber}; outline-offset: 2px; border-radius: 6px; }
+.imss-portal .imss-content { scrollbar-color: rgba(255,255,255,0.18) transparent; scrollbar-width: thin; }
+.imss-portal td, .imss-portal .imss-sum b, .imss-portal .imss-ledger-amt, .imss-portal .imss-owed { font-variant-numeric: tabular-nums; }
+.imss-portal-nav { transition: background-color 160ms cubic-bezier(0.16,1,0.3,1), color 160ms cubic-bezier(0.16,1,0.3,1); }
+.imss-portal-nav:hover { background: rgba(255,255,255,0.05); color: ${C.text}; }
+.imss-portal-nav[aria-current="page"]:hover { background: ${C.amberSoft}; color: ${C.amber}; }
+.imss-portal-title { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 4px 0 20px; }
+.imss-owed { font-family: ${MONO_FONT}; font-size: clamp(40px, 7vw, 64px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 4px; }
+.imss-owed-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.imss-owed-head { padding: 24px; border-right: 1px solid ${C.border}; }
+.imss-sum { margin: 0; padding: 8px 0; list-style: none; }
+.imss-sum li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 24px; }
+.imss-sum li + li { border-top: 1px solid rgba(255,255,255,0.06); }
+.imss-sum span { font-size: 13px; color: ${C.textDim}; }
+.imss-sum b { font-family: ${MONO_FONT}; font-size: 15px; font-weight: 500; color: ${C.text}; }
+.imss-sum .imss-sum-key { background: ${C.tealSoft}; }
+.imss-sum .imss-sum-key span { color: ${C.text}; }
+.imss-sum .imss-sum-key b, .imss-sum .imss-sum-total b { font-weight: 600; }
+.imss-sum .imss-sum-total { border-top: 1px solid ${C.border} !important; }
+.imss-sum .imss-sum-total span { color: ${C.text}; font-weight: 600; }
+.imss-ledger { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.imss-ledger li + li { border-top: 1px solid ${C.border}; }
+.imss-ledger-row { width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1.4fr) minmax(80px, 1fr) auto 16px; align-items: center; gap: 16px; padding: 12px 16px; text-align: left; transition: background-color 160ms cubic-bezier(0.16,1,0.3,1); }
+.imss-ledger-row:hover { background: rgba(255,255,255,0.04); }
+.imss-ledger-row:hover .imss-ledger-bar span { background: ${C.teal}; }
+.imss-ledger-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.imss-ledger-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imss-ledger-bar { height: 8px; border-radius: 9999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.imss-ledger-bar span { display: block; height: 100%; border-radius: 9999px; background: rgba(95,165,147,0.65); transition: background-color 160ms ease-out; }
+.imss-ledger-amt { font-family: ${MONO_FONT}; font-size: 15px; font-weight: 600; min-width: 96px; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+@media (max-width: 900px) {
+  .imss-owed-card { grid-template-columns: 1fr; }
+  .imss-owed-head { border-right: none; border-bottom: 1px solid ${C.border}; padding: 20px; }
+}
+@media (max-width: 640px) {
+  .imss-ledger-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; padding: 12px; }
+  .imss-ledger-bar, .imss-ledger-row > svg { display: none; }
+  .imss-sum li { padding: 9px 16px; }
+  .imss-portal-title { font-size: 22px; margin-bottom: 16px; }
+}
 /* Tables: a full grid. Rows already have bottom borders (Td/Th); add column
    lines, a header band, and drop the last row's line where the card border sits. */
 table th:not(:last-child), table td:not(:last-child) { border-right: 1px solid ${C.border}; }

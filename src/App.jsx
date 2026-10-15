@@ -4734,6 +4734,35 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const splitOf = (r) => revenueRowSplit(r, revenue, masterGross, myPct);
   const sumSplits = (rows) => rows.map(splitOf).reduce((t, x) => ({ gross: t.gross + x.gross, charge: t.charge + x.charge, labelShare: t.labelShare + x.labelShare, artistShare: t.artistShare + x.artistShare }), { gross: 0, charge: 0, labelShare: 0, artistShare: 0 });
   const filteredRevTotals = useMemo(() => sumSplits(filteredMyRevenue), [filteredMyRevenue, revenue, masterGross, myPct]);
+
+  // Every release ranked by what it has earned the artist. Revenue rows join
+  // the catalog by title; titles with revenue but no catalog entry still list.
+  const releaseLedger = useMemo(() => {
+    const byTitle = {};
+    myRevenue.forEach(r => { (byTitle[r.title] = byTitle[r.title] || []).push(r); });
+    const entry = (title, release) => {
+      const rows = byTitle[title] || [];
+      const months = Array.from(new Set(rows.map(r => r.month))).sort();
+      const last = months[months.length - 1];
+      return { key: release ? release.id : 'rev-' + title, title, release, earned: sumSplits(rows).artistShare, lastMonth: last, lastEarned: last ? sumSplits(rows.filter(r => r.month === last)).artistShare : 0 };
+    };
+    const listed = artistCatalog.map(c => entry(c.title, c));
+    const known = new Set(artistCatalog.map(c => c.title));
+    Object.keys(byTitle).filter(t => !known.has(t)).forEach(t => listed.push(entry(t, null)));
+    return listed.sort((a, b) => b.earned - a.earned);
+  }, [artistCatalog, myRevenue, revenue, masterGross, myPct]);
+  const topEarned = releaseLedger.length ? Math.max(releaseLedger[0].earned, 0.01) : 1;
+
+  const monthlyEarnings = useMemo(() => {
+    const map = {};
+    myRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + splitOf(r).artistShare; });
+    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
+  }, [myRevenue, revenue, masterGross, myPct]);
+
+  function openReleaseRevenue(title) {
+    const f = { ...EMPTY_REV_FILTERS, product: title };
+    setRevFilters(f); setRevGenerated(f); setRevError(''); setRevGroupBy('none'); setTab('revenue');
+  }
   const revTypes = useMemo(() => Array.from(new Set(myRevenue.map(r => r.type).filter(Boolean))), [myRevenue]);
   function revPeriodLabel() {
     if (!revGenerated) return '';
@@ -4765,14 +4794,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
 
   const TABS = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'work' },
-    { id: 'releases', label: 'Releases', icon: Disc3, group: 'work' },
-    { id: 'profile', label: 'Profile', icon: UserCog, group: 'work' },
-    { id: 'requests', label: 'Requests', icon: MessageSquare, group: 'work' },
-    { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'money' },
-    { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'money' },
-    { id: 'statements', label: 'Statements', icon: Eye, group: 'money' },
-    isFunded && { id: 'budget', label: 'Budget & Expenses', icon: ClipboardList, group: 'money' },
+    { id: 'overview', label: 'Earnings', icon: LayoutDashboard, group: 'Money' },
+    { id: 'revenue', label: 'Revenue detail', icon: DollarSign, group: 'Money' },
+    { id: 'statements', label: 'Statements', icon: Eye, group: 'Money' },
+    { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Money' },
+    isFunded && { id: 'budget', label: 'Budget & Expenses', icon: ClipboardList, group: 'Money' },
+    { id: 'releases', label: 'Releases', icon: Disc3, group: 'Music & you' },
+    { id: 'requests', label: 'Requests', icon: MessageSquare, group: 'Music & you' },
+    { id: 'profile', label: 'Profile', icon: UserCog, group: 'Music & you' },
   ].filter(Boolean);
 
   const myArtistRequests = useMemo(() => [...artistRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [artistRequests, artist.id]);
@@ -4847,131 +4876,180 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   }
 
   return (
-    <div style={{ background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text }} className="w-full rounded-lg border overflow-hidden imss-portal">
+    <div style={{ background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text }} className="w-full overflow-hidden imss-shell imss-portal">
       <style>{GLOBAL_STYLES}</style>
       <div className="imss-bg-blob imss-bg-blob-1"></div>
       <div className="imss-bg-blob imss-bg-blob-2"></div>
       <div className="imss-bg-blob imss-bg-blob-3"></div>
       <div className="imss-bg-blob imss-bg-blob-4"></div>
-      <div className="imss-print-hide imss-glass-layer flex items-center justify-between flex-wrap gap-2 px-5 py-4" style={{ borderBottom: '1px solid ' + C.border, background: C.panel }}>
-        <div className="flex items-center gap-2">
-          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 22, width: 'auto' }} />
-          <span className="text-xs" style={{ color: C.textFaint }}>· Artist Access</span>
-        </div>
-        <button onClick={onLogout} className="imss-btn rounded inline-flex items-center gap-1.5 text-xs px-3 py-1.5" style={{ border: '1px solid ' + C.border, color: C.textDim }}>
-          <LogOut size={12} /> Switch user
-        </button>
-      </div>
 
-      <div className="imss-content" style={{ padding: 24 }}>
-        <div className="imss-content-inner">
-        <div className="rounded border p-4 mb-6 flex items-center gap-4 flex-wrap justify-between" style={{ background: C.panel, borderColor: C.border }}>
-          <div className="flex items-center gap-4 flex-wrap">
-            <Avatar name={artist.name} photoUrl={artist.photoUrl} size={64} />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 18 }}>{artist.name}</div>
-              <div className="text-sm" style={{ color: C.textFaint }}>{artist.genre || 'No genre set'}{artist.subGenre ? ' · ' + artist.subGenre : ''} · {artist.royaltyRate}% royalty rate</div>
-              {(artist.productManager || artist.anr) && (
-                <div className="text-xs mt-1" style={{ color: C.textFaint }}>
-                  {artist.productManager && <span>Product Manager: {artist.productManager}</span>}
-                  {artist.productManager && artist.anr && <span> · </span>}
-                  {artist.anr && <span>A&amp;R: {artist.anr}</span>}
-                </div>
-              )}
+      <aside className="imss-sidebar imss-print-hide shrink-0" style={{ borderColor: C.border, background: C.panel }} aria-label="Artist navigation">
+        <div className="imss-desktop-only px-5 pt-6 pb-5" style={{ borderBottom: '1px solid ' + C.border }}>
+          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 24, width: 'auto' }} />
+          <div className="flex items-center gap-3 mt-5">
+            <Avatar name={artist.name} photoUrl={artist.photoUrl} size={40} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{artist.name}</div>
+              <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
           </div>
+          {(artist.productManager || artist.anr) && (
+            <div className="text-xs mt-3" style={{ color: C.textDim, lineHeight: 1.6 }}>
+              {artist.productManager && <div>Product Manager · {artist.productManager}</div>}
+              {artist.anr && <div>A&amp;R · {artist.anr}</div>}
+            </div>
+          )}
         </div>
-
-        {(myNotices.length > 0 || needsToKnow.length > 0) && (
-          <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
-            <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>Worth knowing</div>
-            {myNotices.length > 0 && (
-              <div className="flex flex-col gap-3 mb-3">
-                {myNotices.map(n => (
-                  <div key={n.id} className="rounded p-3" style={{ background: C.panel, border: '1px solid ' + C.border }}>
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
-                      <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(n.createdAt)}</div>
-                    </div>
-                    <div className="text-sm mt-1" style={{ color: C.textDim }}>{n.message}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {needsToKnow.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                {needsToKnow.map((n, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.text }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 9999, background: n.tone === 'red' ? C.red : C.amber, flexShrink: 0 }}></span>
-                    {n.text}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="imss-print-hide flex items-center gap-1 mb-6 flex-wrap border-b" style={{ borderColor: C.border }}>
+        <nav className="imss-nav gap-1 px-2 py-2">
           {(() => {
             let lastGroup = null;
             const out = [];
             TABS.forEach(t => {
-              if (lastGroup !== null && t.group !== lastGroup) {
-                out.push(<div key={'div-' + t.id} style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '6px 4px' }}></div>);
+              if (t.group !== lastGroup) {
+                out.push(<div key={'g-' + t.group} className="imss-desktop-only" style={{ color: C.textDim, fontSize: 11, fontWeight: 600, padding: '14px 12px 4px' }}>{t.group}</div>);
+                lastGroup = t.group;
               }
-              lastGroup = t.group;
               const Icon = t.icon;
+              const isActive = tab === t.id;
               out.push(
-                <button key={t.id} onClick={() => setTab(t.id)}
-                  className="text-sm px-3 py-2 inline-flex items-center gap-1.5"
-                  style={{ color: tab === t.id ? C.amber : C.textDim, fontWeight: tab === t.id ? 600 : 500, borderBottom: '2px solid ' + (tab === t.id ? C.amber : 'transparent'), marginBottom: -1 }}>
-                  <Icon size={14} />
-                  {t.label}
+                <button key={t.id} onClick={() => setTab(t.id)} aria-current={isActive ? 'page' : undefined}
+                  className="imss-portal-nav flex items-center gap-2.5 px-3 py-2 rounded text-sm whitespace-nowrap"
+                  style={{ background: isActive ? C.amberSoft : 'transparent', color: isActive ? C.amber : C.textDim, fontWeight: isActive ? 600 : 500 }}>
+                  <Icon size={16} />
+                  <span style={{ flex: 1, textAlign: 'left' }}>{t.label}</span>
                   {t.id === 'requests' && openRequestCount > 0 && (
-                    <span style={{ background: C.amber, color: '#1A1500', borderRadius: 9999, fontSize: 10, fontWeight: 700, minWidth: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{openRequestCount}</span>
+                    <span aria-label={openRequestCount + ' open'} style={{ background: C.amber, color: '#1A1500', borderRadius: 9999, fontSize: 10, fontWeight: 700, minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{openRequestCount}</span>
                   )}
                 </button>
               );
             });
+            out.push(
+              <button key="signout" onClick={onLogout} className="imss-mobile-only imss-portal-nav px-3 py-2 rounded text-sm whitespace-nowrap" style={{ color: C.textDim }}>
+                <span className="inline-flex items-center gap-2"><LogOut size={16} /> Sign out</span>
+              </button>
+            );
             return out;
           })()}
+        </nav>
+        <div className="imss-desktop-only mt-auto px-3 py-3" style={{ borderTop: '1px solid ' + C.border }}>
+          <button onClick={onLogout} className="imss-portal-nav w-full flex items-center gap-2.5 px-3 py-2 rounded text-sm" style={{ color: C.textDim }}>
+            <LogOut size={16} /> Sign out
+          </button>
         </div>
+      </aside>
+
+      <main className="imss-content">
+        <div className="imss-content-inner" style={{ maxWidth: 1120 }}>
+        <div className="imss-mobile-only mb-5">
+          <div className="flex items-center gap-3">
+            <Avatar name={artist.name} photoUrl={artist.photoUrl} size={36} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{artist.name}</div>
+              <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
+            </div>
+          </div>
+        </div>
+
+        {tab !== 'overview' && <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>}
 
         {tab === 'overview' && (
           <div>
-            <div className="flex flex-wrap gap-3 mb-6">
-              <KPICard icon={DollarSign} label="Total revenue" value={formatCurrency(totalRevenue)} tone="teal" />
-              <KPICard icon={Radio} label="Total streams" value={formatNumber(totalStreams)} />
-              <KPICard icon={Disc3} label="Releases" value={artistCatalog.length} sub={artistCatalog.filter(c => c.status === 'Released').length + ' released'} tone="amber" />
-              <KPICard icon={Wallet} label="Balance owed" value={formatCurrency(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />
-              {isFunded && <KPICard icon={Wallet} label="Budget remaining" value={formatCurrency(budgetRemaining)} tone={budgetRemaining < 0 ? 'red' : 'teal'} sub={'of ' + formatCurrency(artist.annualBudget || 0)} />}
-            </div>
+            <h1 className="imss-portal-title">Earnings</h1>
 
-            <div className="imss-grid-2 gap-4 mb-6">
-              <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
-                <div className="text-xs mb-3" style={{ color: C.textFaint }}>Revenue by month</div>
+            <section aria-label="What you are owed" className="rounded border mb-6 imss-owed-card" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="imss-owed-head">
+                <div>
+                  <div className="text-sm" style={{ color: C.textDim }}>{balance > 0 ? 'You’re owed' : 'Balance'}</div>
+                  <div className="imss-owed" style={{ color: balance > 0 ? C.amber : C.text }}>{formatCents(Math.max(0, balance))}</div>
+                </div>
+                <div className="flex gap-2 flex-wrap imss-print-hide mt-4">
+                  <Btn variant="ghost" onClick={() => setTab('statements')}><Eye size={14} /> Get a statement</Btn>
+                  <Btn variant="ghost" onClick={() => setTab('payouts')}><Wallet size={14} /> Payouts</Btn>
+                </div>
+              </div>
+              <ol className="imss-sum" aria-label="How your balance is worked out">
+                <li><span>Gross</span><b>{formatCents(lifetime.gross)}</b></li>
+                <li><span>Inbound Banking Charge</span><b>−{formatCents(lifetime.swift)}</b></li>
+                <li><span>Label share ({Math.round((1 - myPct) * 100)}%)</span><b>−{formatCents(lifetime.labelShare)}</b></li>
+                <li className="imss-sum-key"><span>Your earnings</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
+                {recoupment.recouped > 0 && <li><span>Recouped expenses</span><b>−{formatCents(recoupment.recouped)}</b></li>}
+                <li><span>Paid to you</span><b>{paid > 0 ? '−' : ''}{formatCents(paid)}</b></li>
+                <li className="imss-sum-total"><span>{balance > 0 ? 'You’re owed' : 'Balance'}</span><b style={{ color: balance > 0 ? C.amber : C.text }}>{formatCents(Math.max(0, balance))}</b></li>
+              </ol>
+            </section>
+
+            {(myNotices.length > 0 || needsToKnow.length > 0) && (
+              <section aria-label="Notices" className="mb-6 flex flex-col gap-2">
+                {needsToKnow.map((n, i) => (
+                  <div key={'k' + i} className="rounded border px-4 py-3 text-sm" style={{ borderColor: C.amber, background: C.amberSoft, color: C.text }}>{n.text}</div>
+                ))}
+                {myNotices.map(n => (
+                  <div key={n.id} className="rounded border px-4 py-3" style={{ borderColor: C.border, background: C.panel }}>
+                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{n.title}</div>
+                      <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(n.createdAt)}</div>
+                    </div>
+                    <div className="text-sm mt-1" style={{ color: C.textDim, maxWidth: '70ch' }}>{n.message}</div>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            <section aria-labelledby="ledger-h" className="mb-8">
+              <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
+                <h2 id="ledger-h" style={{ fontWeight: 600, fontSize: 17 }}>What each release has earned you</h2>
+                <div className="text-xs" style={{ color: C.textDim }}>{releaseLedger.length} {releaseLedger.length === 1 ? 'release' : 'releases'} · tap one for its months</div>
+              </div>
+              {releaseLedger.length === 0 ? (
+                <EmptyState icon={Disc3} title="No releases yet" description="Once the label adds your releases and their revenue, each one shows here with what it has earned you." />
+              ) : (
+                <ul className="rounded border imss-ledger" style={{ borderColor: C.border, background: C.panel }}>
+                  {releaseLedger.map(e => (
+                    <li key={e.key}>
+                      <button onClick={() => openReleaseRevenue(e.title)} className="imss-ledger-row" aria-label={e.title + ': ' + formatCents(e.earned) + ' earned. Open its revenue.'}>
+                        <ArtworkThumb release={e.release || { title: e.title }} size={44} />
+                        <span className="imss-ledger-name">
+                          <span style={{ fontWeight: 600, color: C.text }}>{e.title}</span>
+                          <span className="text-xs" style={{ color: C.textDim }}>
+                            {e.release ? [e.release.type, e.release.releaseDate ? formatDate(e.release.releaseDate) : null].filter(Boolean).join(' · ') : 'Not in catalog'}
+                          </span>
+                        </span>
+                        <span className="imss-ledger-bar" aria-hidden="true"><span style={{ width: Math.max(2, (e.earned / topEarned) * 100) + '%' }}></span></span>
+                        <span className="imss-ledger-amt">
+                          <span style={{ color: e.earned > 0 ? C.teal : C.textDim }}>{formatCents(e.earned)}</span>
+                          {e.lastMonth && <span className="text-xs" style={{ color: C.textDim, fontWeight: 400 }}>{monthLabel(e.lastMonth)} +{formatCents(e.lastEarned)}</span>}
+                        </span>
+                        <ChevronRight size={16} color={C.textFaint} aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <div className={'gap-4 mb-6 ' + (platformTotals.length ? 'imss-grid-2' : '')}>
+              <section aria-labelledby="months-h" className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+                <h2 id="months-h" className="text-sm mb-3" style={{ fontWeight: 600 }}>Your earnings by month</h2>
                 <div style={{ height: 220 }}>
-                  {monthlyRevenue.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No revenue yet</div>
+                  {monthlyEarnings.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textDim }}>No earnings yet</div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyRevenue}>
+                      <BarChart data={monthlyEarnings}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                        <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
-                        <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
+                        <XAxis dataKey="month" tick={{ fill: C.textDim, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                        <YAxis tick={{ fill: C.textDim, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => [formatCents(v), 'Your earnings']} />
+                        <Bar dataKey="value" fill={C.teal} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
-              </div>
-              <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
-                <div className="text-xs mb-3" style={{ color: C.textFaint }}>Streams by platform</div>
-                <div style={{ height: 220 }}>
-                  {platformTotals.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No stream data yet</div>
-                  ) : (
+              </section>
+              {platformTotals.length > 0 && (
+                <section aria-labelledby="streams-h" className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+                  <h2 id="streams-h" className="text-sm mb-3" style={{ fontWeight: 600 }}>Streams by platform · {formatNumber(totalStreams)}</h2>
+                  <div style={{ height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
@@ -4981,30 +5059,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
                       </PieChart>
                     </ResponsiveContainer>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
-              <div className="text-xs px-3 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue (all time)</div>
-              {topSongs.length === 0 ? (
-                <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
-              ) : (
-                <table className="w-full" style={{ tableLayout: 'fixed' }}>
-                  <colgroup><col style={{ width: '50%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /></colgroup>
-                  <thead><tr><Th>Song</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
-                  <tbody>
-                    {topSongs.map(r => (
-                      <tr key={r.id}>
-                        <Td>{r.title}</Td>
-                        <Td align="right" mono>{formatCents(r.value)}</Td>
-                        <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(sumSplits(r.rows).artistShare)}</span></Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  </div>
+                </section>
               )}
             </div>
+
+            {isFunded && (
+              <div className="text-sm" style={{ color: C.textDim }}>
+                Budget: <span style={{ fontFamily: MONO_FONT, color: budgetRemaining < 0 ? C.red : C.text }}>{formatCurrency(budgetRemaining)}</span> left of {formatCurrency(artist.annualBudget || 0)}. <button onClick={() => setTab('budget')} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>See expenses</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -5577,7 +5641,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
         )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
