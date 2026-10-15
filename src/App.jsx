@@ -5005,10 +5005,25 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     setCollabError('');
   }
   function removeSubmitCollaborator(idx) { setSubmitForm(f => ({ ...f, collaborators: f.collaborators.filter((_, i) => i !== idx) })); }
+  // One control for everyone credited on the song: Primary (co-headliner) or
+  // Featured (credited as feat. and listed in the splits with their %).
+  const [artistCategory, setArtistCategory] = useState('Primary');
+  const [featuredPct, setFeaturedPct] = useState('');
+  const [artistAddError, setArtistAddError] = useState('');
   function addSubmitPrimaryArtist() {
-    if (!newSubmitPrimaryArtist.trim()) return;
-    setSubmitForm(f => ({ ...f, primaryArtists: [...(f.primaryArtists || []), newSubmitPrimaryArtist.trim()] }));
-    setNewSubmitPrimaryArtist('');
+    const name = newSubmitPrimaryArtist.trim();
+    if (!name) { setArtistAddError('Enter the artist’s name.'); return; }
+    if (artistCategory === 'Primary') {
+      setSubmitForm(f => ({ ...f, primaryArtists: [...(f.primaryArtists || []), name] }));
+    } else {
+      const raw = String(featuredPct).trim(), pct = Number(raw);
+      if (raw === '') { setArtistAddError('Enter the split % signed to this featured artist.'); return; }
+      if (isNaN(pct) || pct < 0 || pct > 100) { setArtistAddError('Split % must be between 0 and 100.'); return; }
+      if (splitsTotal + pct > 100) { setArtistAddError('That takes the splits over 100%. You have ' + (100 - splitsTotal) + '% left.'); return; }
+      setSubmitForm(f => ({ ...f, collaborators: [...f.collaborators, { name, role: 'Feature', splitPercent: pct }] }));
+      setFeaturedPct('');
+    }
+    setNewSubmitPrimaryArtist(''); setArtistAddError('');
   }
   function removeSubmitPrimaryArtist(idx) { setSubmitForm(f => ({ ...f, primaryArtists: f.primaryArtists.filter((_, i) => i !== idx) })); }
   function submitReleaseSubmission() {
@@ -5286,18 +5301,32 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             {showSubmitForm && (
               <form onSubmit={e => { e.preventDefault(); submitReleaseSubmission(); }} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
                 <Field label="Title" full><Input required value={submitForm.title} onChange={e => setSubmitForm({ ...submitForm, title: e.target.value })} placeholder="Working title" /></Field>
-                <Field label="Additional primary artists" full>
-                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                    <Badge tone="teal">{artist.name} (you)</Badge>
+                <fieldset className="imss-span-2">
+                  <legend className="text-xs mb-2" style={{ color: C.textDim }}>Artists on this song</legend>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                    <span className="imss-chip is-primary">{artist.name} <small>primary · you</small></span>
                     {(submitForm.primaryArtists || []).map((name, i) => (
-                      <Badge key={i}>{name} <button type="button" onClick={() => removeSubmitPrimaryArtist(i)} style={{ marginLeft: 4, color: C.textFaint }}>×</button></Badge>
+                      <span key={'p' + i} className="imss-chip is-primary">{name} <small>primary</small><button type="button" onClick={() => removeSubmitPrimaryArtist(i)} aria-label={'Remove ' + name}><Trash2 size={12} /></button></span>
+                    ))}
+                    {submitForm.collaborators.map((c, i) => c.role === 'Feature' && (
+                      <span key={'f' + i} className="imss-chip is-featured">{c.name} <small>featured · {c.splitPercent}%</small><button type="button" onClick={() => removeSubmitCollaborator(i)} aria-label={'Remove ' + c.name}><Trash2 size={12} /></button></span>
                     ))}
                   </div>
-                  <div className="flex gap-2">
-                    <Input value={newSubmitPrimaryArtist} onChange={e => setNewSubmitPrimaryArtist(e.target.value)} placeholder="Add a co-primary artist (for joint releases)" style={{ flex: 1 }} />
-                    <Btn variant="ghost" type="button" onClick={addSubmitPrimaryArtist}>Add</Btn>
+                  <div className={'imss-artist-add' + (artistCategory === 'Featured' ? ' is-featured' : '')}>
+                    <div className="imss-seg" role="radiogroup" aria-label="Category">
+                      {['Primary', 'Featured'].map(c => (
+                        <button key={c} type="button" role="radio" aria-checked={artistCategory === c} onClick={() => { setArtistCategory(c); setArtistAddError(''); }} className={artistCategory === c ? 'is-on' : ''}>{c}</button>
+                      ))}
+                    </div>
+                    <Input aria-label="Artist name" value={newSubmitPrimaryArtist} onChange={e => { setNewSubmitPrimaryArtist(e.target.value); setArtistAddError(''); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubmitPrimaryArtist(); } }} placeholder={artistCategory === 'Primary' ? 'Co-primary artist name' : 'Featured artist name'} />
+                    {artistCategory === 'Featured' && (
+                      <Input aria-label="Featured artist split %" type="number" min="0" max="100" step="0.01" value={featuredPct} onChange={e => { setFeaturedPct(e.target.value); setArtistAddError(''); }} placeholder="Split %" />
+                    )}
+                    <Btn variant="ghost" type="button" onClick={addSubmitPrimaryArtist}><Plus size={14} /> Add</Btn>
                   </div>
-                </Field>
+                  <div className="text-xs mt-2" style={{ color: C.textDim }}>{artistCategory === 'Primary' ? 'Primary artists share the headline credit on a joint release.' : 'Featured artists are credited as “feat.” and added to the splits below with their %.'}</div>
+                  {artistAddError && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{artistAddError}</div>}
+                </fieldset>
                 <Field label="Type">
                   <Select value={submitForm.type} onChange={e => setSubmitForm({ ...submitForm, type: e.target.value })}>
                     {RELEASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}

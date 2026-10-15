@@ -174,6 +174,24 @@ export const GLOBAL_STYLES = `
   .imss-dash-retail li { grid-template-columns: minmax(0, 1fr) 92px; }
   .imss-dash-retail .imss-ledger-bar { display: none; }
 }
+.imss-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9999px; border: 1px solid; font-size: 13px; font-weight: 600; }
+.imss-chip small { font-size: 11px; font-weight: 500; opacity: 0.85; }
+.imss-chip button { display: inline-flex; margin-left: 2px; color: inherit; opacity: 0.8; }
+.imss-chip button:hover { opacity: 1; }
+.imss-chip.is-primary { color: ${C.teal}; background: ${C.tealSoft}; border-color: rgba(95,165,147,0.55); }
+.imss-chip.is-featured { color: ${C.amber}; background: ${C.amberSoft}; border-color: rgba(231,162,61,0.55); }
+.imss-artist-add { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.imss-artist-add.is-featured { grid-template-columns: auto minmax(0, 1fr) 120px auto; }
+.imss-artist-add input, .imss-artist-add .imss-btn, .imss-split-add input, .imss-split-add select, .imss-split-add .imss-btn { height: 38px; }
+.imss-seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid ${C.border}; border-radius: 14px; background: rgba(255,255,255,0.03); height: 38px; }
+.imss-seg button { padding: 0 14px; border-radius: 11px; font-size: 13px; font-weight: 500; color: ${C.textDim}; transition: background-color 160ms cubic-bezier(0.16,1,0.3,1), color 160ms; }
+.imss-seg button:hover { color: ${C.text}; }
+.imss-seg button.is-on { background: ${C.amberSoft}; color: ${C.amber}; font-weight: 600; }
+@media (max-width: 640px) {
+  .imss-artist-add, .imss-artist-add.is-featured { grid-template-columns: minmax(0, 1fr) auto; }
+  .imss-artist-add .imss-seg { grid-column: 1 / -1; justify-self: start; }
+  .imss-artist-add.is-featured input:first-of-type { grid-column: 1 / -1; }
+}
 .imss-split-add { display: grid; grid-template-columns: minmax(0, 1fr) 150px 150px auto; gap: 8px; padding: 10px 12px; align-items: center; }
 @media (max-width: 640px) { .imss-split-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .imss-split-add > :first-child { grid-column: 1 / -1; } }
 /* Tables: a full grid. Rows already have bottom borders (Td/Th); add column
