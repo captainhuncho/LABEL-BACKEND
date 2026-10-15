@@ -12,6 +12,13 @@ npm run dev        # http://localhost:5173
 npm test           # finance baseline
 ```
 
+## Deploying
+
+Pushing to `main` deploys to https://ops.imssrecords.com:
+`.github/workflows/deploy.yml` runs tests, builds, and uploads `dist/` over
+FTPS to hosting.com (secrets `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`).
+`public/.htaccess` forces HTTPS and sets cache headers there.
+
 ## Backend (Supabase)
 
 - `.env.local` holds `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
