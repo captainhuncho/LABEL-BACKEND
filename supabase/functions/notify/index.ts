@@ -79,7 +79,7 @@ ${quote ? `<div style="margin:16px 0;padding:12px 14px;border-left:3px solid #E7
 async function send(to: string[], subject: string, html: string, replyKey?: string) {
   const recipients = [...new Set(to.filter(e => e && e.includes('@')))];
   if (!recipients.length || !RESEND_KEY) return { skipped: !RESEND_KEY ? 'no RESEND_API_KEY' : 'no recipients' };
-  // Only emails with a reply address (submissions, requests) say replies work.
+  // Only emails with a reply address (submissions, requests, invoices) say replies work.
   const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
   const note = replyable ? '<p style="margin:18px 0 0;font-size:13px;color:#9BA1A1">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
   const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html: html.replace('<!--REPLY_NOTE-->', note) };
@@ -90,8 +90,8 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   return { status: res.status, body: await res.text() };
 }
 
-const KEY_CODE: Record<string, string> = { releaseSubmissions: 's', artistRequests: 'q' };
-const CODE_KEY: Record<string, string> = { s: 'releaseSubmissions', q: 'artistRequests' };
+const KEY_CODE: Record<string, string> = { releaseSubmissions: 's', artistRequests: 'q', invoices: 'i' };
+const CODE_KEY: Record<string, string> = { s: 'releaseSubmissions', q: 'artistRequests', i: 'invoices' };
 
 // ---------- outgoing ----------
 async function handleEvent(ev: Event) {
@@ -129,7 +129,7 @@ async function handleEvent(ev: Event) {
       const kind = item.kind === 'expense' ? 'expense claim' : 'service invoice';
       return send(await stageReviewers('PM Approval', artist), `PM Approval: ${kind} from ${artistName}, $${Number(item.amount || 0).toFixed(2)}`,
         page(`${artistName} submitted an ${kind}`, [`<b>${esc(item.title || '')}</b> · $${Number(item.amount || 0).toFixed(2)}`, 'It’s waiting for PM Approval in Invoices.'],
-          { label: 'Open Invoices', url: `${APP_URL}/` }, item.details || undefined));
+          { label: 'Open Invoices', url: `${APP_URL}/` }, item.details || undefined), replyKey);
     }
   }
 
@@ -139,23 +139,23 @@ async function handleEvent(ev: Event) {
     if (item.status === 'Rejected') {
       return send([artistEmail], `Your invoice “${item.title}” wasn’t approved`,
         page('Your invoice wasn’t approved', [`Hi ${esc(artistName)}, your invoice <b>${esc(item.title)}</b> (${amount}) wasn’t approved.`],
-          { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined));
+          { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined), replyKey);
     }
     if (item.status === 'Paid') {
       return send([artistEmail], `Paid: your invoice “${item.title}” (${amount})`,
-        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }));
+        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }), replyKey);
     }
     const reviewers = await stageReviewers(item.status, artist);
     const back = last.action === 'sent back';
     return send(reviewers, `${back ? 'Sent back' : 'Ready'} for ${item.status}: ${artistName}, ${amount}`,
       page(`${item.status}: ${artistName}`, [`<b>${esc(item.title)}</b> · ${amount}`, back ? `${esc(last.by || 'Someone')} sent it back from ${esc(last.from || 'the next queue')}.` : `${esc(last.by || 'It')} approved it at ${esc(last.from || 'the previous queue')}; it’s now waiting for you.`],
-        { label: 'Open Invoices', url: `${APP_URL}/` }, last.note || undefined));
+        { label: 'Open Invoices', url: `${APP_URL}/` }, last.note || undefined), replyKey);
   }
 
   if (ev.type === 'message') {
     const msgs: Item[] = Array.isArray(item.messages) ? item.messages : [];
     const last = msgs[msgs.length - 1];
-    const what = ev.key === 'releaseSubmissions' ? `your release “${item.title}”` : `your request “${item.title || item.category}”`;
+    const what = ev.key === 'releaseSubmissions' ? `your release “${item.title}”` : ev.key === 'invoices' ? `your invoice “${item.title}”` : `your request “${item.title || item.category}”`;
     // A label response on a request (the older single-response field) counts as a label message.
     const labelText = last && last.from === 'label' ? last.text : (ev.key === 'artistRequests' && item.response && (!last || last.from !== 'artist') ? item.response : null);
     if (labelText) {
@@ -164,8 +164,9 @@ async function handleEvent(ev: Event) {
           { label: 'Open your portal', url: `${APP_URL}/` }, labelText), replyKey);
     }
     if (last && last.from === 'artist') {
-      const team = await teamFor(artist);
-      const label = ev.key === 'releaseSubmissions' ? `“${item.title}”` : `request “${item.title || item.category}”`;
+      // Invoice replies go to whoever holds the invoice now, plus Admins.
+      const team = ev.key === 'invoices' ? [...new Set([...(await stageReviewers(item.status, artist)), ...(await teamFor(undefined))])] : await teamFor(artist);
+      const label = ev.key === 'releaseSubmissions' ? `“${item.title}”` : ev.key === 'invoices' ? `invoice “${item.title}”` : `request “${item.title || item.category}”`;
       return send(team, `${artistName} replied about ${label}`,
         page(`${artistName} replied`, [`About ${esc(label)}:`], { label: 'Open in the app', url: `${APP_URL}/` }, last.text), replyKey);
     }
@@ -216,7 +217,7 @@ async function handleInbound(data: Item) {
   if (!res.ok) return { skipped: 'could not fetch email ' + res.status };
   const email = await res.json();
   const toList: string[] = [].concat(email.to || data.to || []).map(addressOf);
-  const target = toList.map(t => t.match(/^reply-([sq])-([^@]+)@/)).find(Boolean);
+  const target = toList.map(t => t.match(/^reply-([sqi])-([^@]+)@/)).find(Boolean);
   if (!target) return { skipped: 'not a reply address' };
   const key = CODE_KEY[target[1]], id = target[2];
   const from = addressOf(email.from || data.from || '');

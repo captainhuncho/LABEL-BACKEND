@@ -48,6 +48,9 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - **Statement files** live in the private Storage bucket `statements` under
   `<artistId>/`. The team can manage every file; an artist can only read files
   in their own folder. Downloads use short-lived (2 min) signed URLs.
+- `artist_reply_invoice()` lets an artist add a message only to their own
+  invoice, and not once it's Paid. Email replies to an invoice land on the same
+  thread via the notify function.
 - Internal helpers (`section()`, `my_artist()`, `js_slug()`) are not callable
   from the API. Default privileges in `public` grant no API access to new
   functions; every function exposed to the API is granted explicitly.

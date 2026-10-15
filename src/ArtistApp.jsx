@@ -44,6 +44,11 @@ export default function ArtistApp({ signOut }) {
         if (err) { setError('Could not send your reply. Please try again.'); return; }
         load();
       }}
+      replyToInvoice={async (id, message) => {
+        const { error: err } = await supabase.rpc('artist_reply_invoice', { invoice_id: id, message });
+        if (err) { setError('Could not send your message. Please try again.'); return; }
+        load();
+      }}
       onLogout={signOut}
     />
   );

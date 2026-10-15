@@ -3533,6 +3533,22 @@ function artistInvoiceStatus(inv) {
 }
 const INVOICE_TONES = { 'PM Approval': 'amber', 'Finance Queue': 'amber', 'LH Queue': 'amber', 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red', Pending: 'amber', Approved: 'teal' };
 
+// Messages between the label and the artist on one invoice (in app or by email).
+function InvoiceThread({ inv, artistLabel }) {
+  const msgs = inv.messages || [];
+  if (!msgs.length) return <div className="text-sm" style={{ color: C.textDim }}>No messages yet.</div>;
+  return (
+    <ol className="imss-thread">
+      {msgs.map((m, i) => (
+        <li key={i} className={m.from === 'artist' ? 'is-artist' : 'is-label'}>
+          <div className="imss-thread-meta">{m.from === 'artist' ? (m.by || artistLabel) : (m.by || 'Label')} · {formatDate(String(m.at || '').slice(0, 10))}{m.via === 'email' ? ' · by email' : ''}</div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function InvoicesSection({ invoices, update, roster, staff = [], labelSettings = {}, updateLabelSettings, canEdit = true, session = {}, pmScope = null }) {
   const workflow = labelSettings.invoiceWorkflow || {};
   const isAdmin = session.role === 'Admin';
@@ -3543,6 +3559,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [showWorkflow, setShowWorkflow] = useState(false);
+  const [message, setMessage] = useState('');
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
   const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
   const reviewersOf = inv => invoiceReviewers(inv, roster, staff, workflow);
@@ -3568,6 +3585,12 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
       ...(to === 'Paid' ? { paidAt: stamp } : {}),
     }));
     setNote(''); setError('');
+  }
+  function sendMessage(inv) {
+    const text = message.trim();
+    if (!text) return;
+    update(invoices.map(i => i.id !== inv.id ? i : { ...i, messages: [...(i.messages || []), { from: 'label', by: session.name, at: new Date().toISOString(), text }] }));
+    setMessage('');
   }
   function toggleAssignee(key, id) {
     const cur = workflow[key] || [];
@@ -3640,7 +3663,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
                       <Td align="right" mono>{formatCents(inv.amount)}</Td>
                       <Td><Badge tone={INVOICE_TONES[st]}>{st}</Badge></Td>
                       <Td>{stage ? (reviewers.length ? reviewers.map(m => m.name).join(', ') : <span style={{ color: C.amber }}>Unassigned</span>) : '—'}</Td>
-                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : canAct(inv) ? 'Review' : 'Open'}</button></Td>
+                      <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : inv.id); setNote(''); setMessage(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : canAct(inv) ? 'Review' : 'Open'}</button></Td>
                     </tr>
                     {isOpen && (
                       <tr><td colSpan={8} style={{ padding: 0, borderBottom: '1px solid ' + C.border }}>
@@ -3676,6 +3699,19 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
                                 <li key={i}><b style={{ textTransform: 'capitalize' }}>{h.action}</b> by {h.by} · {formatDate(String(h.at).slice(0, 10))} <span style={{ color: C.textDim }}>({h.from} → {h.to})</span>{h.note && <div style={{ color: C.textDim, whiteSpace: 'pre-wrap' }}>“{h.note}”</div>}</li>
                               ))}
                             </ol>
+                          </section>
+                          <section className="imss-sub-wide">
+                            <h3 className="imss-sub-h">Messages with the artist</h3>
+                            <InvoiceThread inv={inv} artistLabel={artistName(inv.artistId)} />
+                            {canEdit && (
+                              <div className="mt-3">
+                                <Field label="Message to the artist">
+                                  <TextArea rows={2} value={message} onChange={e => setMessage(e.target.value)} placeholder="e.g. Can you send the receipt for the studio deposit?" />
+                                </Field>
+                                <div className="mt-2"><Btn variant="ghost" onClick={() => sendMessage(inv)} disabled={!message.trim()}><MessageSquare size={14} /> Send message</Btn></div>
+                                <div className="text-xs mt-1" style={{ color: C.textDim }}>The artist gets it by email and can reply to that email.</div>
+                              </div>
+                            )}
                           </section>
                           {canAct(inv) && (
                             <section className="imss-sub-wide">
@@ -5157,7 +5193,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
   );
 }
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, statementFiles = [], labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], labelSettings, onLogout }) {
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -5400,6 +5436,15 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     if (replyToSubmission) await replyToSubmission(sub.id, text);
     else updateReleaseSubmissions(releaseSubmissions.map(x => x.id !== sub.id ? x : { ...x, status: 'Pending', messages: [...(x.messages || []), { from: 'artist', by: artist.name, at: new Date().toISOString(), text }] }));
     setReplyDrafts(d => ({ ...d, [sub.id]: '' }));
+  }
+  const [openInvoiceId, setOpenInvoiceId] = useState(null);
+  async function sendInvoiceReply(inv) {
+    const text = (replyDrafts['inv_' + inv.id] || '').trim();
+    if (!text) { setReplyError(e => ({ ...e, ['inv_' + inv.id]: 'Write a message first.' })); return; }
+    setReplyError(e => ({ ...e, ['inv_' + inv.id]: '' }));
+    if (replyToInvoice) await replyToInvoice(inv.id, text);
+    else updateInvoices(invoices.map(x => x.id !== inv.id ? x : { ...x, messages: [...(x.messages || []), { from: 'artist', by: artist.name, at: new Date().toISOString(), text }] }));
+    setReplyDrafts(d => ({ ...d, ['inv_' + inv.id]: '' }));
   }
   const mySubmissions = useMemo(() => [...releaseSubmissions.filter(s => s.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [releaseSubmissions, artist.id]);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
@@ -6548,16 +6593,33 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             ) : (
               <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                 <table className="w-full" style={{ minWidth: 620 }}>
-                  <thead><tr><Th>Date</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Status</Th></tr></thead>
+                  <thead><tr><Th>Date</Th><Th>Type</Th><Th>Description</Th><Th align="right">Amount</Th><Th>Status</Th><Th align="right">Messages</Th></tr></thead>
                   <tbody>
                     {myInvoices.map(i => (
-                      <tr key={i.id}>
+                      <React.Fragment key={i.id}>
+                      <tr>
                         <Td mono>{formatDate(i.invoiceDate)}</Td>
                         <Td>{INVOICE_KINDS[i.kind] || i.kind}</Td>
                         <Td>{i.title}{i.reviewNote ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>Label: {i.reviewNote}</div> : null}</Td>
                         <Td align="right" mono>{formatCents(i.amount)}</Td>
                         <Td><Badge tone={INVOICE_TONES[invoiceStatus(i)]}>{artistInvoiceStatus(i)}</Badge></Td>
+                        <Td align="right"><button onClick={() => setOpenInvoiceId(openInvoiceId === i.id ? null : i.id)} aria-expanded={openInvoiceId === i.id} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{openInvoiceId === i.id ? 'Close' : (i.messages || []).length ? 'Messages (' + i.messages.length + ')' : 'Message'}</button></Td>
                       </tr>
+                      {openInvoiceId === i.id && (
+                        <tr><td colSpan={6} style={{ padding: 16, borderBottom: '1px solid ' + C.border }}>
+                          <InvoiceThread inv={i} artistLabel={artist.name} />
+                          {invoiceStatus(i) !== 'Paid' && (
+                            <div className="mt-3">
+                              <Field label="Message to the label">
+                                <TextArea rows={2} value={replyDrafts['inv_' + i.id] || ''} onChange={e => setReplyDrafts(d => ({ ...d, ['inv_' + i.id]: e.target.value }))} placeholder="e.g. Receipt attached by email; the deposit was paid on 12 March." />
+                              </Field>
+                              {replyError['inv_' + i.id] && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{replyError['inv_' + i.id]}</div>}
+                              <div className="mt-2"><Btn variant="ghost" onClick={() => sendInvoiceReply(i)}><MessageSquare size={14} /> Send message</Btn></div>
+                            </div>
+                          )}
+                        </td></tr>
+                      )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -6791,6 +6853,22 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Artists and email replies write to these sections while the team app is
+  // open, so re-read them when the tab regains focus and once a minute.
+  useEffect(() => {
+    if (!supabase || loading) return;
+    const live = [['invoices', setInvoices], ['artistRequests', setArtistRequests], ['releaseSubmissions', setReleaseSubmissions], ['profileRequests', setProfileRequests]];
+    async function refresh() {
+      if (document.visibilityState === 'hidden') return;
+      for (const [key, setter] of live) {
+        try { const res = await window.storage.get(key, false); if (res && res.value) setter(JSON.parse(res.value)); } catch (e) { /* keep what's on screen */ }
+      }
+    }
+    const timer = setInterval(refresh, 60000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [loading]);
 
   async function persist(key, value) {
     try {
