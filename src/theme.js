@@ -89,6 +89,11 @@ export const GLOBAL_STYLES = `
   box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.22) !important;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
+/* Tables: a full grid. Rows already have bottom borders (Td/Th); add column
+   lines, a header band, and drop the last row's line where the card border sits. */
+table th:not(:last-child), table td:not(:last-child) { border-right: 1px solid ${C.border}; }
+table thead th { background: rgba(255,255,255,0.04); }
+table tbody tr:last-child td { border-bottom: none !important; }
 button.rounded.border:hover {
   transform: translateY(-2px) !important;
   box-shadow: 0 4px 10px rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.28) !important;
