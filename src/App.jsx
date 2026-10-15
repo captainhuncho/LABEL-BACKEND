@@ -226,7 +226,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
                 <BarChart data={monthlyRevenue}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                  <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                  <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
                   <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
                   <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                 </BarChart>
@@ -295,7 +295,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
 
       {canViewRoyalties && <div className="imss-grid-2 gap-4 mb-6">
         <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
-          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue</div>
+          <div className="text-xs px-3 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue</div>
           {topSongs.length === 0 ? (
             <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
           ) : (
@@ -611,7 +611,7 @@ function ArtistDetailPanel({ artist, roster, catalog, revenue, streams, masterGr
                   <BarChart data={monthlyRevenue}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                    <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                    <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
                     <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
                     <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                   </BarChart>
@@ -4693,8 +4693,9 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const topSongs = useMemo(() => {
     const map = {};
     myRevenue.forEach(r => {
-      if (!map[r.title]) map[r.title] = { id: r.title, title: r.title, value: 0 };
+      if (!map[r.title]) map[r.title] = { id: r.title, title: r.title, value: 0, rows: [] };
       map[r.title].value += r.earning;
+      map[r.title].rows.push(r);
     });
     return Object.values(map).sort((a, b) => b.value - a.value).slice(0, 5);
   }, [myRevenue]);
@@ -4957,7 +4958,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       <BarChart data={monthlyRevenue}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                         <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
                         <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
                         <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                       </BarChart>
@@ -4985,16 +4986,19 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
             </div>
             <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
-              <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue</div>
+              <div className="text-xs px-3 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue (all time)</div>
               {topSongs.length === 0 ? (
                 <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
               ) : (
-                <table className="w-full">
+                <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                  <colgroup><col style={{ width: '50%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /></colgroup>
+                  <thead><tr><Th>Song</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
                   <tbody>
                     {topSongs.map(r => (
                       <tr key={r.id}>
                         <Td>{r.title}</Td>
-                        <Td align="right" mono>{formatCurrency(r.value)}</Td>
+                        <Td align="right" mono>{formatCents(r.value)}</Td>
+                        <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(sumSplits(r.rows).artistShare)}</span></Td>
                       </tr>
                     ))}
                   </tbody>
@@ -5534,7 +5538,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       <BarChart data={spendByMonth}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                         <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
                         <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
                         <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                       </BarChart>
