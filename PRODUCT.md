@@ -1,0 +1,427 @@
+# IMSS Records — Label Operations Dashboard
+## Product Specification
+
+Build a single-page web app for running an independent record label: artist
+roster, release catalog, royalty accounting, payout statements, expense and
+recoupment tracking, and team access control.
+
+**Stack:** React 18 + Vite. No backend. All state persists to the browser
+through one async key/value adapter (`window.storage`), so it can be swapped
+for an API later without touching the app.
+
+**Dependencies:** `react`, `react-dom`, `recharts` (charts), `lucide-react`
+(icons), `papaparse` (CSV import), `xlsx` (Excel export), `tailwindcss`.
+
+---
+
+## 1. Who uses it
+
+Two front doors, chosen on a soft sign-in screen. This is a clean view split,
+not authentication — anyone with the link can pick either. Say so on the screen.
+
+**Team side** — label staff. What they see depends on their role and
+permissions.
+
+**Artist portal** — an artist sees only their own revenue, payouts, statements,
+releases, and profile.
+
+---
+
+## 2. Access model
+
+Access has two axes: a **role**, and a set of **per-person permissions** an
+Admin ticks.
+
+### Permissions
+
+| Key | Label | Grants |
+|---|---|---|
+| `analytics` | Analytics | Overview, Streams, Release Calendar |
+| `roster` | Roster | Artist roster |
+| `catalog` | Catalog | Catalog and CSV import |
+| `royalties` | Artist earnings | Revenue, Master Gross, Payouts, Statements — **what artists earn** |
+| `spend` | Budgets & expenses | Budgets, Ledger, per-artist spend |
+| `notices` | Noticeboard | Post announcements to artist dashboards |
+| `edits` | Can edit | Add/edit/delete within whatever they can see |
+
+`royalties` and `spend` **must be separate**. The whole point is that a Product
+Manager can see what an artist *costs* without seeing what they *earn*.
+
+### Roles and their defaults
+
+| Role | royalties | spend | analytics | roster | catalog | notices | edits |
+|---|---|---|---|---|---|---|---|
+| **Admin** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Legal** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Finance** | ✓ | ✓ | ✓ | — | — | — | ✓ |
+| **Product Manager** | — | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| **A&R / Label Manager** | — | — | ✓ | ✓ | ✓ | — | ✓ |
+| **Marketing** | — | — | ✓ | — | ✓ | ✓ | — |
+| **Other** | — | — | ✓ | — | — | — | — |
+
+### Rank rules
+
+- **Admin is the highest role.** Its access is fixed at full and cannot be
+  edited by anyone, including another Admin. (Prevents lockout.)
+- **Legal** has Admin-level reach — same screens, same data — but when Legal
+  changes anyone's role or permissions, the change **does not apply**. It
+  queues as a proposal for an Admin to approve.
+- **Legal cannot edit an Admin at all.** The permission checkboxes are disabled
+  with a note explaining why, and the save path refuses it too (don't rely on
+  the disabled UI alone).
+- An Admin editing Legal works normally and applies immediately. Legal's
+  permissions are real stored data, not a hard-coded constant.
+
+Provide a single function `permissionsFor(staff)` as the **only** way to read
+someone's access. It applies the Admin override and falls back to role
+defaults. Nothing should read `staff.permissions` directly.
+
+### Product Manager scoping
+
+A PM manages specific artists (`artist.productManager` matches their name).
+When a PM is signed in:
+
+- Roster shows only their artists.
+- The Ledger shows only entries tied to their artists — no company overhead,
+  no other PM's roster.
+- The label-wide Budget screen is hidden entirely (it's company-level).
+- **Overview must contain no money at all.** The hero card shows Total streams
+  instead of Total revenue, and the revenue chart, top-artists-by-revenue,
+  top-songs, label finance snapshot, and genre/market revenue panels are all
+  hidden. This is easy to get wrong — `analytics` grants Overview, so the
+  money panels need gating on `royalties` specifically.
+
+---
+
+## 3. Finance model
+
+This is the heart of the product. Five collections. **Everything is computed on
+read — never stored.** All money is floating dollars; round only at display.
+
+### Collections
+
+**`artists`** — keyed by slug of name
+| field | type | notes |
+|---|---|---|
+| name | string | display name |
+| artistPct | number | artist's share of net royalties, e.g. `0.75` |
+| distroLabel | string | usually "IMSS Records" |
+| notes | string | |
+
+Label's share = `1 - artistPct`.
+
+**`revenue`** — one row per track per month. Id = `${slug(artist)}_${slug(title)}_${month}`
+| field | type |
+|---|---|
+| artist, artistSlug, title | string |
+| month | `"YYYY-MM"` |
+| earning | number — gross royalty for that track that month |
+| type | string, e.g. "Single", "EP Track", "Album Track" |
+| epAlbum | string \| null — parent release |
+| releaseDate | `"YYYY-MM-DD"` \| null |
+
+**`masterGross`** — one row per calendar month, company-wide. Id = month
+| field | type |
+|---|---|
+| month | `"YYYY-MM"` |
+| totalGross | number — what the label actually received from the distributor, across **all** artists, tracked or not |
+| swiftFee | number — the distributor's fee for that month |
+
+**`ledger`** — non-royalty income/expense and recoupment
+| field | type |
+|---|---|
+| date | `"YYYY-MM-DD"` |
+| type | `"income"` \| `"expense"` |
+| category | string, e.g. Advance, Marketing, Studio |
+| description | string |
+| amount | number, always positive |
+| artist | string \| null |
+| recoupable | boolean |
+
+**`payouts`** — saved statements: artist, artistSlug, periodStart, periodEnd,
+grossEarning, swiftShare, netAfterSwift, artistPct, artistShare, labelShare,
+status (`"draft"` \| `"paid"`), createdAt, notes.
+
+### Slug convention
+
+```
+slug(s) = lowercase(s).trim() → runs of non-alphanumeric → "-" → strip leading/trailing "-"
+```
+
+Months are `"YYYY-MM"` strings that compare correctly with plain `<` and `>`.
+
+### The formulas
+
+**Monthly aggregates**
+```
+revByMonth[month]                = sum of revenue.earning for that month, all artists
+revByArtistMonth[artist][month]  = sum of revenue.earning for that artist that month
+```
+
+**Swift fee — split proportionally, not evenly.** This is the one rule that's
+easy to get wrong:
+```
+swiftShare(artist, month) =
+    masterGross[month].swiftFee × revByArtistMonth[artist][month] / revByMonth[month]
+
+= 0 if there's no masterGross row for that month, or revByMonth[month] <= 0
+```
+
+**Artist lifetime** (over every month that artist has revenue)
+```
+gross       = Σ revByArtistMonth[artist][m]
+swift       = Σ swiftShare(artist, m)
+net         = gross - swift
+artistShare = net × artistPct
+labelShare  = net × (1 - artistPct)
+```
+
+**Company-wide**
+```
+totalGross   = Σ masterGross[*].totalGross
+totalSwift   = Σ masterGross[*].swiftFee
+totalNet     = totalGross - totalSwift
+trackedGross = Σ artistLifetime(a).gross  over all artists
+artistEarn   = Σ artistLifetime(a).artistShare
+labelEarn    = Σ artistLifetime(a).labelShare
+untrackedGap = totalGross - trackedGross
+```
+
+`untrackedGap` is **a reconciliation flag, not an error**. It's money the
+distributor paid that has no matching revenue row yet. Surface it; never
+auto-correct it.
+
+**Ledger totals**
+```
+income  = Σ amount where type = 'income'
+expense = Σ amount where type = 'expense'
+net     = income - expense
+```
+
+**Recoupment, per artist**
+```
+spent    = Σ ledger.amount where type='expense' AND recoupable AND artist = name
+earned   = artistLifetime(artist).artistShare
+recouped = min(spent, earned)
+balance  = spent - earned        // > 0 → still unrecouped; <= 0 → due the difference
+```
+Recoupment applies **only** when the entry is an expense, is marked recoupable,
+and names an artist. A general company expense must never reduce an artist's
+balance.
+
+**Payout statement for an arbitrary period** — same as lifetime, but over every
+month from `periodStart` to `periodEnd` inclusive.
+
+**Label P&L (all-time)**
+```
+netProfit = labelEarn + ledger.income - ledger.expense
+```
+
+### Approval gate
+
+Revenue and ledger entries submitted by non-Admins get
+`approvalStatus: 'Pending'`; Admins' entries are auto-approved.
+
+**Every aggregate figure must compute from approved-only data.** The management
+screens (Revenue, Ledger) show pending rows so they can be approved, but
+Overview, Master Gross reconciliation, Payouts, Statements, the roster detail
+panel and the artist portal all consume the approved subset. Mixing these
+produces numbers that disagree between screens.
+
+---
+
+## 4. Screens
+
+### Sign-in gate
+Pick "Team member" (then choose a name from staff) or "Artist" (then choose an
+artist). Note on screen that it's a view split, not real auth.
+
+### Team side
+
+Sidebar nav, grouped. Items appear only if the person's permissions allow.
+
+**Analytics**
+- **Overview** — date-range filter with a Generate button (see §5); KPI row;
+  revenue-by-month bar chart; streams-by-platform donut; top artists by revenue
+  and by streams; top songs; label finance snapshot (distributor gross, swift
+  fees, artist share, label share, untracked gap); top genres and markets.
+  All money panels gate on `royalties`.
+- **Streams** — stream counts by platform and release, with a leaderboard.
+
+**Artists & Catalog**
+- **Roster** — grid/table of artists with filters. Clicking one opens a detail
+  panel: contacts and dates, alerts (contract/licence expiry, unrecouped
+  balance), team notes, revenue-by-month chart, releases, annual budget,
+  recent expenses, payout history. Earnings panels gate on `royalties`,
+  spend panels on `spend`.
+- **Artist Requests** — requests artists raised from the portal, with responses.
+- **Catalog** — releases with artwork, type, dates, ISRC/UPC, status, licence
+  expiry, a production checklist and distribution-doc checklist. Grid, table
+  and pipeline views. Review queue for artist-submitted releases.
+- **Release Calendar** — month grid with releases, task due dates, expiries.
+- **Import** — CSV import of distributor statements (§6).
+
+**Finance**
+- **Revenue** — one row per track per month. CRUD, filters (month range with
+  Generate, artist, search), approve/reject pending rows, CSV export.
+- **Master Gross** — one row per month: total gross received, swift fee, net,
+  and tracked revenue with the variance. KPI row showing total gross, total
+  swift, tracked gross and untracked gap. Default swift fee setting.
+- **Ledger** — non-royalty income and expenses. Filters by type and artist.
+  Recoupment-status table per artist (spent / earned / balance). PM-scoped.
+- **Budget** — label-wide category allocations vs actual spend. Hidden for PMs.
+- **Payouts** — pick artist + period → generates a statement live from the
+  formulas; save as draft or mark paid. Label P&L KPIs. Recoupment table.
+- **Statements** — pick an artist, choose a period, Generate → month-by-month
+  statement with per-track breakdown, CSV export and print/PDF.
+
+**Team**
+- **Team** — staff profiles, roles, the permission checkboxes, onboarding
+  checklists. Admin/Legal only.
+- **Access Requests** — queue of permission changes Legal proposed, each
+  showing a from → to diff per changed field. Admin approves or rejects;
+  approving is what applies the change. Legal sees status only.
+- **Tasks**, **Noticeboard**, **Activity Log**.
+
+**System**
+- **Backup & Restore** — export the whole dataset as JSON, reimport it.
+
+### Artist portal
+
+Header with the artist's name, split and PM/A&R contacts, a "Worth knowing"
+notice panel, then tabs:
+
+- **Overview** — their totals, revenue-by-month, streams by platform, top songs.
+- **Releases** — their catalog, plus a form to submit a new release (title,
+  type, collaborators and splits, track metadata, credits, lyrics, a
+  distribution-doc checklist) which goes to their PM for review.
+- **Profile** — request changes to photo, bio, email; goes to PM for approval.
+- **Requests** — raise a request by category; see responses.
+- **Revenue** — period + type + product filters, **Generate** → their rows,
+  groupable flat / by type / by product, with export.
+- **Payouts** — gross accrued, unrecouped balance, paid to date, balance due,
+  and payout history.
+- **Statements** — period chooser, **Generate** → the statement.
+
+---
+
+## 5. Behaviors that matter
+
+**Generate gates.** Anywhere a period is chosen, there is a Generate button.
+
+- In the **artist portal**, nothing renders until they press it — Revenue and
+  Statements both open on a prompt ("Pick a period, then generate"). The
+  artist asks a question; the app answers it.
+- On **team screens**, the period applies on Generate while other filters
+  (search, artist, product) stay live. These default to all-time so an admin
+  never lands on a blank dashboard.
+- Validate the range and refuse a backwards one with a clear message. Bound
+  month inputs to the artist's actual earning window. After the first run the
+  button reads "Regenerate", with a Clear beside it.
+- Statement totals must be **summed from the rows displayed**, so the headline
+  figures always reconcile against the breakdown beneath them.
+
+**Approval workflows.** Three of them, all the same shape — submit → pending →
+reviewer approves/rejects:
+1. Revenue and ledger entries from non-Admins.
+2. Artist profile-change requests → their PM or an Admin.
+3. Legal's access changes → an Admin.
+
+Surface pending counts in the top-bar notification bell.
+
+**Data versioning.** A `DATA_VERSION` constant gates reseeding. On load, if the
+stored version differs, reseed from the seed data and write the new version.
+Bump it when the data shape changes; leave it alone for UI-only edits, or
+you'll wipe saved data.
+
+**Export.** CSV and Excel export on the data-heavy tables, and a print/PDF path
+for statements that hides the chrome.
+
+---
+
+## 6. CSV import
+
+Two modes:
+
+1. **Per-product detail report** — each row is one product's earnings
+   (DistroKid/CD Baby/TuneCore style). Auto-detect column meanings from header
+   aliases, let the user correct the mapping, match rows to existing artists and
+   releases by ISRC → UPC → title, and let them resolve unmatched ones (pick an
+   existing release, create a new one, or skip).
+2. **Store breakdown for one product** — each row is one store's total for a
+   single track (EMPIRE style). Extract the pivot table, confirm the artist,
+   title and period.
+
+Both commit into `revenue` **aggregated to one row per track per month** —
+multiple store rows for the same track and month sum into a single entry,
+keyed by the standard id. Carry `type` and `releaseDate` over from the
+existing catalog entry.
+
+---
+
+## 7. Look and layout
+
+Dark, warm, editorial. Not a generic admin template.
+
+- **Palette:** near-black panels on a deep gradient canvas (warm brown →
+  charcoal → deep green → indigo), amber as the primary accent, teal for
+  positive money, red for negative/danger. Soft blurred radial colour blobs
+  behind the content, heavily blurred, low opacity.
+- **Type:** Space Grotesk for UI, IBM Plex Mono for every number. Tabular
+  figures so columns line up.
+- **Surfaces:** 14px radius on cards, 10px on controls, soft layered shadows.
+  Subtle lift on hover for interactive cards.
+- **App shell:** fills the viewport (`100dvh`) and scrolls in **exactly one
+  place** — the content pane. The sidebar is full height with its own scrolling
+  nav and a pinned footer (account + reset controls). Never nest a second
+  scroll container; never let the page itself scroll.
+- **Width:** cap the content column (~1440px) and centre it, so wide monitors
+  don't stretch a two-field filter across the screen.
+- **KPI cards:** cap their width (~340px) so a row of two doesn't balloon, and
+  make cards in a row equal height.
+- **Breakpoints** live in one global stylesheet, not in utility classes:
+  single column on mobile with the nav as a horizontal strip, two columns from
+  640px, sidebar layout from 768px, three-column forms from 1280px.
+  "Full width" form fields span the whole row whatever the column count.
+- **Empty states** everywhere, with a sentence saying what will fill them.
+
+---
+
+## 8. Seed data
+
+Ship with real-shaped seed data so the app is explorable on first run: a roster
+of ~14 artists with varying splits (0.70 / 0.75 / 0.80), a catalog derived from
+the revenue history (one release per distinct track, carrying its own type and
+release date), ~600 monthly revenue rows spanning ~2.5 years, and ~33 months of
+master gross with varying swift fees.
+
+The real data already carries a large `untrackedGap` ($3,444.30 of $13,256.50
+gross), so reconciliation is visible on first run without inventing anything.
+Every revenue month in it *does* have a master gross row, so the
+`swiftShare = 0` branch (no `masterGross` row for a month) is never exercised by
+the seed — cover it with a unit test rather than by adding a fake month, which
+would move the totals the acceptance check below pins.
+
+Leave `ledger` and `payouts` empty unless there's real data for them — don't
+invent expenses.
+
+### Acceptance check
+
+Build a small script that computes the company totals straight from the
+formulas in §3 and compares them to what the app displays. They must match to
+the cent. That one test catches most of the ways this can go wrong.
+
+---
+
+## 9. Build order
+
+1. Theme, layout shell, UI primitives (buttons, fields, tables, cards).
+2. Data model, storage adapter, seeding and `DATA_VERSION`.
+3. **The finance engine as pure functions, with the acceptance check from §8
+   passing, before any finance UI exists.** Everything downstream depends on it.
+4. Roster, catalog, revenue, master gross.
+5. Ledger, budgets, payouts, statements.
+6. Permissions and roles; then the Legal → Admin approval queue.
+7. Artist portal.
+8. CSV import.
+9. Export, backup/restore, print.

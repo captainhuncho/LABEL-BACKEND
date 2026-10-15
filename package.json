@@ -1,0 +1,28 @@
+{
+  "name": "imss-records-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "IMSS Records — label operations dashboard (roster, catalog, royalties, payouts, access control).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/finance.test.js"
+  },
+  "dependencies": {
+    "lucide-react": "^0.460.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.13.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.11"
+  }
+}

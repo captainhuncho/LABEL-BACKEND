@@ -1,0 +1,5933 @@
+import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, History, LayoutDashboard, LogOut, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
+import Papa from 'papaparse';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import * as XLSX from 'xlsx';
+import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, slug, swiftShareFor } from './finance.js';
+import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
+import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
+import { ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
+
+function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmReset, onReseed, confirmReseed, setConfirmReseed, sessionName, onLogout }) {
+  return (
+    <div className="imss-sidebar shrink-0" style={{ borderColor: C.border, background: C.panel }}>
+      <div className="imss-desktop-only px-5 pt-6 pb-4">
+        <div className="flex items-center gap-2">
+          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 26, width: 'auto' }} />
+        </div>
+        <div className="text-xs mt-1" style={{ color: C.textFaint }}>Label operations</div>
+      </div>
+      <nav className="imss-nav gap-1 px-2 py-2">
+        {(() => {
+          let lastGroup = null;
+          const out = [];
+          nav.forEach(item => {
+            if (item.group && item.group !== lastGroup) {
+              out.push(
+                <div key={'group-' + item.group} className="imss-desktop-only" style={{ color: C.textFaint, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '12px 12px 4px' }}>
+                  {item.group}
+                </div>
+              );
+              lastGroup = item.group;
+            }
+            const Icon = item.icon;
+            const isActive = active === item.id;
+            out.push(
+              <button key={item.id} onClick={() => setActive(item.id)}
+                className="flex items-center gap-2 px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-white/5"
+                style={{ background: isActive ? C.amberSoft : 'transparent', color: isActive ? C.amber : C.textDim, fontWeight: isActive ? 600 : 500 }}>
+                <Icon size={16} />
+                {item.label}
+              </button>
+            );
+          });
+          return out;
+        })()}
+      </nav>
+      <div className="imss-desktop-only mt-auto px-5 py-4 text-xs" style={{ color: C.textFaint }}>
+        {sessionName && (
+          <div className="flex items-center justify-between gap-2 mb-3 pb-3" style={{ borderBottom: '1px solid ' + C.border }}>
+            <span className="flex items-center gap-1.5" style={{ color: C.textDim }}><ShieldCheck size={13} color={C.teal} /> {sessionName}</span>
+            <button onClick={onLogout} style={{ color: C.textFaint }}><LogOut size={13} /></button>
+          </div>
+        )}
+        {confirmReset ? (
+          <span className="inline-flex flex-col gap-1">
+            Clear all data?
+            <span className="inline-flex gap-2">
+              <button onClick={onClearAll} style={{ color: C.red, fontWeight: 600 }}>Yes, clear</button>
+              <button onClick={() => setConfirmReset(false)} style={{ color: C.textDim }}>Cancel</button>
+            </span>
+          </span>
+        ) : (
+          <button onClick={() => setConfirmReset(true)} style={{ color: C.textFaint }}>Clear all data</button>
+        )}
+        {confirmReseed ? (
+          <span className="inline-flex flex-col gap-1 mt-2">
+            Overwrite with fresh sample data?
+            <span className="inline-flex gap-2">
+              <button onClick={onReseed} style={{ color: C.amber, fontWeight: 600 }}>Yes, reset</button>
+              <button onClick={() => setConfirmReseed(false)} style={{ color: C.textDim }}>Cancel</button>
+            </span>
+          </span>
+        ) : (
+          <button onClick={() => setConfirmReseed(true)} className="block mt-2" style={{ color: C.textFaint }}>Reset to sample data</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Overview({ roster, catalog, revenue, masterGross = [], streams, artistMap, releaseMap, notices = [], staff = [], sessionName = '', canViewRoyalties = true }) {
+  const [filters, setFilters] = useState({ startDate: '', endDate: '' });
+  // The range only takes effect on Generate — until then the dashboard shows
+  // all time, so landing here is never a blank screen.
+  const [applied, setApplied] = useState({ startDate: '', endDate: '' });
+  const [rangeError, setRangeError] = useState('');
+
+  const filteredRevenue = revenue.filter(r => (!applied.startDate || (r.month + '-01') >= applied.startDate) && (!applied.endDate || (r.month + '-01') <= applied.endDate));
+  const filteredStreams = streams.filter(s => (!applied.startDate || s.date >= applied.startDate) && (!applied.endDate || s.date <= applied.endDate));
+  const filtersActive = !!(applied.startDate || applied.endDate);
+  function resetFilters() { setFilters({ startDate: '', endDate: '' }); setApplied({ startDate: '', endDate: '' }); setRangeError(''); }
+  function applyRange() {
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+      setRangeError('The "from" date has to come before the "to" date.');
+      return;
+    }
+    setRangeError('');
+    setApplied({ ...filters });
+  }
+
+  const totalRevenue = filteredRevenue.reduce((s, r) => s + r.earning, 0);
+  const totalStreams = filteredStreams.reduce((s, r) => s + r.count, 0);
+  const activeArtists = roster.filter(a => a.status === 'Active').length;
+  const myStaffRecord = staff.find(s => s.name === sessionName);
+  const myTeamNotices = useMemo(() => {
+    return [...notices.filter(n => n.audience === 'all-team' || (myStaffRecord && n.audience === myStaffRecord.id))].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }, [notices, myStaffRecord]);
+
+  const finance = useMemo(() => companyFinanceTotals(roster, filteredRevenue, masterGross), [roster, filteredRevenue, masterGross]);
+
+  const monthlyRevenue = useMemo(() => {
+    const map = {};
+    filteredRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + r.earning; });
+    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
+  }, [filteredRevenue]);
+
+  const platformTotals = useMemo(() => {
+    const map = {};
+    filteredStreams.forEach(s => { map[s.platform] = (map[s.platform] || 0) + s.count; });
+    return Object.keys(map).map(k => ({ name: k, value: map[k] }));
+  }, [filteredStreams]);
+
+  const topSongs = useMemo(() => {
+    const map = {};
+    filteredRevenue.forEach(r => {
+      const key = r.artistSlug + '|' + r.title;
+      if (!map[key]) map[key] = { id: key, title: r.title, type: r.type, artist: r.artist, value: 0 };
+      map[key].value += r.earning;
+    });
+    return Object.values(map).sort((a, b) => b.value - a.value).slice(0, 8);
+  }, [filteredRevenue]);
+
+  const topGenres = useMemo(() => {
+    const map = {};
+    filteredRevenue.forEach(r => {
+      const artist = roster.find(a => slug(a.name) === r.artistSlug);
+      const genre = artist && artist.genre ? artist.genre : 'Unspecified';
+      map[genre] = (map[genre] || 0) + r.earning;
+    });
+    return Object.entries(map).map(([genre, value]) => ({ genre, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+  }, [filteredRevenue, roster]);
+
+  const topMarkets = useMemo(() => {
+    const map = {};
+    filteredRevenue.forEach(r => {
+      const artist = roster.find(a => slug(a.name) === r.artistSlug);
+      const market = artist && artist.primaryMarket ? artist.primaryMarket : 'Unspecified';
+      map[market] = (map[market] || 0) + r.earning;
+    });
+    return Object.entries(map).map(([market, value]) => ({ market, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+  }, [filteredRevenue, roster]);
+
+  const topArtistsByRevenue = useMemo(() => {
+    const map = {};
+    filteredRevenue.forEach(r => { map[r.artistSlug] = (map[r.artistSlug] || 0) + r.earning; });
+    return roster.map(a => ({ artist: a, value: map[slug(a.name)] || 0 })).filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 5);
+  }, [filteredRevenue, roster]);
+
+  const topArtistsByStreams = useMemo(() => {
+    const map = {};
+    filteredStreams.forEach(s => { const rel = releaseMap[s.releaseId]; if (rel) map[rel.artistId] = (map[rel.artistId] || 0) + s.count; });
+    return roster.map(a => ({ artist: a, value: map[a.id] || 0 })).filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 5);
+  }, [filteredStreams, releaseMap, roster]);
+
+  return (
+    <div>
+      <SectionHeader title="Overview" description="Label performance at a glance — roster health, release activity, revenue, and stream volume." />
+
+      {myTeamNotices.length > 0 && (
+        <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
+          <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>Worth knowing</div>
+          <div className="flex flex-col gap-3">
+            {myTeamNotices.map(n => (
+              <div key={n.id} className="rounded p-3" style={{ background: C.panel, border: '1px solid ' + C.border }}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
+                  <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(n.createdAt)}</div>
+                </div>
+                <div className="text-sm mt-1" style={{ color: C.textDim }}>{n.message}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Date range</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="From"><Input type="date" value={filters.startDate} onChange={e => { setFilters({ ...filters, startDate: e.target.value }); setRangeError(''); }} /></Field>
+          <Field label="To"><Input type="date" value={filters.endDate} onChange={e => { setFilters({ ...filters, endDate: e.target.value }); setRangeError(''); }} /></Field>
+        </div>
+        {rangeError && (
+          <div className="rounded px-3 py-2 text-xs mt-3" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{rangeError}</div>
+        )}
+        <div className="flex items-center gap-2 flex-wrap mt-4">
+          <Btn variant="primary" onClick={applyRange}><FileText size={14} /> Generate</Btn>
+          {filtersActive && <Btn variant="ghost" onClick={resetFilters}>Reset to all-time</Btn>}
+          {filtersActive && <span className="text-xs" style={{ color: C.textFaint }}>Showing {formatDate(applied.startDate) || 'the start'} – {formatDate(applied.endDate) || 'today'}</span>}
+        </div>
+      </div>
+
+      <div className="imss-bento mb-6">
+        <div className="imss-bento-span-3 rounded p-6 border flex flex-col justify-center" style={{ background: C.panel, borderColor: C.border, minHeight: 160 }}>
+          <div className="flex items-center gap-2 mb-2" style={{ color: C.textFaint }}>
+            {canViewRoyalties ? <DollarSign size={16} /> : <Radio size={16} />}
+            <span className="text-sm">{canViewRoyalties ? 'Total revenue' : 'Total streams'}</span>
+          </div>
+          <div style={{ fontFamily: MONO_FONT, fontSize: 40, fontWeight: 700, color: C.teal, lineHeight: 1 }}>
+            {canViewRoyalties ? formatCurrency(totalRevenue) : formatNumber(totalStreams)}
+          </div>
+          <div className="text-xs mt-2" style={{ color: C.textFaint }}>{filtersActive ? 'Selected date range' : 'All-time'}</div>
+        </div>
+        <div className="imss-bento-span-1"><KPICard icon={Users} label="Active artists" value={activeArtists} sub={roster.length + ' total on roster'} tone="amber" /></div>
+        <div className="imss-bento-span-1"><KPICard icon={Disc3} label="Catalog size" value={catalog.length} sub={catalog.filter(c => c.status === 'Released').length + ' released'} /></div>
+        <div className="imss-bento-span-1"><KPICard icon={Radio} label="Total streams" value={formatNumber(totalStreams)} /></div>
+
+        {canViewRoyalties && <div className="imss-bento-span-3 rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs mb-3" style={{ color: C.textFaint }}>Revenue by month</div>
+          <div style={{ height: 220 }}>
+            {monthlyRevenue.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No revenue yet</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyRevenue}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                  <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                  <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>}
+        <div className="imss-bento-span-3 rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs mb-3" style={{ color: C.textFaint }}>Streams by platform</div>
+          <div style={{ height: 220 }}>
+            {platformTotals.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No stream data yet</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
+                    {platformTotals.map((p) => (<Cell key={p.name} fill={PLATFORM_COLORS[p.name] || C.textFaint} />))}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="imss-grid-2 gap-4 mb-6">
+        {canViewRoyalties && <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top artists by revenue</div>
+          {topArtistsByRevenue.length === 0 ? (
+            <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
+          ) : (
+            <table className="w-full">
+              <tbody>
+                {topArtistsByRevenue.map(({ artist, value }, i) => (
+                  <tr key={artist.id}>
+                    <Td mono>{i + 1}</Td>
+                    <Td>{artist.name}</Td>
+                    <Td align="right" mono>{formatCurrency(value)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>}
+        <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top artists by streams</div>
+          {topArtistsByStreams.length === 0 ? (
+            <div className="p-4 text-sm" style={{ color: C.textDim }}>No stream data yet.</div>
+          ) : (
+            <table className="w-full">
+              <tbody>
+                {topArtistsByStreams.map(({ artist, value }, i) => (
+                  <tr key={artist.id}>
+                    <Td mono>{i + 1}</Td>
+                    <Td>{artist.name}</Td>
+                    <Td align="right" mono>{formatNumber(value)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {canViewRoyalties && <div className="imss-grid-2 gap-4 mb-6">
+        <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue</div>
+          {topSongs.length === 0 ? (
+            <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
+          ) : (
+            <table className="w-full">
+              <thead><tr><Th>Song</Th><Th>Type</Th><Th align="right">Amount</Th></tr></thead>
+              <tbody>
+                {topSongs.map(r => (
+                  <tr key={r.id}>
+                    <Td>{r.title}<div className="text-xs" style={{ color: C.textFaint }}>{r.artist}</div></Td>
+                    <Td>{r.type}</Td>
+                    <Td align="right" mono>{formatCurrency(r.value)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs mb-3" style={{ color: C.textFaint }}>Label finance snapshot</div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Distributor gross (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalGross)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Swift fees (all-time)</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.totalSwift)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Artist share</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.artistEarn)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span style={{ color: C.textDim }}>Label share</span><span style={{ fontFamily: MONO_FONT, color: C.teal }}>{formatCurrency(finance.labelEarn)}</span></div>
+            {Math.abs(finance.untrackedGap) > 0.01 && (
+              <div className="flex items-center justify-between text-sm mt-1 pt-2" style={{ borderTop: '1px solid ' + C.borderLight, color: C.amber }}><span>Untracked gap</span><span style={{ fontFamily: MONO_FONT }}>{formatCurrency(finance.untrackedGap)}</span></div>
+            )}
+          </div>
+        </div>
+      </div>}
+
+      {canViewRoyalties && <div className="imss-grid-2 gap-4 mb-6">
+        <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top genres by revenue</div>
+          {topGenres.length === 0 ? (
+            <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
+          ) : (
+            <table className="w-full">
+              <tbody>
+                {topGenres.map((g, i) => (
+                  <tr key={g.genre}>
+                    <Td mono>{i + 1}</Td>
+                    <Td>{g.genre}</Td>
+                    <Td align="right" mono>{formatCurrency(g.value)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top markets by revenue</div>
+          {topMarkets.length === 0 ? (
+            <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
+          ) : (
+            <table className="w-full">
+              <tbody>
+                {topMarkets.map((m, i) => (
+                  <tr key={m.market}>
+                    <Td mono>{i + 1}</Td>
+                    <Td><Globe size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6, color: C.textFaint }} />{m.market}</Td>
+                    <Td align="right" mono>{formatCurrency(m.value)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>}
+
+    </div>
+  );
+}
+
+function ArtistDetailPanel({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+  const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
+  const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
+  const aSlug = useMemo(() => slug(artist.name), [artist.name]);
+
+  const myRevenue = useMemo(() => revenue.filter(r => r.artistSlug === aSlug), [revenue, aSlug]);
+  const myStreams = useMemo(() => streams.filter(s => releaseIds.has(s.releaseId)), [streams, releaseIds]);
+
+  const lifetime = useMemo(() => artistLifetime(artist, revenue, masterGross), [artist, revenue, masterGross]);
+  const recoupment = useMemo(() => recoupmentForArtist(artist, ledger, revenue, masterGross), [artist, ledger, revenue, masterGross]);
+  const totalRevenue = myRevenue.reduce((s, r) => s + r.earning, 0);
+  const totalStreams = myStreams.reduce((s, r) => s + r.count, 0);
+
+  const remainingRecoupable = recoupment.unrecouped;
+  const netAfterRecoupment = recoupment.dueOnTop;
+  const paid = payouts.filter(p => p.artistSlug === aSlug && p.status === 'paid').reduce((s, p) => s + (p.artistShare || 0), 0);
+  const balance = netAfterRecoupment - paid;
+  const myExpenses = [...ledger.filter(x => x.artist === artist.name && x.type === 'expense')].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const isFunded = artist.fundingTier === 'Funded';
+  const totalSpent = myExpenses.reduce((s, x) => s + x.amount, 0);
+  const budgetRemaining = (artist.annualBudget || 0) - totalSpent;
+  const budgetPct = artist.annualBudget > 0 ? Math.min(100, Math.round((totalSpent / artist.annualBudget) * 100)) : 0;
+  const myPayouts = [...payouts.filter(p => p.artistSlug === aSlug)].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  const monthlyRevenue = useMemo(() => {
+    const map = {};
+    myRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + r.earning; });
+    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
+  }, [myRevenue]);
+
+  const platformTotals = useMemo(() => {
+    const map = {};
+    myStreams.forEach(s => { map[s.platform] = (map[s.platform] || 0) + s.count; });
+    return Object.keys(map).map(k => ({ name: k, value: map[k] }));
+  }, [myStreams]);
+
+  const contractStat = artist.contractExpiration ? expirationStatus(artist.contractExpiration) : null;
+  const alerts = [];
+  if (contractStat && contractStat.label !== 'Active') alerts.push({ tone: contractStat.tone, text: 'Contract ' + contractStat.label.toLowerCase() + (artist.contractExpiration ? ' (' + formatDate(artist.contractExpiration) + ')' : '') });
+  artistCatalog.forEach(c => {
+    if (!c.licenseExpiration) return;
+    const st = expirationStatus(c.licenseExpiration);
+    if (st.label !== 'Active') alerts.push({ tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase() });
+  });
+  if (canViewRoyalties && remainingRecoupable > 0) alerts.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' still unrecouped against future earnings' });
+
+  const pmStaff = staff.find(s => s.name === artist.productManager);
+  const myTasks = [...tasks.filter(t => t.artistId === artist.id && t.status === 'Open')].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+  const [newComment, setNewComment] = useState('');
+  const comments = artist.comments || [];
+  const canApproveProfile = isAdmin || sessionName === artist.productManager;
+  const myPendingProfileRequests = profileRequests.filter(r => r.artistId === artist.id && r.status === 'Pending');
+  function approveProfileRequest(req) {
+    if (update) update(roster.map(a => a.id === artist.id ? { ...a, ...req.changes } : a));
+    if (updateProfileRequests) updateProfileRequests(profileRequests.map(r => r.id === req.id ? { ...r, status: 'Approved', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : r));
+  }
+  function rejectProfileRequest(req) {
+    if (updateProfileRequests) updateProfileRequests(profileRequests.map(r => r.id === req.id ? { ...r, status: 'Rejected', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : r));
+  }
+  function addComment() {
+    if (!newComment.trim() || !update) return;
+    const comment = { id: uid(), author: sessionName || 'Unknown', text: newComment.trim(), createdAt: new Date().toISOString() };
+    update(roster.map(a => a.id === artist.id ? { ...a, comments: [...(a.comments || []), comment] } : a));
+    setNewComment('');
+  }
+  function removeComment(id) {
+    if (!update) return;
+    update(roster.map(a => a.id === artist.id ? { ...a, comments: (a.comments || []).filter(c => c.id !== id) } : a));
+  }
+  const anrStaff = staff.find(s => s.name === artist.anr);
+
+  return (
+    <div>
+      <button onClick={onBack} className="text-sm inline-flex items-center gap-1.5 mb-4" style={{ color: C.textDim }}><ChevronLeft size={14} /> Back to roster</button>
+
+      <div className="rounded border p-4 mb-6 flex items-start gap-4 flex-wrap justify-between" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="flex items-center gap-4 flex-wrap">
+          <Avatar name={artist.name} photoUrl={artist.photoUrl} size={72} />
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 20 }}>{artist.name}</div>
+            <div className="text-sm mt-1" style={{ color: C.textFaint }}>{artist.genre || 'No genre set'}{artist.subGenre ? ' · ' + artist.subGenre : ''}</div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              <Badge tone={artistStatusTone(artist.status)}>{artist.status}</Badge>
+              <Badge>{artist.royaltyRate}% royalty</Badge>
+              {isFunded && <Badge tone="teal">Funded</Badge>}
+              {artist.primaryMarket && <Badge tone="teal"><Globe size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{artist.primaryMarket}</Badge>}
+              {artist.secondaryMarket && <Badge>+ {artist.secondaryMarket}</Badge>}
+            </div>
+          </div>
+        </div>
+        {canEdit && <Btn variant="primary" onClick={() => onEdit(artist)}><Pencil size={14} /> Edit profile</Btn>}
+      </div>
+
+      {alerts.length > 0 && (
+        <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
+          <div className="text-xs mb-2" style={{ color: C.amber, fontWeight: 600 }}>Needs attention</div>
+          <div className="flex flex-col gap-1.5">
+            {alerts.map((a, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.text }}>
+                <span style={{ width: 6, height: 6, borderRadius: 9999, background: a.tone === 'red' ? C.red : C.amber, flexShrink: 0 }}></span>
+                {a.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canApproveProfile && myPendingProfileRequests.length > 0 && (
+        <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
+          <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>{artist.name} requested profile changes</div>
+          <div className="flex flex-col gap-3">
+            {myPendingProfileRequests.map(req => (
+              <div key={req.id} className="rounded p-3" style={{ background: C.panel, border: '1px solid ' + C.border }}>
+                <div className="flex flex-col gap-1.5 mb-3">
+                  {Object.entries(req.changes).map(([key, value]) => {
+                    const field = PROFILE_EDITABLE_FIELDS.find(f => f.key === key);
+                    const current = artist[key] || '';
+                    return (
+                      <div key={key} className="text-sm">
+                        <span style={{ fontWeight: 600 }}>{field ? field.label : key}:</span>{' '}
+                        {key === 'photoUrl' ? (
+                          <span className="inline-flex items-center gap-2 align-middle">
+                            <Avatar name={artist.name} photoUrl={current} size={24} /> <ChevronRight size={12} /> <Avatar name={artist.name} photoUrl={value} size={24} />
+                          </span>
+                        ) : (
+                          <span style={{ color: C.textDim }}>"{current || '—'}" <ChevronRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> "{value}"</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <Btn variant="primary" onClick={() => approveProfileRequest(req)}>Approve</Btn>
+                  <Btn variant="ghost" onClick={() => rejectProfileRequest(req)}>Reject</Btn>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        {canViewRoyalties && <KPICard icon={DollarSign} label="Total revenue" value={formatCurrency(totalRevenue)} tone="teal" />}
+        <KPICard icon={Radio} label="Total streams" value={formatNumber(totalStreams)} />
+        <KPICard icon={Disc3} label="Releases" value={artistCatalog.length} />
+        {canViewRoyalties && <KPICard icon={Wallet} label="Balance owed" value={formatCurrency(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />}
+      </div>
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Contacts &amp; dates</div>
+        <div className="imss-grid-2 gap-3 text-sm">
+          <div>
+            <div style={{ color: C.textFaint }} className="text-xs mb-0.5">Product Manager</div>
+            <div>{artist.productManager || '—'}{pmStaff && pmStaff.email ? ' · ' + pmStaff.email : ''}</div>
+          </div>
+          <div>
+            <div style={{ color: C.textFaint }} className="text-xs mb-0.5">A&amp;R</div>
+            <div>{artist.anr || '—'}{anrStaff && anrStaff.email ? ' · ' + anrStaff.email : ''}</div>
+          </div>
+          <div>
+            <div style={{ color: C.textFaint }} className="text-xs mb-0.5">Signed</div>
+            <div>{artist.signedDate ? formatDate(artist.signedDate) : '—'}</div>
+          </div>
+          <div>
+            <div style={{ color: C.textFaint }} className="text-xs mb-0.5">Contract expiration</div>
+            <div className="flex items-center gap-2">
+              {artist.contractExpiration ? formatDate(artist.contractExpiration) : '—'}
+              {contractStat && contractStat.label !== 'Active' && <Badge tone={contractStat.tone}>{contractStat.label}</Badge>}
+            </div>
+          </div>
+          <div>
+            <div style={{ color: C.textFaint }} className="text-xs mb-0.5">Email</div>
+            <div>{artist.email || '—'}</div>
+          </div>
+        </div>
+        {artist.notes && (
+          <div className="mt-3 pt-3 text-sm" style={{ borderTop: '1px solid ' + C.border, color: C.textDim }}>{artist.notes}</div>
+        )}
+      </div>
+
+      {myTasks.length > 0 && (
+        <div className="rounded border mb-6" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Active work</div>
+          <table className="w-full">
+            <tbody>
+              {myTasks.map(t => {
+                const overdue = t.dueDate && t.dueDate < todayStr();
+                const release = t.releaseId ? catalog.find(c => c.id === t.releaseId) : null;
+                return (
+                  <tr key={t.id}>
+                    <Td>{t.title}{release && <div className="text-xs" style={{ color: C.textFaint }}>{release.title}</div>}</Td>
+                    <Td>{t.assignee}</Td>
+                    <Td align="right" mono style={{ color: overdue ? C.red : undefined }}>{t.dueDate ? formatDate(t.dueDate) : '—'}</Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Team notes ({comments.length})</div>
+        {comments.length === 0 ? (
+          <div className="text-sm mb-3" style={{ color: C.textDim }}>No notes yet — leave context here for whoever picks this up next.</div>
+        ) : (
+          <div className="flex flex-col gap-3 mb-3" style={{ maxHeight: 280, overflowY: 'auto' }}>
+            {comments.map(c => (
+              <div key={c.id} className="rounded p-3" style={{ background: C.bg, border: '1px solid ' + C.border }}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-xs" style={{ fontWeight: 600, color: C.textDim }}>{c.author}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs" style={{ color: C.textFaint }}>{new Date(c.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                    {canEdit && <button onClick={() => removeComment(c.id)} style={{ color: C.textFaint }}><Trash2 size={11} /></button>}
+                  </span>
+                </div>
+                <div className="text-sm" style={{ color: C.text }}>{c.text}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {canEdit && (
+          <div className="flex gap-2">
+            <TextArea rows={2} value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Leave a note for the team — status updates, context, anything worth remembering." />
+            <Btn variant="primary" onClick={addComment}>Post</Btn>
+          </div>
+        )}
+      </div>
+
+      <div className="imss-grid-2 gap-4 mb-6">
+        {canViewRoyalties && (
+          <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="text-xs mb-3" style={{ color: C.textFaint }}>Revenue by month</div>
+            <div style={{ height: 200 }}>
+              {monthlyRevenue.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No revenue yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyRevenue}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                    <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                    <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                    <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="text-xs mb-3" style={{ color: C.textFaint }}>Streams by platform</div>
+          <div style={{ height: 200 }}>
+            {platformTotals.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No stream data yet</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} paddingAngle={2}>
+                    {platformTotals.map((p) => (<Cell key={p.name} fill={PLATFORM_COLORS[p.name] || C.textFaint} />))}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded border mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Releases</div>
+        {artistCatalog.length === 0 ? (
+          <div className="p-4 text-sm" style={{ color: C.textDim }}>No releases yet.</div>
+        ) : (
+          <table className="w-full">
+            <thead><tr><Th></Th><Th>Title</Th><Th>Type</Th><Th>Release date</Th><Th>Status</Th><Th>License</Th></tr></thead>
+            <tbody>
+              {artistCatalog.map(c => {
+                const lic = c.licenseExpiration ? expirationStatus(c.licenseExpiration) : null;
+                return (
+                  <tr key={c.id}>
+                    <Td><ArtworkThumb release={c} size={32} /></Td>
+                    <Td>{c.title}</Td>
+                    <Td>{c.type}</Td>
+                    <Td mono>{formatDate(c.releaseDate)}</Td>
+                    <Td><Badge tone={releaseStatusTone(c.status)}>{c.status}</Badge></Td>
+                    <Td>{lic ? <Badge tone={lic.tone}>{lic.label}</Badge> : '—'}</Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {canViewSpend && isFunded && (
+        <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs" style={{ color: C.textFaint }}>Annual budget</div>
+            <div className="text-xs" style={{ color: C.textFaint }}>{formatCurrency(totalSpent)} of {formatCurrency(artist.annualBudget || 0)} spent</div>
+          </div>
+          <div className="rounded-full overflow-hidden" style={{ height: 8, background: C.panel2 }}>
+            <div style={{ height: 8, width: budgetPct + '%', background: budgetRemaining < 0 ? C.red : C.amber }} />
+          </div>
+          <div className="flex flex-wrap gap-3 mt-4">
+            <KPICard icon={DollarSign} label="Budget allocated" value={formatCurrency(artist.annualBudget || 0)} />
+            <KPICard icon={DollarSign} label="Spent" value={formatCurrency(totalSpent)} tone="amber" />
+            <KPICard icon={Wallet} label="Remaining" value={formatCurrency(budgetRemaining)} tone={budgetRemaining < 0 ? 'red' : 'teal'} />
+          </div>
+        </div>
+      )}
+
+      {(canViewSpend || canViewRoyalties) && (
+        <div className="imss-grid-2 gap-4">
+          {canViewSpend && (
+          <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Recent expenses</div>
+            {myExpenses.length === 0 ? (
+              <div className="p-4 text-sm" style={{ color: C.textDim }}>No expenses logged.</div>
+            ) : (
+              <table className="w-full">
+                <tbody>
+                  {myExpenses.slice(0, 6).map(x => (
+                    <tr key={x.id}>
+                      <Td mono>{formatDate(x.date)}</Td>
+                      <Td>{x.category}</Td>
+                      <Td align="right" mono>{formatCurrency(x.amount)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          )}
+          {canViewRoyalties && (
+          <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
+            {myPayouts.length === 0 ? (
+              <div className="p-4 text-sm" style={{ color: C.textDim }}>No payouts recorded.</div>
+            ) : (
+              <table className="w-full">
+                <tbody>
+                  {myPayouts.slice(0, 6).map(p => (
+                    <tr key={p.id}>
+                      <Td mono>{p.periodStart} – {p.periodEnd}</Td>
+                      <Td><Badge tone={p.status === 'paid' ? 'teal' : undefined}>{p.status}</Badge></Td>
+                      <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
+                    </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+          )}
+      </div>
+      )}
+    </div>
+  );
+}
+
+function RosterSection({ roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+  const [detailId, setDetailId] = useState(null);
+  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterGenre, setFilterGenre] = useState('all');
+  const [filterMarket, setFilterMarket] = useState('all');
+  const [view, setView] = useState('grid');
+  const [confirmId, setConfirmId] = useState(null);
+  const [form, setForm] = useState(empty);
+  const photoInputRef = useRef(null);
+
+  function openAdd() { setForm({ ...empty, productManager: pmScope || '' }); setEditing(null); setShowForm(true); }
+  function openEdit(a) { setForm({ ...empty, ...a }); setEditing(a.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); if (photoInputRef.current) photoInputRef.current.value = ''; }
+
+  function save(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    const payload = { ...form, royaltyRate: Number(form.royaltyRate), annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
+    if (editing) update(roster.map(a => a.id === editing ? { ...payload, id: editing } : a));
+    else update([...roster, { ...payload, id: uid() }]);
+    closeForm();
+  }
+  function remove(id) { update(roster.filter(a => a.id !== id)); setConfirmId(null); }
+  function handlePhotoUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    resizeImageFile(file, 300, dataUrl => setForm(f => ({ ...f, photoUrl: dataUrl })));
+  }
+
+  const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
+  const genres = Array.from(new Set(visibleRoster.map(a => a.genre).filter(Boolean))).sort();
+  const marketsInUse = Array.from(new Set(visibleRoster.flatMap(a => [a.primaryMarket, a.secondaryMarket]).filter(Boolean))).sort();
+
+  const filtered = visibleRoster.filter(a => {
+    if (filterStatus !== 'all' && a.status !== filterStatus) return false;
+    if (filterGenre !== 'all' && a.genre !== filterGenre) return false;
+    if (filterMarket !== 'all' && a.primaryMarket !== filterMarket && a.secondaryMarket !== filterMarket) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    if (a.name.toLowerCase().includes(q)) return true;
+    if (a.genre && a.genre.toLowerCase().includes(q)) return true;
+    return catalog.some(c => c.artistId === a.id && (
+      c.title.toLowerCase().includes(q) ||
+      (c.upc && c.upc.toLowerCase().includes(q))
+    ));
+  });
+  const filtersActive = filterStatus !== 'all' || filterGenre !== 'all' || filterMarket !== 'all' || !!query;
+
+  return (
+    <div>
+      {pmScope && (
+        <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          Showing only artists assigned to you as Product Manager ({visibleRoster.length} of {roster.length} total).
+        </div>
+      )}
+      <SectionHeader title="Roster" description="Everyone signed to the label, their royalty terms, and status." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add artist</Btn>} />
+
+      {detailId && roster.find(a => a.id === detailId) ? (
+        <ArtistDetailPanel
+          artist={roster.find(a => a.id === detailId)}
+          roster={roster} catalog={catalog} revenue={revenue} streams={streams} masterGross={masterGross}
+          payouts={payouts} ledger={ledger} labelSettings={labelSettings} staff={staff}
+          tasks={tasks}
+          onBack={() => setDetailId(null)}
+          onEdit={(a) => { setDetailId(null); openEdit(a); }}
+          canEdit={canEdit}
+          canViewRoyalties={canViewRoyalties}
+          canViewSpend={canViewSpend}
+          update={update}
+          sessionName={sessionName}
+          isAdmin={isAdmin}
+          profileRequests={profileRequests}
+          updateProfileRequests={updateProfileRequests}
+        />
+      ) : (
+        <>
+
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="Status">
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">All statuses</option>
+              {ARTIST_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+          <Field label="Genre">
+            <Select value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
+              <option value="all">All genres</option>
+              {genres.map(g => <option key={g} value={g}>{g}</option>)}
+            </Select>
+          </Field>
+          <Field label="Market">
+            <Select value={filterMarket} onChange={e => setFilterMarket(e.target.value)}>
+              <option value="all">All markets</option>
+              {marketsInUse.map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+          <Field label="Search" full>
+            <div className="flex items-center gap-2 rounded" style={{ background: C.panel2, border: '1px solid ' + C.border, padding: '7px 9px' }}>
+              <Search size={14} color={C.textFaint} />
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Name, product, or UPC" className="w-full text-sm bg-transparent" style={{ color: C.text, fontFamily: HEADING_FONT, border: 'none' }} />
+            </div>
+          </Field>
+        </div>
+        {filtersActive && <div className="text-xs mt-3" style={{ color: C.textFaint }}>Showing {filtered.length} of {visibleRoster.length} artists</div>}
+      </div>
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <div className="imss-span-2 flex items-center gap-3">
+            <Avatar name={form.name} photoUrl={form.photoUrl} size={64} />
+            <div className="flex flex-col gap-1">
+              <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="text-xs" style={{ color: C.textDim, maxWidth: 220 }} />
+              {form.photoUrl && <button type="button" onClick={() => setForm({ ...form, photoUrl: '' })} className="text-xs text-left" style={{ color: C.textFaint }}>Remove photo</button>}
+            </div>
+          </div>
+          <Field label="Artist / act name"><Input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Nova Reyes" /></Field>
+          <Field label="Genre">
+            <Select value={form.genre} onChange={e => setForm({ ...form, genre: e.target.value })}>
+              <option value="">— none —</option>
+              {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+            </Select>
+          </Field>
+          <Field label="Sub-genre">
+            <Select value={form.subGenre} onChange={e => setForm({ ...form, subGenre: e.target.value })}>
+              <option value="">— none —</option>
+              {SUB_GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+            </Select>
+          </Field>
+          <Field label="Primary market">
+            <Select value={form.primaryMarket} onChange={e => setForm({ ...form, primaryMarket: e.target.value })}>
+              <option value="">— none —</option>
+              {MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+          <Field label="Secondary market">
+            <Select value={form.secondaryMarket} onChange={e => setForm({ ...form, secondaryMarket: e.target.value })}>
+              <option value="">— none —</option>
+              {MARKETS.filter(m => m !== form.primaryMarket).map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+          <Field label="Royalty rate (% to artist)"><Input type="number" min="0" max="100" value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>
+          <Field label="Funding tier">
+            <Select value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value })}>
+              {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </Field>
+          {form.fundingTier === 'Funded' && (
+            <Field label="Annual budget"><Input type="number" min="0" step="0.01" value={form.annualBudget} onChange={e => setForm({ ...form, annualBudget: e.target.value })} placeholder="Total allocated for this artist" /></Field>
+          )}
+          <Field label="Signed date"><Input type="date" value={form.signedDate} onChange={e => setForm({ ...form, signedDate: e.target.value })} /></Field>
+          <Field label="Contract expiration"><Input type="date" value={form.contractExpiration} onChange={e => setForm({ ...form, contractExpiration: e.target.value })} /></Field>
+          <Field label="Contact email"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Dropbox / Drive folder" full><Input type="url" value={form.driveFolder} onChange={e => setForm({ ...form, driveFolder: e.target.value })} placeholder="https://drive.google.com/... or Dropbox link" /></Field>
+          <Field label="Product Manager">
+            <Select value={form.productManager} onChange={e => setForm({ ...form, productManager: e.target.value })}>
+              <option value="">— unassigned —</option>
+              {staff.filter(s => s.role === 'Product Manager').map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="A&amp;R">
+            <Select value={form.anr} onChange={e => setForm({ ...form, anr: e.target.value })}>
+              <option value="">— unassigned —</option>
+              {staff.filter(s => s.role === 'A&R').map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+              {ARTIST_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+          <Field label="Notes" full><TextArea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add artist'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      <ExportBar filename="imss-roster" headers={['Name', 'Genre', 'Sub-genre', 'Status', 'Royalty %', 'Funding Tier', 'Primary Market', 'Secondary Market', 'Product Manager', 'A&R', 'Signed Date', 'Contract Expiration', 'Email']} rows={filtered.map(a => [
+        a.name,
+        a.genre || '',
+        a.subGenre || '',
+        a.status,
+        a.royaltyRate,
+        a.fundingTier || 'Non-Funded',
+        a.primaryMarket || '',
+        a.secondaryMarket || '',
+        a.productManager || '',
+        a.anr || '',
+        a.signedDate || '',
+        a.contractExpiration || '',
+        a.email || '',
+      ])} />
+
+      <div className="flex justify-end gap-1 mb-4">
+        <SegmentedToggle options={[{ id: 'grid', label: 'Grid' }, { id: 'table', label: 'Table' }]} value={view} onChange={setView} />
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState icon={Users} title={filtersActive ? 'No matching artists' : 'No artists yet'} description={filtersActive ? 'Try a different filter or search term.' : 'Add your first signing to start tracking releases and royalties.'} />
+      ) : view === 'grid' ? (
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {filtered.map(a => {
+            const releaseCount = catalog.filter(c => c.artistId === a.id).length;
+            return (
+              <button key={a.id} onClick={() => setDetailId(a.id)} className="text-left rounded border p-4" style={{ background: C.panel, borderColor: C.border, cursor: 'pointer' }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <Avatar name={a.name} photoUrl={a.photoUrl} size={48} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</div>
+                    <div className="text-xs" style={{ color: C.textFaint }}>{a.genre || 'No genre set'}{a.subGenre ? ' · ' + a.subGenre : ''}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                  <Badge tone={artistStatusTone(a.status)}>{a.status}</Badge>
+                  <Badge>{a.royaltyRate}% royalty</Badge>
+                  {a.fundingTier === 'Funded' && <Badge tone="teal">Funded</Badge>}
+                  {a.contractExpiration && expirationStatus(a.contractExpiration).label !== 'Active' && (
+                    <Badge tone={expirationStatus(a.contractExpiration).tone}>{expirationStatus(a.contractExpiration).label}</Badge>
+                  )}
+                </div>
+                {(a.primaryMarket || a.secondaryMarket) && (
+                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    {a.primaryMarket && <Badge tone="teal"><Globe size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{a.primaryMarket}</Badge>}
+                    {a.secondaryMarket && <Badge>+ {a.secondaryMarket}</Badge>}
+                  </div>
+                )}
+                {(a.productManager || a.anr) && (
+                  <div className="text-xs mb-2" style={{ color: C.textFaint, lineHeight: 1.5 }}>
+                    {a.productManager && <div>PM: {a.productManager}</div>}
+                    {a.anr && <div>A&amp;R: {a.anr}</div>}
+                  </div>
+                )}
+                <div className="text-xs" style={{ color: C.textFaint }}>
+                  {releaseCount} release{releaseCount === 1 ? '' : 's'} · Signed {formatDate(a.signedDate)}
+                  {a.contractExpiration && <div>Contract expires {formatDate(a.contractExpiration)}</div>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 680 }}>
+            <thead><tr>
+              <Th></Th><Th>Artist</Th><Th>Genre</Th><Th>Market</Th><Th>Team</Th><Th align="right">Royalty</Th><Th>Signed</Th><Th>Contract</Th><Th align="right">Releases</Th><Th>Status</Th><Th>Funding</Th><Th align="right">Actions</Th>
+            </tr></thead>
+            <tbody>
+              {filtered.map(a => {
+                const releaseCount = catalog.filter(c => c.artistId === a.id).length;
+                return (
+                  <tr key={a.id}>
+                    <Td><Avatar name={a.name} photoUrl={a.photoUrl} size={32} /></Td>
+                    <Td><button onClick={() => setDetailId(a.id)} style={{ color: C.text, fontWeight: 500, textAlign: 'left' }}>{a.name}</button></Td>
+                    <Td>{a.genre || '—'}{a.subGenre && <div className="text-xs" style={{ color: C.textFaint }}>{a.subGenre}</div>}</Td>
+                    <Td>{a.primaryMarket || '—'}{a.secondaryMarket && <div className="text-xs" style={{ color: C.textFaint }}>+ {a.secondaryMarket}</div>}</Td>
+                    <Td>
+                      {!a.productManager && !a.anr ? '—' : (
+                        <div style={{ lineHeight: 1.5, fontSize: 12 }}>
+                          {a.productManager && <div>PM: {a.productManager}</div>}
+                          {a.anr && <div style={{ color: C.textFaint }}>A&amp;R: {a.anr}</div>}
+                        </div>
+                      )}
+                    </Td>
+                    <Td align="right" mono>{a.royaltyRate}%</Td>
+                    <Td mono>{formatDate(a.signedDate)}</Td>
+                    <Td>
+                      {!a.contractExpiration ? '—' : (
+                        <div style={{ lineHeight: 1.5 }}>
+                          <div style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{formatDate(a.contractExpiration)}</div>
+                          {expirationStatus(a.contractExpiration).label !== 'Active' && <Badge tone={expirationStatus(a.contractExpiration).tone}>{expirationStatus(a.contractExpiration).label}</Badge>}
+                        </div>
+                      )}
+                    </Td>
+                    <Td align="right">{releaseCount}</Td>
+                    <Td><Badge tone={artistStatusTone(a.status)}>{a.status}</Badge></Td>
+                    <Td>{a.fundingTier === 'Funded' ? <Badge tone="teal">Funded</Badge> : <span style={{ color: C.textFaint }}>—</span>}</Td>
+                    <Td align="right">
+                      {confirmId === a.id ? (
+                        <ConfirmInline onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
+                      ) : canEdit ? (
+                        <span className="inline-flex gap-3 justify-end">
+                          <button onClick={() => openEdit(a)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button onClick={() => setConfirmId(a.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                        </span>
+                      ) : <span style={{ color: C.textFaint }}>—</span>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function NoticesSection({ notices, update, roster, staff, sessionName }) {
+  const empty = { title: '', message: '', audience: 'all' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+
+  function openAdd() { setForm(empty); setEditing(null); setShowForm(true); }
+  function openEdit(n) { setForm({ title: n.title, message: n.message, audience: n.audience }); setEditing(n.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function save(e) {
+    e.preventDefault();
+    if (!form.title.trim() || !form.message.trim()) return;
+    if (editing) update(notices.map(n => n.id === editing ? { ...n, ...form } : n));
+    else update([{ ...form, id: uid(), createdBy: sessionName, createdAt: todayStr() }, ...notices]);
+    closeForm();
+  }
+  function remove(id) { update(notices.filter(n => n.id !== id)); setConfirmId(null); }
+
+  function audienceLabel(n) {
+    if (n.audience === 'all') return 'All artists';
+    if (n.audience === 'all-team') return 'All team members';
+    const artist = roster.find(a => a.id === n.audience);
+    if (artist) return artist.name + ' (artist)';
+    const member = staff.find(s => s.id === n.audience);
+    if (member) return member.name + ' (team)';
+    return 'Unknown';
+  }
+
+  const sorted = [...notices].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+  return (
+    <div>
+      <SectionHeader title="Noticeboard" description="Push announcements to artist dashboards or straight to the team — target everyone, or someone specific." action={<Btn variant="primary" onClick={openAdd}><Plus size={14} /> New notice</Btn>} />
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Title" full><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Studio closed for the holidays" /></Field>
+          <Field label="Audience" full>
+            <Select value={form.audience} onChange={e => setForm({ ...form, audience: e.target.value })}>
+              <optgroup label="Artists">
+                <option value="all">All artists</option>
+                {roster.map(a => <option key={a.id} value={a.id}>{a.name} only</option>)}
+              </optgroup>
+              <optgroup label="Team">
+                <option value="all-team">All team members</option>
+                {staff.map(s => <option key={s.id} value={s.id}>{s.name} only</option>)}
+              </optgroup>
+            </Select>
+          </Field>
+          <Field label="Message" full><TextArea rows={3} required value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="What should they know?" /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Post notice'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      {sorted.length === 0 ? (
+        <EmptyState icon={Bell} title="No notices posted" description="Anything you post here shows up on the 'Worth knowing' section of the right dashboard — artist or team." />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {sorted.map(n => (
+            <div key={n.id} className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div style={{ fontWeight: 600 }}>{n.title}</div>
+                  <div className="text-xs mt-0.5" style={{ color: C.textFaint }}>
+                    {audienceLabel(n)}
+                    {' · '}{n.createdBy}{' · '}{formatDate(n.createdAt)}
+                  </div>
+                </div>
+                {confirmId === n.id ? <ConfirmInline onConfirm={() => remove(n.id)} onCancel={() => setConfirmId(null)} /> : (
+                  <span className="inline-flex gap-3">
+                    <button onClick={() => openEdit(n)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                    <button onClick={() => setConfirmId(n.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                  </span>
+                )}
+              </div>
+              <div className="text-sm mt-2" style={{ color: C.textDim }}>{n.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Access changes proposed by Legal sit here until an Admin approves them.
+// Legal can propose anything — including overriding what an Admin set — but
+// nothing takes effect until an Admin signs it off.
+function AccessRequestsSection({ accessRequests, update, staff, updateStaff, isAdmin, sessionName }) {
+  const [confirmId, setConfirmId] = useState(null);
+  const pending = accessRequests.filter(r => r.status === 'Pending');
+  const settled = accessRequests.filter(r => r.status !== 'Pending')
+    .sort((a, b) => (b.reviewedAt || '').localeCompare(a.reviewedAt || ''));
+
+  function approve(req) {
+    const target = staff.find(s => s.id === req.staffId);
+    if (target) {
+      updateStaff(staff.map(s => s.id === req.staffId
+        ? { ...s, role: req.proposedRole, permissions: req.proposedPermissions }
+        : s));
+    }
+    update(accessRequests.map(r => r.id === req.id
+      ? { ...r, status: target ? 'Approved' : 'Rejected',
+          note: target ? '' : 'That team member no longer exists.',
+          reviewedBy: sessionName, reviewedAt: new Date().toISOString() }
+      : r));
+  }
+  function reject(req) {
+    update(accessRequests.map(r => r.id === req.id
+      ? { ...r, status: 'Rejected', reviewedBy: sessionName, reviewedAt: new Date().toISOString() }
+      : r));
+    setConfirmId(null);
+  }
+
+  function diffRows(req) {
+    const rows = [];
+    if (req.previousRole !== req.proposedRole) {
+      rows.push({ key: 'role', label: 'Role', from: req.previousRole, to: req.proposedRole });
+    }
+    PERMISSION_FIELDS.forEach(f => {
+      const before = !!(req.previousPermissions || {})[f.key];
+      const after = !!(req.proposedPermissions || {})[f.key];
+      if (before !== after) rows.push({ key: f.key, label: f.label, from: before ? 'Yes' : 'No', to: after ? 'Yes' : 'No', granted: after });
+    });
+    return rows;
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Access Requests"
+        description={isAdmin
+          ? 'Access changes Legal has proposed. Nothing here has taken effect yet — approving is what applies it.'
+          : 'Access changes you have proposed. An Admin has to approve them before they take effect.'} />
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={ShieldCheck} label="Waiting on approval" value={pending.length} tone={pending.length ? 'amber' : undefined} />
+        <KPICard icon={CheckCircle2} label="Approved" value={accessRequests.filter(r => r.status === 'Approved').length} tone="teal" />
+        <KPICard icon={Trash2} label="Rejected" value={accessRequests.filter(r => r.status === 'Rejected').length} />
+      </div>
+
+      {pending.length === 0 ? (
+        <EmptyState icon={ShieldCheck} title="Nothing waiting"
+          description={isAdmin ? 'When Legal proposes an access change, it lands here for you to approve.' : 'Change someone’s access from the Team tab and it will show up here for an Admin.'} />
+      ) : (
+        <div className="flex flex-col gap-4 mb-6">
+          {pending.map(req => {
+            const rows = diffRows(req);
+            return (
+              <div key={req.id} className="rounded border p-4" style={{ background: C.panel, borderColor: C.amber }}>
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{req.staffName}</div>
+                    <div className="text-xs mt-0.5" style={{ color: C.textFaint }}>
+                      Proposed by {req.requestedBy} · {formatDate(String(req.requestedAt).slice(0, 10))}
+                    </div>
+                  </div>
+                  <Badge tone="amber">Pending</Badge>
+                </div>
+
+                {rows.length === 0 ? (
+                  <div className="text-sm" style={{ color: C.textDim }}>No effective change.</div>
+                ) : (
+                  <div className="rounded border overflow-x-auto mb-3" style={{ borderColor: C.border, background: C.bg }}>
+                    <table className="w-full" style={{ minWidth: 380 }}>
+                      <thead><tr><Th>What changes</Th><Th>From</Th><Th>To</Th></tr></thead>
+                      <tbody>
+                        {rows.map(r => (
+                          <tr key={r.key}>
+                            <Td>{r.label}</Td>
+                            <Td><span style={{ color: C.textFaint }}>{r.from}</span></Td>
+                            <Td><span style={{ color: r.granted ? C.teal : C.amber, fontWeight: 600 }}>{r.to}</span></Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {req.reason && <div className="text-sm mb-3" style={{ color: C.textDim }}>“{req.reason}”</div>}
+
+                {isAdmin ? (
+                  confirmId === req.id ? (
+                    <div className="flex items-center gap-2 flex-wrap text-sm">
+                      <span style={{ color: C.textDim }}>Reject this change?</span>
+                      <button onClick={() => reject(req)} style={{ color: C.red, fontWeight: 600 }}>Yes, reject</button>
+                      <button onClick={() => setConfirmId(null)} style={{ color: C.textDim }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 flex-wrap">
+                      <Btn variant="primary" onClick={() => approve(req)}><CheckCircle2 size={14} /> Approve &amp; apply</Btn>
+                      <Btn variant="ghost" onClick={() => setConfirmId(req.id)}>Reject</Btn>
+                    </div>
+                  )
+                ) : (
+                  <div className="text-xs" style={{ color: C.textFaint }}>Waiting on an Admin.</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {settled.length > 0 && (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Decided</div>
+          <table className="w-full" style={{ minWidth: 520 }}>
+            <thead><tr><Th>Team member</Th><Th>Proposed by</Th><Th>Reviewed by</Th><Th>When</Th><Th align="right">Outcome</Th></tr></thead>
+            <tbody>
+              {settled.map(r => (
+                <tr key={r.id}>
+                  <Td>{r.staffName}</Td>
+                  <Td>{r.requestedBy}</Td>
+                  <Td>{r.reviewedBy || '—'}</Td>
+                  <Td mono>{r.reviewedAt ? formatDate(String(r.reviewedAt).slice(0, 10)) : '—'}</Td>
+                  <Td align="right"><Badge tone={r.status === 'Approved' ? 'teal' : 'red'}>{r.status}</Badge></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', accessRequests = [], updateAccessRequests }) {
+  // Legal has Admin-level reach, but access changes it makes are proposals:
+  // they queue for an Admin instead of applying.
+  const proposesOnly = sessionRole === 'Legal';
+  const [proposed, setProposed] = useState('');
+  const empty = { name: '', role: 'Product Manager', email: '', phone: '', startDate: todayStr(), status: 'Onboarding', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Product Manager'), onboarding: makeOnboardingChecklist() };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [search, setSearch] = useState('');
+  const [view, setView] = useState('grid');
+  const [newTaskLabel, setNewTaskLabel] = useState('');
+  const photoInputRef = useRef(null);
+
+  function openAdd() { setForm({ ...empty, permissions: defaultPermissionsForRole('Product Manager'), onboarding: makeOnboardingChecklist() }); setEditing(null); setShowForm(true); }
+  function openEdit(s) { setForm({ ...empty, ...s, permissions: permissionsFor(s), onboarding: s.onboarding && s.onboarding.length ? s.onboarding : makeOnboardingChecklist() }); setEditing(s.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); setNewTaskLabel(''); if (photoInputRef.current) photoInputRef.current.value = ''; }
+  function changeRole(role) { setForm(f => ({ ...f, role, permissions: defaultPermissionsForRole(role) })); }
+  function togglePermission(key) { setForm(f => ({ ...f, permissions: { ...f.permissions, [key]: !f.permissions[key] } })); }
+  function toggleTask(taskId) {
+    setForm(f => {
+      const onboarding = f.onboarding.map(t => t.id === taskId ? { ...t, done: !t.done } : t);
+      const allDone = onboarding.length > 0 && onboarding.every(t => t.done);
+      return { ...f, onboarding, status: allDone && f.status === 'Onboarding' ? 'Active' : f.status };
+    });
+  }
+  function addTask() {
+    if (!newTaskLabel.trim()) return;
+    setForm(f => ({ ...f, onboarding: [...f.onboarding, { id: uid(), label: newTaskLabel.trim(), done: false }] }));
+    setNewTaskLabel('');
+  }
+  function removeTask(taskId) { setForm(f => ({ ...f, onboarding: f.onboarding.filter(t => t.id !== taskId) })); }
+  function handlePhotoUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    resizeImageFile(file, 300, dataUrl => setForm(f => ({ ...f, photoUrl: dataUrl })));
+  }
+  function save(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    if (editing) {
+      const before = staff.find(s => s.id === editing);
+      // Legal outranks nobody where Admin is concerned.
+      if (proposesOnly && isTopRole(before && before.role)) { closeForm(); return; }
+      const beforePerms = permissionsFor(before);
+      const accessChanged = before && (before.role !== form.role ||
+        PERMISSION_FIELDS.some(f => !!beforePerms[f.key] !== !!form.permissions[f.key]));
+      if (proposesOnly && accessChanged) {
+        // Everything except role and permissions still saves straight away.
+        update(staff.map(s => s.id === editing
+          ? { ...form, id: editing, role: before.role, permissions: beforePerms }
+          : s));
+        if (updateAccessRequests) {
+          updateAccessRequests([{
+            id: uid(), staffId: editing, staffName: form.name.trim(),
+            previousRole: before.role, proposedRole: form.role,
+            previousPermissions: beforePerms, proposedPermissions: { ...form.permissions },
+            requestedBy: sessionName || 'Legal', requestedAt: new Date().toISOString(),
+            status: 'Pending', reviewedBy: '', reviewedAt: '', reason: '',
+          }, ...accessRequests]);
+        }
+        setProposed(form.name.trim());
+        closeForm();
+        return;
+      }
+      update(staff.map(s => s.id === editing ? { ...form, id: editing } : s));
+    } else if (proposesOnly) {
+      // A new hire Legal adds starts on their role's defaults; any custom
+      // access Legal picked goes to an Admin as a proposal.
+      const newId = uid();
+      const roleDefaults = defaultPermissionsForRole(form.role);
+      update([...staff, { ...form, id: newId, permissions: roleDefaults }]);
+      const custom = PERMISSION_FIELDS.some(f => !!roleDefaults[f.key] !== !!form.permissions[f.key]);
+      if (custom && updateAccessRequests) {
+        updateAccessRequests([{
+          id: uid(), staffId: newId, staffName: form.name.trim(),
+          previousRole: form.role, proposedRole: form.role,
+          previousPermissions: roleDefaults, proposedPermissions: { ...form.permissions },
+          requestedBy: sessionName || 'Legal', requestedAt: new Date().toISOString(),
+          status: 'Pending', reviewedBy: '', reviewedAt: '', reason: '',
+        }, ...accessRequests]);
+        setProposed(form.name.trim());
+      }
+    } else {
+      update([...staff, { ...form, id: uid() }]);
+    }
+    closeForm();
+  }
+  function remove(id) { update(staff.filter(s => s.id !== id)); setConfirmId(null); }
+
+  const filtered = staff.filter(s => {
+    if (filterStatus !== 'all' && (s.status || 'Active') !== filterStatus) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return s.name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q) || (s.email && s.email.toLowerCase().includes(q));
+  });
+  const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+  const lockedAccess = isTopRole(form.role);
+  // Legal cannot touch an Admin — Admin is the highest power.
+  const editingAdmin = editing ? isTopRole((staff.find(s => s.id === editing) || {}).role) : false;
+  const blockedByRank = proposesOnly && editingAdmin;
+  const onboardingCount = staff.filter(s => (s.status || 'Active') === 'Onboarding').length;
+
+  return (
+    <div>
+      <SectionHeader title="Team" description="Everyone on the label side with access to this dashboard — profiles, roles, permissions, and onboarding progress." action={<Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add team member</Btn>} />
+      {proposesOnly && (
+        <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          You can change anyone's access here, including what an Admin set — but the change is a proposal. An Admin has to approve it in Access Requests before it takes effect.
+        </div>
+      )}
+      {proposed && (
+        <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.tealSoft, color: C.teal, border: '1px solid ' + C.teal }}>
+          Access change for {proposed} sent to an Admin for approval. <button onClick={() => setProposed('')} style={{ textDecoration: 'underline' }}>Dismiss</button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={Users} label="Team members" value={staff.length} />
+        <KPICard icon={UserCog} label="Onboarding" value={onboardingCount} tone={onboardingCount > 0 ? 'amber' : undefined} />
+      </div>
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="Status">
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">All statuses</option>
+              {STAFF_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+          <Field label="Search" full><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Name, role, or email" /></Field>
+        </div>
+      </div>
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <div className="flex items-center gap-3 mb-4">
+            <Avatar name={form.name} photoUrl={form.photoUrl} size={64} />
+            <div className="flex flex-col gap-1">
+              <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="text-xs" style={{ color: C.textDim, maxWidth: 220 }} />
+              {form.photoUrl && <button type="button" onClick={() => setForm({ ...form, photoUrl: '' })} className="text-xs text-left" style={{ color: C.textFaint }}>Remove photo</button>}
+            </div>
+          </div>
+          <div className="imss-form-grid gap-3 mb-4">
+            <Field label="Name"><Input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Dana Whitfield" /></Field>
+            <Field label="Role">
+              <Select value={form.role} onChange={e => changeRole(e.target.value)}>
+                {STAFF_ROLES.filter(r => !proposesOnly || editingAdmin || !isTopRole(r)).map(r => <option key={r} value={r}>{r}</option>)}
+              </Select>
+            </Field>
+            <Field label="Email"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Phone"><Input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Optional" /></Field>
+            <Field label="Start date"><Input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} /></Field>
+            <Field label="Status">
+              <Select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                {STAFF_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </Select>
+            </Field>
+            <Field label="Bio / notes" full><TextArea rows={2} value={form.bio} onChange={e => setForm({ ...form, bio: e.target.value })} placeholder="What they're joining to do, background, anything worth noting." /></Field>
+          </div>
+
+          <div className="text-xs mb-2" style={{ color: C.textFaint }}>Access {lockedAccess && '— Admins always have full access'}</div>
+          {blockedByRank && (
+            <div className="rounded px-3 py-2 text-xs mb-2" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>
+              Admin is the highest role — Legal can't change an Admin's access. Ask an Admin to make this change.
+            </div>
+          )}
+          <div className="rounded border p-3 mb-4" style={{ borderColor: C.border, background: C.bg }}>
+            <div className="grid grid-cols-1 gap-2">
+              {PERMISSION_FIELDS.map(f => (
+                <label key={f.key} className="flex items-start gap-2 text-sm" style={{ color: (lockedAccess || blockedByRank) ? C.textFaint : C.text, opacity: (lockedAccess || blockedByRank) ? 0.6 : 1 }}>
+                  <input type="checkbox" checked={lockedAccess ? true : !!form.permissions[f.key]} disabled={lockedAccess || blockedByRank} onChange={() => togglePermission(f.key)} style={{ marginTop: 3 }} />
+                  <span>
+                    <span style={{ fontWeight: 500 }}>{f.label}</span>
+                    <span className="block text-xs" style={{ color: C.textFaint }}>{f.desc}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="text-xs mb-2" style={{ color: C.textFaint }}>Onboarding checklist — {onboardingProgress(form).done}/{onboardingProgress(form).total} complete</div>
+          <div className="rounded border p-3 mb-4" style={{ borderColor: C.border, background: C.bg }}>
+            <div className="flex flex-col gap-2 mb-3">
+              {form.onboarding.map(t => (
+                <div key={t.id} className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 text-sm" style={{ color: t.done ? C.textFaint : C.text, textDecoration: t.done ? 'line-through' : 'none' }}>
+                    <input type="checkbox" checked={t.done} onChange={() => toggleTask(t.id)} />
+                    {t.label}
+                  </label>
+                  <button type="button" onClick={() => removeTask(t.id)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                </div>
+              ))}
+              {form.onboarding.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>No tasks yet.</div>}
+            </div>
+            <div className="flex gap-2">
+              <Input value={newTaskLabel} onChange={e => setNewTaskLabel(e.target.value)} placeholder="Add a custom task" />
+              <Btn variant="ghost" type="button" onClick={addTask}>Add</Btn>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add team member'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      <ExportBar filename="imss-team" headers={['Name', 'Role', 'Status', 'Email', 'Phone', 'Start Date', 'Onboarding Progress']} rows={sorted.map(s => {
+        const prog = onboardingProgress(s);
+        return [s.name, s.role, s.status || 'Active', s.email || '', s.phone || '', s.startDate || '', prog.total > 0 ? prog.done + '/' + prog.total : ''];
+      })} />
+
+      <div className="flex justify-end gap-1 mb-4">
+        <SegmentedToggle options={[{ id: 'grid', label: 'Grid' }, { id: 'table', label: 'Table' }]} value={view} onChange={setView} />
+      </div>
+
+      {sorted.length === 0 ? (
+        <EmptyState icon={UserCog} title="No team members yet" description="Add the people on your side of the label — this list is also what populates sign-in, roster assignments, and access control." />
+      ) : view === 'grid' ? (
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {sorted.map(s => {
+            const prog = onboardingProgress(s);
+            const status = s.status || 'Active';
+            return (
+              <button key={s.id} onClick={() => openEdit(s)} className="text-left rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <Avatar name={s.name} photoUrl={s.photoUrl} size={48} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                    <div className="text-xs" style={{ color: C.textFaint }}>{s.role}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                  <Badge tone={status === 'Active' ? 'teal' : status === 'Onboarding' ? 'amber' : 'default'}>{status}</Badge>
+                </div>
+                {status === 'Onboarding' && prog.total > 0 && (
+                  <div className="mb-2">
+                    <div className="rounded-full overflow-hidden" style={{ height: 4, background: C.panel2 }}>
+                      <div style={{ height: 4, width: prog.pct + '%', background: C.amber }} />
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: C.textFaint }}>{prog.done}/{prog.total} onboarding tasks</div>
+                  </div>
+                )}
+                <div className="text-xs" style={{ color: C.textFaint }}>{s.email || 'No email set'}</div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 720 }}>
+            <thead><tr><Th></Th><Th>Name</Th><Th>Role</Th><Th>Status</Th><Th>Onboarding</Th><Th>Email</Th><Th align="right">Actions</Th></tr></thead>
+            <tbody>
+              {sorted.map(s => {
+                const prog = onboardingProgress(s);
+                const status = s.status || 'Active';
+                return (
+                  <tr key={s.id}>
+                    <Td><Avatar name={s.name} photoUrl={s.photoUrl} size={32} /></Td>
+                    <Td>{s.name}</Td>
+                    <Td><Badge tone={s.role === 'Admin' ? 'amber' : s.role === 'Finance' ? 'teal' : 'default'}>{s.role}</Badge></Td>
+                    <Td><Badge tone={status === 'Active' ? 'teal' : status === 'Onboarding' ? 'amber' : 'default'}>{status}</Badge></Td>
+                    <Td mono>{prog.total > 0 ? prog.done + '/' + prog.total : '—'}</Td>
+                    <Td>{s.email || '—'}</Td>
+                    <Td align="right">
+                      {confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : (
+                        <span className="inline-flex gap-3 justify-end">
+                          <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                        </span>
+                      )}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '' }) {
+  const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
+  const visibleArtistIds = new Set(visibleRoster.map(a => a.id));
+  const visibleCatalog = pmScope ? catalog.filter(c => visibleArtistIds.has(c.artistId)) : catalog;
+  const visibleSubmissions = (pmScope ? releaseSubmissions.filter(s => visibleArtistIds.has(s.artistId)) : releaseSubmissions).filter(s => s.status === 'Pending');
+
+  const empty = { artistId: visibleRoster[0] ? visibleRoster[0].id : '', title: '', type: 'Single', genre: '', releaseDate: todayStr(), isrc: '', upc: '', status: 'Processing', artworkUrl: '', enteredBy: '', hasVideo: false, licenseExpiration: '', collaborators: [], primaryArtists: [], primaryMarket: '', secondaryMarket: '', checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs(), label: '', explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits() };
+  const [distributorEmail, setDistributorEmail] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [filterArtist, setFilterArtist] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterLicense, setFilterLicense] = useState('all');
+  const [filterMarket, setFilterMarket] = useState('all');
+  const [search, setSearch] = useState('');
+  const [view, setView] = useState('grid');
+  const [confirmId, setConfirmId] = useState(null);
+  const [newCollab, setNewCollab] = useState({ name: '', role: 'Feature', splitPercent: '' });
+  const [newPrimaryArtist, setNewPrimaryArtist] = useState('');
+  const [newChecklistLabel, setNewChecklistLabel] = useState('');
+  const artworkInputRef = useRef(null);
+  const lastEnteredBy = catalog.length ? (catalog[catalog.length - 1].enteredBy || '') : '';
+
+  function openAdd() { setForm({ ...empty, artistId: visibleRoster[0] ? visibleRoster[0].id : '', enteredBy: lastEnteredBy, checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs() }); setEditing(null); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
+  function openFromSubmission(sub) {
+    setForm({ ...empty, artistId: sub.artistId, title: sub.title, type: sub.type, genre: sub.genre || '', releaseDate: sub.proposedDate || todayStr(), artworkUrl: sub.artworkUrl || '', collaborators: sub.collaborators || [], primaryArtists: sub.primaryArtists || [], enteredBy: sessionName, checklist: makeReleaseChecklist(), distributionDocs: sub.distributionDocs && sub.distributionDocs.length ? sub.distributionDocs : makeDistributionDocs(), explicit: sub.explicit || 'Not Set', dolbyAtmos: !!sub.dolbyAtmos, lyrics: sub.lyrics || '', duration: sub.duration || '', credits: sub.credits ? { ...emptyCredits(), ...sub.credits } : emptyCredits() });
+    setEditing(null);
+    setNewCollab({ name: '', role: 'Feature', splitPercent: '' });
+    setDistributorEmail('');
+    setShowForm(true);
+    if (updateReleaseSubmissions) updateReleaseSubmissions(releaseSubmissions.map(s => s.id === sub.id ? { ...s, status: 'Approved', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : s));
+  }
+  function rejectSubmission(sub) {
+    if (updateReleaseSubmissions) updateReleaseSubmissions(releaseSubmissions.map(s => s.id === sub.id ? { ...s, status: 'Rejected', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : s));
+  }
+  function openEdit(r) { setForm({ ...empty, ...r, collaborators: r.collaborators || [], primaryArtists: r.primaryArtists || [], checklist: r.checklist && r.checklist.length ? r.checklist : makeReleaseChecklist(), distributionDocs: r.distributionDocs && r.distributionDocs.length ? r.distributionDocs : makeDistributionDocs(), credits: r.credits ? { ...emptyCredits(), ...r.credits } : emptyCredits() }); setEditing(r.id); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); setNewChecklistLabel(''); if (artworkInputRef.current) artworkInputRef.current.value = ''; }
+  function addCollaborator() {
+    if (!newCollab.name.trim()) return;
+    setForm(f => ({ ...f, collaborators: [...f.collaborators, { ...newCollab, splitPercent: Number(newCollab.splitPercent) || 0 }] }));
+    setNewCollab({ name: '', role: 'Feature', splitPercent: '' });
+  }
+  function addPrimaryArtist() {
+    if (!newPrimaryArtist.trim()) return;
+    setForm(f => ({ ...f, primaryArtists: [...(f.primaryArtists || []), newPrimaryArtist.trim()] }));
+    setNewPrimaryArtist('');
+  }
+  function removePrimaryArtist(idx) { setForm(f => ({ ...f, primaryArtists: f.primaryArtists.filter((_, i) => i !== idx) })); }
+  function removeCollaborator(idx) { setForm(f => ({ ...f, collaborators: f.collaborators.filter((_, i) => i !== idx) })); }
+  function toggleChecklistItem(itemId) { setForm(f => ({ ...f, checklist: f.checklist.map(t => t.id === itemId ? { ...t, done: !t.done } : t) })); }
+  function addChecklistItem() {
+    if (!newChecklistLabel.trim()) return;
+    setForm(f => ({ ...f, checklist: [...f.checklist, { id: uid(), label: newChecklistLabel.trim(), done: false }] }));
+    setNewChecklistLabel('');
+  }
+  function removeChecklistItem(itemId) { setForm(f => ({ ...f, checklist: f.checklist.filter(t => t.id !== itemId) })); }
+  function toggleDistDoc(docId) { setForm(f => ({ ...f, distributionDocs: f.distributionDocs.map(d => d.id === docId ? { ...d, attached: !d.attached } : d) })); }
+  function setDistDocNote(docId, note) { setForm(f => ({ ...f, distributionDocs: f.distributionDocs.map(d => d.id === docId ? { ...d, note } : d) })); }
+  function openDriveFolder() {
+    const artist = roster.find(a => a.id === form.artistId);
+    if (artist && artist.driveFolder) window.open(artist.driveFolder, '_blank', 'noopener,noreferrer');
+  }
+  function generateMetadataSheet() {
+    const artist = roster.find(a => a.id === form.artistId);
+    const allPrimary = [artist ? artist.name : '', ...(form.primaryArtists || [])].filter(Boolean).join(' & ');
+    const performedBy = form.credits.performedBy || allPrimary + ((form.collaborators || []).length ? ' feat. ' + form.collaborators.map(c => c.name).join(', ') : '');
+    const rows = [[
+      form.genre || (artist ? artist.genre || '' : ''),
+      form.label || '',
+      form.explicit === 'Not Set' ? '' : form.explicit,
+      form.dolbyAtmos ? 'Yes' : 'No',
+      form.lyrics || '',
+      form.title,
+      performedBy,
+      form.credits.writtenBy || '',
+      form.credits.producedBy || (form.collaborators || []).filter(c => c.role === 'Producer').map(c => c.name).join(', '),
+      form.credits.recordingEngineer || '',
+      form.credits.mixingEngineer || '',
+      form.credits.masteringEngineer || '',
+      form.credits.dolbyEngineer || '',
+      artist ? artist.productManager || '' : '',
+      form.duration || '',
+      form.upc || '',
+      form.isrc || '',
+    ]];
+    const headers = ['Genre', 'Label', 'Explicit/Clean', 'Dolby', 'Lyrics', 'Song Title', 'Performed by', 'Written by', 'Produced By', 'Recording Engineer', 'Mixing Engineer', 'Mastering Engineer', 'Dolby Engineer', 'Product Manager', 'Duration', 'UPC', 'ISRC'];
+    exportRowsToExcel((form.title || 'release').replace(/\s+/g, '-').toLowerCase() + '-metadata', headers, rows);
+  }
+  function sendPackageToDistributor() {
+    if (!distributorEmail.trim()) return;
+    const artist = roster.find(a => a.id === form.artistId);
+    const missing = missingRequiredDocs(form.distributionDocs);
+    const subject = encodeURIComponent((artist ? artist.name + ' — ' : '') + form.title + ' — Distribution Package');
+    const bodyLines = [
+      'Release: ' + form.title,
+      'Artist: ' + (artist ? artist.name : ''),
+      'Type: ' + form.type,
+      'Release date: ' + (form.releaseDate || 'TBD'),
+      form.isrc ? 'ISRC: ' + form.isrc : null,
+      form.upc ? 'UPC: ' + form.upc : null,
+      '',
+      artist && artist.driveFolder ? 'Files and documents: ' + artist.driveFolder : 'Files and documents: (no Drive/Dropbox folder on file for this artist yet)',
+      '',
+      missing > 0 ? missing + ' required document(s) still outstanding — see checklist.' : 'All required documents attached.',
+    ].filter(Boolean);
+    const body = encodeURIComponent(bodyLines.join('\n'));
+    window.open('mailto:' + distributorEmail.trim() + '?subject=' + subject + '&body=' + body, '_blank');
+  }
+  function save(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    if (editing) update(catalog.map(r => r.id === editing ? { ...form, id: editing } : r));
+    else update([...catalog, { ...form, id: uid() }]);
+    closeForm();
+  }
+  function remove(id) { update(catalog.filter(r => r.id !== id)); setConfirmId(null); }
+  function handleArtworkUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    resizeImageFile(file, 400, dataUrl => setForm(f => ({ ...f, artworkUrl: dataUrl })));
+  }
+  function moveStatus(release, newStatus) { update(catalog.map(c => c.id === release.id ? { ...c, status: newStatus } : c)); }
+
+  const marketsInUse = Array.from(new Set(visibleCatalog.flatMap(c => [c.primaryMarket, c.secondaryMarket]).filter(Boolean))).sort();
+
+  const filtered = visibleCatalog.filter(c => {
+    if (filterArtist !== 'all' && c.artistId !== filterArtist) return false;
+    if (filterStatus !== 'all' && c.status !== filterStatus) return false;
+    if (filterMarket !== 'all' && c.primaryMarket !== filterMarket && c.secondaryMarket !== filterMarket) return false;
+    if (filterLicense !== 'all') {
+      const lic = expirationStatus(c.licenseExpiration);
+      if (filterLicense === 'none' && lic) return false;
+      if (filterLicense !== 'none' && (!lic || lic.label !== filterLicense)) return false;
+    }
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.title.toLowerCase().includes(q) ||
+      (c.isrc && c.isrc.toLowerCase().includes(q)) ||
+      (c.upc && c.upc.toLowerCase().includes(q))
+    );
+  });
+  const sorted = [...filtered].sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || ''));
+  const filtersActive = filterArtist !== 'all' || filterStatus !== 'all' || filterLicense !== 'all' || filterMarket !== 'all' || !!search;
+
+  return (
+    <div>
+      <SectionHeader title="Catalog" description="Every release across the roster — singles, EPs, and albums." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add release</Btn>} />
+
+      {canEdit && visibleSubmissions.length > 0 && (
+        <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
+          <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>Artists have submitted {visibleSubmissions.length} new release{visibleSubmissions.length === 1 ? '' : 's'} for review</div>
+          <div className="flex flex-col gap-2">
+            {visibleSubmissions.map(sub => {
+              const artist = roster.find(a => a.id === sub.artistId);
+              const missing = missingRequiredDocs(sub.distributionDocs);
+              return (
+                <div key={sub.id} className="rounded p-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: C.panel, border: '1px solid ' + C.border }}>
+                  <div className="flex items-center gap-2">
+                    <ArtworkThumb release={{ title: sub.title, artworkUrl: sub.artworkUrl }} size={32} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{sub.title} <span style={{ color: C.textFaint, fontWeight: 400 }}>({sub.type}{sub.genre ? ' · ' + sub.genre : ''})</span></div>
+                      <div className="text-xs" style={{ color: C.textFaint }}>{artist ? artist.name : 'Unknown'}{sub.proposedDate ? ' · proposed ' + formatDate(sub.proposedDate) : ''}{sub.collaborators && sub.collaborators.length > 0 ? ' · feat. ' + sub.collaborators.map(c => c.name).join(', ') : ''}{sub.notes ? ' · "' + sub.notes + '"' : ''}</div>
+                      <div className="text-xs mt-0.5" style={{ color: missing > 0 ? C.amber : C.teal }}>{missing > 0 ? missing + ' required doc' + (missing === 1 ? '' : 's') + ' still marked not-ready' : 'All required docs marked ready'}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Btn variant="primary" onClick={() => openFromSubmission(sub)}>Review &amp; add</Btn>
+                    <Btn variant="ghost" onClick={() => rejectSubmission(sub)}>Reject</Btn>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="Artist">
+            <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
+              <option value="all">All artists</option>
+              {visibleRoster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">All statuses</option>
+              {RELEASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+          <Field label="License">
+            <Select value={filterLicense} onChange={e => setFilterLicense(e.target.value)}>
+              <option value="all">All licenses</option>
+              <option value="Active">Active</option>
+              <option value="Expiring soon">Expiring soon</option>
+              <option value="Expired">Expired</option>
+              <option value="none">No license on file</option>
+            </Select>
+          </Field>
+          <Field label="Market">
+            <Select value={filterMarket} onChange={e => setFilterMarket(e.target.value)}>
+              <option value="all">All markets</option>
+              {marketsInUse.map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+          <Field label="Search" full><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Title, ISRC, or UPC" /></Field>
+        </div>
+        {filtersActive && <div className="text-xs mt-3" style={{ color: C.textFaint }}>Showing {filtered.length} of {visibleCatalog.length} releases</div>}
+      </div>
+
+      {pmScope && (
+        <div className="rounded px-3 py-2 text-xs mb-6" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          Showing only releases for artists assigned to you as Product Manager ({visibleCatalog.length} of {catalog.length} total).
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <div className="imss-span-2 flex items-center gap-3">
+            <ArtworkThumb release={form} size={64} radius={8} />
+            <div className="flex flex-col gap-1">
+              <input ref={artworkInputRef} type="file" accept="image/*" onChange={handleArtworkUpload} className="text-xs" style={{ color: C.textDim, maxWidth: 220 }} />
+              {form.artworkUrl && <button type="button" onClick={() => setForm({ ...form, artworkUrl: '' })} className="text-xs text-left" style={{ color: C.textFaint }}>Remove artwork</button>}
+            </div>
+          </div>
+          <Field label="Product name"><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></Field>
+          <Field label="Artist">
+            <Select value={form.artistId} onChange={e => setForm({ ...form, artistId: e.target.value })}>
+              {visibleRoster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Additional primary artists" full>
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              {(form.primaryArtists || []).map((name, i) => (
+                <Badge key={i}>{name} <button type="button" onClick={() => removePrimaryArtist(i)} style={{ marginLeft: 4, color: C.textFaint }}>×</button></Badge>
+              ))}
+              {(!form.primaryArtists || form.primaryArtists.length === 0) && <span className="text-xs" style={{ color: C.textFaint }}>Just {visibleRoster.find(a => a.id === form.artistId) ? visibleRoster.find(a => a.id === form.artistId).name : 'the selected artist'} — add others for a joint release (e.g. "Artist A &amp; Artist B")</span>}
+            </div>
+            <div className="flex gap-2">
+              <Input value={newPrimaryArtist} onChange={e => setNewPrimaryArtist(e.target.value)} placeholder="Name of co-primary artist" style={{ flex: 1 }} list="primary-artist-suggestions" />
+              <datalist id="primary-artist-suggestions">
+                {roster.map(a => <option key={a.id} value={a.name} />)}
+              </datalist>
+              <Btn variant="ghost" type="button" onClick={addPrimaryArtist}>Add</Btn>
+            </div>
+          </Field>
+          <Field label="Type">
+            <Select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+              {RELEASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </Field>
+          <Field label="Genre"><Input value={form.genre} onChange={e => setForm({ ...form, genre: e.target.value })} placeholder={(roster.find(a => a.id === form.artistId) || {}).genre || 'e.g. Alt-Pop'} /></Field>
+          <Field label="Release date"><Input type="date" value={form.releaseDate} onChange={e => setForm({ ...form, releaseDate: e.target.value })} /></Field>
+          <Field label="ISRC (recording code)"><Input value={form.isrc} onChange={e => setForm({ ...form, isrc: e.target.value })} placeholder="US-XXX-YY-NNNNN" /></Field>
+          <Field label="UPC (release code)"><Input value={form.upc} onChange={e => setForm({ ...form, upc: e.target.value })} placeholder="e.g. 198004512367" /></Field>
+          <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
+          <Field label="License expiration"><Input type="date" value={form.licenseExpiration} onChange={e => setForm({ ...form, licenseExpiration: e.target.value })} /></Field>
+          <Field label="Primary market">
+            <Select value={form.primaryMarket} onChange={e => setForm({ ...form, primaryMarket: e.target.value })}>
+              <option value="">— none —</option>
+              {MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+          <Field label="Secondary market">
+            <Select value={form.secondaryMarket} onChange={e => setForm({ ...form, secondaryMarket: e.target.value })}>
+              <option value="">— none —</option>
+              {MARKETS.filter(m => m !== form.primaryMarket).map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+          <Field label="Video">
+            <label className="flex items-center gap-2 text-sm" style={{ color: C.text, paddingTop: 7 }}>
+              <input type="checkbox" checked={form.hasVideo} onChange={e => setForm({ ...form, hasVideo: e.target.checked })} />
+              Has a music video
+            </label>
+          </Field>
+          <Field label="Status">
+            <Select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+              {RELEASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+          <div className="imss-span-2">
+            <div className="text-xs mb-2" style={{ color: C.textFaint }}>Collaborators &amp; splits — {roster.find(a => a.id === form.artistId) ? roster.find(a => a.id === form.artistId).name : 'Primary artist'} keeps the remainder ({Math.max(0, 100 - form.collaborators.reduce((s, c) => s + c.splitPercent, 0))}%)</div>
+            <div className="rounded border p-3 mb-1" style={{ borderColor: C.border, background: C.bg }}>
+              {form.collaborators.length > 0 && (
+                <div className="flex flex-col gap-2 mb-3">
+                  {form.collaborators.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                      <span>{c.name} <span style={{ color: C.textFaint }}>· {c.role} · {c.splitPercent}%</span></span>
+                      <button type="button" onClick={() => removeCollaborator(i)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 flex-wrap">
+                <Input value={newCollab.name} onChange={e => setNewCollab({ ...newCollab, name: e.target.value })} placeholder="Name" style={{ flex: 2, minWidth: 120 }} />
+                <Select value={newCollab.role} onChange={e => setNewCollab({ ...newCollab, role: e.target.value })} style={{ flex: 1, minWidth: 110 }}>
+                  {COLLABORATOR_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </Select>
+                <Input type="number" min="0" max="100" value={newCollab.splitPercent} onChange={e => setNewCollab({ ...newCollab, splitPercent: e.target.value })} placeholder="Split %" style={{ flex: 1, minWidth: 90 }} />
+                <Btn variant="ghost" type="button" onClick={addCollaborator}>Add</Btn>
+              </div>
+            </div>
+          </div>
+
+          <div className="imss-span-2">
+            <div className="text-xs mb-2" style={{ color: C.textFaint }}>Credits &amp; metadata sheet fields</div>
+            <div className="rounded border p-3 mb-1 imss-form-grid gap-3" style={{ borderColor: C.border, background: C.bg }}>
+              <Field label="Label / imprint"><Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. IMSS Records" /></Field>
+              <Field label="Duration"><Input value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} placeholder="mm:ss" /></Field>
+              <Field label="Explicit / Clean">
+                <Select value={form.explicit} onChange={e => setForm({ ...form, explicit: e.target.value })}>
+                  {EXPLICIT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </Select>
+              </Field>
+              <Field label="Dolby Atmos">
+                <label className="flex items-center gap-2 text-sm" style={{ paddingTop: 8 }}>
+                  <input type="checkbox" checked={form.dolbyAtmos} onChange={e => setForm({ ...form, dolbyAtmos: e.target.checked })} /> Dolby Atmos mix available
+                </label>
+              </Field>
+              <Field label="Performed by" full><Input value={form.credits.performedBy} onChange={e => setForm({ ...form, credits: { ...form.credits, performedBy: e.target.value } })} placeholder="Artist name(s) as credited" /></Field>
+              <Field label="Written by"><Input value={form.credits.writtenBy} onChange={e => setForm({ ...form, credits: { ...form.credits, writtenBy: e.target.value } })} /></Field>
+              <Field label="Produced by"><Input value={form.credits.producedBy} onChange={e => setForm({ ...form, credits: { ...form.credits, producedBy: e.target.value } })} /></Field>
+              <Field label="Recording engineer"><Input value={form.credits.recordingEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, recordingEngineer: e.target.value } })} /></Field>
+              <Field label="Mixing engineer"><Input value={form.credits.mixingEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, mixingEngineer: e.target.value } })} /></Field>
+              <Field label="Mastering engineer"><Input value={form.credits.masteringEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, masteringEngineer: e.target.value } })} /></Field>
+              <Field label="Dolby engineer"><Input value={form.credits.dolbyEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, dolbyEngineer: e.target.value } })} /></Field>
+              <Field label="Lyrics" full><TextArea rows={3} value={form.lyrics} onChange={e => setForm({ ...form, lyrics: e.target.value })} placeholder="Paste lyrics, or note where they're stored" /></Field>
+            </div>
+          </div>
+
+          <div className="imss-span-2">
+            <div className="text-xs mb-2" style={{ color: C.textFaint }}>Production checklist — {checklistProgress(form.checklist).done}/{checklistProgress(form.checklist).total} complete</div>
+            <div className="rounded border p-3 mb-1" style={{ borderColor: C.border, background: C.bg }}>
+              <div className="flex flex-col gap-2 mb-3">
+                {form.checklist.map(t => (
+                  <div key={t.id} className="flex items-center justify-between gap-2">
+                    <label className="flex items-center gap-2 text-sm" style={{ color: t.done ? C.textFaint : C.text, textDecoration: t.done ? 'line-through' : 'none' }}>
+                      <input type="checkbox" checked={t.done} onChange={() => toggleChecklistItem(t.id)} />
+                      {t.label}
+                    </label>
+                    <button type="button" onClick={() => removeChecklistItem(t.id)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                  </div>
+                ))}
+                {form.checklist.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>No tasks yet.</div>}
+              </div>
+              <div className="flex gap-2">
+                <Input value={newChecklistLabel} onChange={e => setNewChecklistLabel(e.target.value)} placeholder="Add a custom task" />
+                <Btn variant="ghost" type="button" onClick={addChecklistItem}>Add</Btn>
+              </div>
+            </div>
+          </div>
+
+          <div className="imss-span-2">
+            <div className="text-xs mb-2" style={{ color: C.textFaint }}>
+              Distribution package{missingRequiredDocs(form.distributionDocs) > 0 && <span style={{ color: C.red }}> — {missingRequiredDocs(form.distributionDocs)} required document{missingRequiredDocs(form.distributionDocs) === 1 ? '' : 's'} missing</span>}
+            </div>
+            <div className="rounded border p-3 mb-3" style={{ borderColor: C.border, background: C.bg }}>
+              <div className="flex flex-col gap-2">
+                {form.distributionDocs.map(d => (
+                  <div key={d.id} className="flex items-center gap-2 flex-wrap">
+                    <label className="flex items-center gap-2 text-sm" style={{ minWidth: 160, color: d.attached ? C.textFaint : C.text, textDecoration: d.attached ? 'line-through' : 'none' }}>
+                      <input type="checkbox" checked={d.attached} onChange={() => toggleDistDoc(d.id)} />
+                      {d.label}
+                    </label>
+                    {!d.attached && (d.required ? <Badge tone="red">Missing</Badge> : <Badge>Optional</Badge>)}
+                    <Input value={d.note} onChange={e => setDistDocNote(d.id, e.target.value)} placeholder="Note (e.g. uploaded to Drive 9/6)" style={{ flex: 1, minWidth: 160 }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded border p-3 mb-1" style={{ borderColor: C.border, background: C.bg }}>
+              <div className="flex flex-wrap gap-2 mb-3">
+                <Btn variant="ghost" type="button" onClick={openDriveFolder} disabled={!roster.find(a => a.id === form.artistId) || !roster.find(a => a.id === form.artistId).driveFolder}>Open Drive folder</Btn>
+                <Btn variant="ghost" type="button" onClick={generateMetadataSheet}><FileSpreadsheet size={14} /> Generate metadata sheet</Btn>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <Input type="email" value={distributorEmail} onChange={e => setDistributorEmail(e.target.value)} placeholder="distributor@label.com" style={{ flex: 1, minWidth: 200 }} />
+                <Btn variant="primary" type="button" onClick={sendPackageToDistributor}>Send package</Btn>
+              </div>
+              <div className="text-xs mt-2" style={{ color: C.textFaint }}>Opens your email client with the release details and the artist's Drive/Dropbox link pre-filled — attach the actual files there before sending.</div>
+            </div>
+          </div>
+
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add release'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      {roster.length === 0 && <div className="text-sm mb-4" style={{ color: C.textDim }}>Add an artist to the roster before creating a release.</div>}
+
+      <ExportBar filename="imss-catalog" headers={['Title', 'Artist', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'License Expiration', 'Has Video', 'Collaborators', 'Entered By']} rows={sorted.map(r => [
+        r.title,
+        artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown',
+        r.type,
+        r.releaseDate,
+        r.isrc || '',
+        r.upc || '',
+        r.status,
+        r.primaryMarket || '',
+        r.secondaryMarket || '',
+        r.licenseExpiration || '',
+        r.hasVideo ? 'Yes' : 'No',
+        (r.collaborators || []).map(c => c.name + ' (' + c.role + ', ' + c.splitPercent + '%)').join('; '),
+        r.enteredBy || '',
+      ])} />
+
+      <div className="flex justify-end gap-1 mb-4">
+        <SegmentedToggle options={[{ id: 'grid', label: 'Grid' }, { id: 'table', label: 'Table' }, { id: 'pipeline', label: 'Pipeline' }]} value={view} onChange={setView} />
+      </div>
+
+      {view === 'pipeline' && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, minmax(220px, 1fr))', overflowX: 'auto' }}>
+          {RELEASE_STATUSES.map(status => {
+            const inStage = sorted.filter(r => r.status === status);
+            return (
+              <div key={status} className="rounded border p-3" style={{ background: C.panel, borderColor: C.border, minWidth: 220 }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs" style={{ color: C.textFaint, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{status}</div>
+                  <Badge>{inStage.length}</Badge>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {inStage.length === 0 ? (
+                    <div className="text-xs" style={{ color: C.textFaint }}>Nothing here</div>
+                  ) : inStage.map(r => {
+                    const prog = checklistProgress(r.checklist);
+                    const artist = artistMap[r.artistId];
+                    const nextIdx = RELEASE_STATUSES.indexOf(status) + 1;
+                    const nextStatus = RELEASE_STATUSES[nextIdx];
+                    return (
+                      <div key={r.id} className="rounded border p-2" style={{ background: C.bg, borderColor: C.border }}>
+                        <div className="flex items-center gap-2">
+                          <ArtworkThumb release={r} size={28} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                            <div className="text-xs" style={{ color: C.textFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artist ? artist.name : 'Unknown'}</div>
+                          </div>
+                        </div>
+                        {prog.total > 0 && (
+                          <div className="mt-2">
+                            <div className="rounded-full overflow-hidden" style={{ height: 3, background: C.panel2 }}>
+                              <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
+                            </div>
+                          </div>
+                        )}
+                        {missingRequiredDocs(r.distributionDocs) > 0 && (
+                          <div className="text-xs mt-1.5" style={{ color: C.red }}>{missingRequiredDocs(r.distributionDocs)} doc{missingRequiredDocs(r.distributionDocs) === 1 ? '' : 's'} missing</div>
+                        )}
+                        {canEdit && nextStatus && (
+                          <button onClick={() => {
+                            const missing = missingRequiredDocs(r.distributionDocs);
+                            if (missing > 0 && (nextStatus === 'Upcoming' || nextStatus === 'Released') && !window.confirm(r.title + ' still has ' + missing + ' required distribution document(s) missing. Move to ' + nextStatus + ' anyway?')) return;
+                            moveStatus(r, nextStatus);
+                          }} className="text-xs mt-2 inline-flex items-center gap-1" style={{ color: C.amber }}>
+                            Move to {nextStatus} <ChevronRight size={11} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {view !== 'pipeline' && (sorted.length === 0 ? (
+        <EmptyState icon={Disc3} title={filtersActive ? 'No matching releases' : 'No releases yet'} description={filtersActive ? 'Try a different filter or search term.' : 'Add a single, EP, or album to start building the catalog.'} />
+      ) : view === 'grid' ? (
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
+          {sorted.map(r => {
+            const lic = r.licenseExpiration ? expirationStatus(r.licenseExpiration) : null;
+            const prog = checklistProgress(r.checklist);
+            return (
+              <button key={r.id} onClick={() => canEdit && openEdit(r)} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
+                <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
+                  <ArtworkThumb release={r} size="100%" radius={0} />
+                  {r.status !== 'Released' && prog.total > 0 && (
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'rgba(0,0,0,0.45)' }}>
+                      <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
+                    </div>
+                  )}
+                </div>
+                <div className="p-3">
+                  <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(r.releaseDate)}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, marginTop: 2 }}>{r.title}</div>
+                  <div style={{ fontStyle: 'italic', fontSize: 13, color: C.textDim, marginTop: 1 }}>
+                    {[artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown', ...(r.primaryArtists || [])].join(' & ')}
+                    {r.collaborators && r.collaborators.length > 0 && ' feat. ' + r.collaborators.map(c => c.name).join(', ')}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <Badge tone={releaseStatusTone(r.status)}>{r.status}</Badge>
+                    <Badge>{r.type}</Badge>
+                    {r.hasVideo && <Badge><Video size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />Video</Badge>}
+                    {lic && lic.label !== 'Active' && <Badge tone={lic.tone}>License {lic.label.toLowerCase()}</Badge>}
+                  </div>
+                  {(r.primaryMarket || r.secondaryMarket) && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {r.primaryMarket && <Badge tone="teal"><Globe size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{r.primaryMarket}</Badge>}
+                      {r.secondaryMarket && <Badge>+ {r.secondaryMarket}</Badge>}
+                    </div>
+                  )}
+                  {r.status !== 'Released' && prog.total > 0 && (
+                    <div className="text-xs mt-1.5" style={{ color: C.textFaint }}>{prog.done}/{prog.total} production tasks</div>
+                  )}
+                  {r.status !== 'Released' && missingRequiredDocs(r.distributionDocs) > 0 && (
+                    <div className="text-xs mt-1.5" style={{ color: C.red }}>{missingRequiredDocs(r.distributionDocs)} required doc{missingRequiredDocs(r.distributionDocs) === 1 ? '' : 's'} missing</div>
+                  )}
+                  {r.enteredBy && <div className="text-xs mt-1.5" style={{ color: C.textFaint }}>Entered by {r.enteredBy}</div>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 820 }}>
+            <thead><tr><Th></Th><Th>Product</Th><Th>Artist</Th><Th>Type</Th><Th>Market</Th><Th>Release date</Th><Th>Codes</Th><Th>Status</Th><Th>License</Th><Th align="right">Actions</Th></tr></thead>
+            <tbody>
+              {sorted.map(r => (
+                <tr key={r.id}>
+                  <Td><ArtworkThumb release={r} size={36} /></Td>
+                  <Td>{r.title}{r.collaborators && r.collaborators.length > 0 && <div className="text-xs" style={{ color: C.textFaint }}>feat. {r.collaborators.map(c => c.name).join(', ')}</div>}</Td>
+                  <Td>{artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown'}</Td>
+                  <Td>{r.type}{r.hasVideo && <Video size={12} style={{ display: 'inline', marginLeft: 5, verticalAlign: 'middle', color: C.textFaint }} />}</Td>
+                  <Td>{r.primaryMarket || '—'}{r.secondaryMarket && <div className="text-xs" style={{ color: C.textFaint }}>+ {r.secondaryMarket}</div>}</Td>
+                  <Td mono>{formatDate(r.releaseDate)}</Td>
+                  <Td mono>
+                    {!r.isrc && !r.upc ? '—' : (
+                      <div style={{ lineHeight: 1.5 }}>
+                        {r.isrc && <div>{r.isrc}</div>}
+                        {r.upc && <div style={{ color: C.textFaint }}>{r.upc}</div>}
+                      </div>
+                    )}
+                  </Td>
+                  <Td><Badge tone={releaseStatusTone(r.status)}>{r.status}</Badge></Td>
+                  <Td>
+                    {!r.licenseExpiration ? <span style={{ color: C.textFaint }}>—</span> : (
+                      <div style={{ lineHeight: 1.5 }}>
+                        <div style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{formatDate(r.licenseExpiration)}</div>
+                        <Badge tone={expirationStatus(r.licenseExpiration).tone}>{expirationStatus(r.licenseExpiration).label}</Badge>
+                      </div>
+                    )}
+                  </Td>
+                  <Td align="right">
+                    {confirmId === r.id ? <ConfirmInline onConfirm={() => remove(r.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
+                      <span className="inline-flex gap-3 justify-end">
+                        <button onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                        <button onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                      </span>
+                    ) : <span style={{ color: C.textFaint }}>—</span>}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RevenueSection({ revenue, update, roster, canEdit = true, isAdmin = false, sessionName = '' }) {
+  const empty = { artist: roster[0] ? roster[0].name : '', title: '', month: todayStr().slice(0, 7), earning: '', type: RELEASE_TYPES[0], epAlbum: '', releaseDate: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+  const [filters, setFilters] = useState({ startMonth: '', endMonth: '', artist: 'all', search: '' });
+
+  function openAdd() { setForm(empty); setEditing(null); setShowForm(true); }
+  function openEdit(r) { setForm({ artist: r.artist, title: r.title, month: r.month, earning: String(r.earning), type: r.type || RELEASE_TYPES[0], epAlbum: r.epAlbum || '', releaseDate: r.releaseDate || '' }); setEditing(r.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function save(e) {
+    e.preventDefault();
+    const earning = Number(form.earning);
+    if (!form.artist || !form.title.trim() || !form.month || !earning || earning <= 0) return;
+    const artistSlug = slug(form.artist);
+    const id = editing || (artistSlug + '_' + slug(form.title) + '_' + form.month);
+    const approvalStatus = isAdmin ? 'Approved' : 'Pending';
+    const payload = { id, artist: form.artist, artistSlug, title: form.title.trim(), month: form.month, earning, type: form.type, epAlbum: form.epAlbum.trim() || null, releaseDate: form.releaseDate || null, approvalStatus, approvedBy: isAdmin ? sessionName : '', approvedAt: isAdmin ? todayStr() : '' };
+    if (editing) update(revenue.map(r => r.id === editing ? { ...r, ...payload, id: editing } : r));
+    else update([...revenue.filter(r => r.id !== id), payload]);
+    closeForm();
+  }
+  function remove(id) { update(revenue.filter(r => r.id !== id)); setConfirmId(null); }
+  function approveEntry(id) { update(revenue.map(r => r.id === id ? { ...r, approvalStatus: 'Approved', approvedBy: sessionName, approvedAt: todayStr() } : r)); }
+  function rejectEntry(id) { update(revenue.map(r => r.id === id ? { ...r, approvalStatus: 'Rejected', approvedBy: sessionName, approvedAt: todayStr() } : r)); }
+  // The month range applies on Generate; artist and search stay live so the
+  // management table is still quick to scan.
+  const [appliedMonths, setAppliedMonths] = useState({ startMonth: '', endMonth: '' });
+  const [rangeError, setRangeError] = useState('');
+  function resetFilters() { setFilters({ startMonth: '', endMonth: '', artist: 'all', search: '' }); setAppliedMonths({ startMonth: '', endMonth: '' }); setRangeError(''); }
+  function applyMonths() {
+    if (filters.startMonth && filters.endMonth && filters.startMonth > filters.endMonth) {
+      setRangeError('The start month has to come before the end month.');
+      return;
+    }
+    setRangeError('');
+    setAppliedMonths({ startMonth: filters.startMonth, endMonth: filters.endMonth });
+  }
+
+  const filtered = useMemo(() => {
+    const q = filters.search.trim().toLowerCase();
+    return revenue.filter(r => {
+      if (appliedMonths.startMonth && r.month < appliedMonths.startMonth) return false;
+      if (appliedMonths.endMonth && r.month > appliedMonths.endMonth) return false;
+      if (filters.artist !== 'all' && r.artistSlug !== filters.artist) return false;
+      if (!q) return true;
+      return (r.title && r.title.toLowerCase().includes(q)) || (r.artist && r.artist.toLowerCase().includes(q));
+    });
+  }, [revenue, filters, appliedMonths]);
+
+  function exportCsv() {
+    exportRowsToCsv('revenue-export', ['Artist', 'Title', 'Month', 'Earning', 'Type', 'EP/Album', 'Release date', 'Status'],
+      [...filtered].sort((a, b) => b.month.localeCompare(a.month)).map(r => [r.artist, r.title, r.month, r.earning, r.type || '', r.epAlbum || '', r.releaseDate || '', r.approvalStatus || 'Approved']));
+  }
+
+  const sorted = [...filtered].sort((a, b) => b.month.localeCompare(a.month) || a.artist.localeCompare(b.artist));
+  const total = filtered.reduce((s, r) => s + r.earning, 0);
+  const pendingCount = revenue.filter(r => r.approvalStatus === 'Pending').length;
+  const filtersActive = !!(appliedMonths.startMonth || appliedMonths.endMonth || filters.artist !== 'all' || filters.search);
+
+  return (
+    <div>
+      <SectionHeader title="Revenue" description="One row per track per month — the source of truth every finance calculation is built from." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add revenue</Btn>} />
+
+      {!isAdmin && pendingCount > 0 && (
+        <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          {pendingCount} {pendingCount === 1 ? 'entry is' : 'entries are'} waiting on admin approval and excluded from totals until approved.
+        </div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3 mb-3">
+          <Field label="Start month"><Input type="month" value={filters.startMonth} onChange={e => { setFilters({ ...filters, startMonth: e.target.value }); setRangeError(''); }} /></Field>
+          <Field label="End month"><Input type="month" value={filters.endMonth} onChange={e => { setFilters({ ...filters, endMonth: e.target.value }); setRangeError(''); }} /></Field>
+          <Field label="Artist">
+            <Select value={filters.artist} onChange={e => setFilters({ ...filters, artist: e.target.value })}>
+              <option value="all">All artists</option>
+              {roster.map(a => <option key={a.id} value={slug(a.name)}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Search"><Input value={filters.search} onChange={e => setFilters({ ...filters, search: e.target.value })} placeholder="Track title or artist" /></Field>
+        </div>
+        {rangeError && (
+          <div className="rounded px-3 py-2 text-xs mb-3" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{rangeError}</div>
+        )}
+        <div className="flex gap-2 flex-wrap">
+          <Btn variant="primary" onClick={applyMonths}><FileText size={14} /> Generate</Btn>
+          <Btn variant="ghost" onClick={exportCsv}><Download size={14} /> Export to CSV</Btn>
+          <Btn variant="ghost" onClick={resetFilters}>Reset</Btn>
+        </div>
+        {filtersActive && <div className="text-xs mt-2" style={{ color: C.textFaint }}>Showing {filtered.length} of {revenue.length} entries</div>}
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={DollarSign} label="Total revenue (filtered)" value={formatCurrency(total)} tone="teal" />
+        <KPICard icon={ClipboardList} label="Pending approval" value={pendingCount} tone={pendingCount ? 'amber' : undefined} />
+      </div>
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Artist">
+            <Select value={form.artist} onChange={e => setForm({ ...form, artist: e.target.value })}>
+              {roster.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Track title"><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></Field>
+          <Field label="Month"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} /></Field>
+          <Field label="Earning (gross, USD)"><Input type="number" min="0" step="0.01" required value={form.earning} onChange={e => setForm({ ...form, earning: e.target.value })} /></Field>
+          <Field label="Type">
+            <Select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+              {RELEASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </Field>
+          <Field label="Parent EP/Album (optional)"><Input value={form.epAlbum} onChange={e => setForm({ ...form, epAlbum: e.target.value })} /></Field>
+          <Field label="Original release date (optional)"><Input type="date" value={form.releaseDate} onChange={e => setForm({ ...form, releaseDate: e.target.value })} /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add revenue'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      {sorted.length === 0 ? (
+        <EmptyState icon={DollarSign} title={filtersActive ? 'No matching revenue' : 'No revenue recorded'} description={filtersActive ? 'Try widening the filters.' : 'Log a track/month earning to get started.'} />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 760 }}>
+            <thead><tr><Th>Month</Th><Th>Artist</Th><Th>Track</Th><Th>Type</Th><Th align="right">Earning</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
+            <tbody>
+              {sorted.map(r => (
+                <tr key={r.id}>
+                  <Td mono>{r.month}</Td>
+                  <Td>{r.artist}</Td>
+                  <Td>{r.title}{r.epAlbum ? <span style={{ color: C.textFaint }}> · {r.epAlbum}</span> : ''}</Td>
+                  <Td><Badge>{r.type || '—'}</Badge></Td>
+                  <Td align="right" mono>{formatCurrency(r.earning)}</Td>
+                  <Td><Badge tone={r.approvalStatus === 'Pending' ? 'amber' : r.approvalStatus === 'Rejected' ? 'red' : 'teal'}>{r.approvalStatus || 'Approved'}</Badge></Td>
+                  <Td align="right">
+                    {confirmId === r.id ? <ConfirmInline onConfirm={() => remove(r.id)} onCancel={() => setConfirmId(null)} /> : (
+                      <span className="inline-flex gap-3 justify-end items-center">
+                        {isAdmin && r.approvalStatus === 'Pending' && (
+                          <>
+                            <button onClick={() => approveEntry(r.id)} style={{ color: C.teal }}><CheckCircle2 size={14} /></button>
+                            <button onClick={() => rejectEntry(r.id)} style={{ color: C.red }}><Trash2 size={14} /></button>
+                          </>
+                        )}
+                        {canEdit && <button onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>}
+                        {canEdit && <button onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>}
+                      </span>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StreamsSection({ streams, update, catalog, releaseMap, artistMap, canEdit = true }) {
+  const empty = { date: todayStr(), platform: 'Spotify', releaseId: catalog[0] ? catalog[0].id : '', count: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+  const [filters, setFilters] = useState({ startDate: '', endDate: '', product: 'all', search: '' });
+  const [view, setView] = useState('leaderboard');
+  const allMonths = useMemo(() => Array.from(new Set(streams.map(s => monthKey(s.date)))).sort(), [streams]);
+  const [leaderboardMonth, setLeaderboardMonth] = useState('');
+
+  function openAdd() { setForm({ ...empty, releaseId: catalog[0] ? catalog[0].id : '' }); setEditing(null); setShowForm(true); }
+  function openEdit(s) { setForm({ ...s, count: String(s.count) }); setEditing(s.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function save(e) {
+    e.preventDefault();
+    const cnt = Number(form.count);
+    if (!cnt || cnt < 0 || !form.releaseId) return;
+    const payload = { ...form, count: cnt };
+    if (editing) update(streams.map(s => s.id === editing ? { ...payload, id: editing } : s));
+    else update([...streams, { ...payload, id: uid() }]);
+    closeForm();
+  }
+  function remove(id) { update(streams.filter(s => s.id !== id)); setConfirmId(null); }
+  // Date range applies on Generate; product and search stay live.
+  const [appliedRange, setAppliedRange] = useState({ startDate: '', endDate: '' });
+  const [rangeError, setRangeError] = useState('');
+  function resetFilters() { setFilters({ startDate: '', endDate: '', product: 'all', search: '' }); setAppliedRange({ startDate: '', endDate: '' }); setRangeError(''); }
+  function applyRange() {
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+      setRangeError('The "from" date has to come before the "to" date.');
+      return;
+    }
+    setRangeError('');
+    setAppliedRange({ startDate: filters.startDate, endDate: filters.endDate });
+  }
+
+  const filtered = useMemo(() => {
+    const q = filters.search.trim().toLowerCase();
+    return streams.filter(s => {
+      if (appliedRange.startDate && s.date < appliedRange.startDate) return false;
+      if (appliedRange.endDate && s.date > appliedRange.endDate) return false;
+      if (filters.product !== 'all' && s.releaseId !== filters.product) return false;
+      if (!q) return true;
+      const rel = releaseMap[s.releaseId];
+      if (!rel) return false;
+      const artist = artistMap[rel.artistId];
+      return (
+        (rel.title && rel.title.toLowerCase().includes(q)) ||
+        (rel.upc && rel.upc.toLowerCase().includes(q)) ||
+        (rel.isrc && rel.isrc.toLowerCase().includes(q)) ||
+        (artist && artist.name.toLowerCase().includes(q))
+      );
+    });
+  }, [streams, filters, appliedRange, releaseMap, artistMap]);
+
+  function exportCsv() {
+    const rows = [['Date', 'Platform', 'Product', 'Artist', 'UPC', 'ISRC', 'Streams']];
+    [...filtered].sort((a, b) => (b.date || '').localeCompare(a.date || '')).forEach(s => {
+      const rel = releaseMap[s.releaseId];
+      const artist = rel && artistMap[rel.artistId] ? artistMap[rel.artistId].name : '';
+      rows.push([s.date, s.platform, rel ? rel.title : '', artist, rel ? (rel.upc || '') : '', rel ? (rel.isrc || '') : '', String(s.count)]);
+    });
+    const csv = rows.map(r => r.map(v => (/[",\n]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : v)).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'streams-export.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  const sorted = [...filtered].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const totalsByPlatform = useMemo(() => {
+    const map = {};
+    filtered.forEach(s => { map[s.platform] = (map[s.platform] || 0) + s.count; });
+    return PLATFORMS.map(p => ({ platform: p, value: map[p] || 0 })).filter(x => x.value > 0);
+  }, [filtered]);
+  const trend = useMemo(() => {
+    const map = {};
+    filtered.forEach(s => { const k = monthKey(s.date); map[k] = (map[k] || 0) + s.count; });
+    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
+  }, [filtered]);
+  const total = filtered.reduce((s, r) => s + r.count, 0);
+  const filtersActive = !!(appliedRange.startDate || appliedRange.endDate || filters.product !== 'all' || filters.search);
+
+  const currentMonth = leaderboardMonth || allMonths[allMonths.length - 1] || '';
+  const currentMonthIdx = allMonths.indexOf(currentMonth);
+  const previousMonth = currentMonthIdx > 0 ? allMonths[currentMonthIdx - 1] : '';
+  const leaderboard = useMemo(() => computePlatformLeaderboard(streams, releaseMap, artistMap, currentMonth, previousMonth, 5), [streams, releaseMap, artistMap, currentMonth, previousMonth]);
+  const grandTotal = leaderboard.reduce((s, p) => s + p.totalCurrent, 0);
+
+  const VIEWS = [
+    { id: 'leaderboard', label: 'Platform leaderboard' },
+    { id: 'trend', label: 'Trend' },
+    { id: 'log', label: 'Entry log', count: sorted.length },
+  ];
+
+  return (
+    <div>
+      <SectionHeader title="Streams" description="Track stream counts by platform and product over time." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3 mb-3">
+          <Field label="Start date"><Input type="date" value={filters.startDate} onChange={e => { setFilters({ ...filters, startDate: e.target.value }); setRangeError(''); }} /></Field>
+          <Field label="End date"><Input type="date" value={filters.endDate} onChange={e => { setFilters({ ...filters, endDate: e.target.value }); setRangeError(''); }} /></Field>
+          <Field label="Product">
+            <Select value={filters.product} onChange={e => setFilters({ ...filters, product: e.target.value })}>
+              <option value="all">All products</option>
+              {[...catalog].sort((a, b) => a.title.localeCompare(b.title)).map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </Select>
+          </Field>
+          <Field label="Search" full><Input value={filters.search} onChange={e => setFilters({ ...filters, search: e.target.value })} placeholder="Product, UPC, ISRC, or artist" /></Field>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Btn variant="primary" onClick={applyRange}><FileText size={14} /> Generate</Btn>
+          <Btn variant="ghost" onClick={exportCsv}><Download size={14} /> Export to CSV</Btn>
+          <Btn variant="ghost" onClick={resetFilters}>Reset</Btn>
+        </div>
+        {filtersActive && <div className="text-xs mt-2" style={{ color: C.textFaint }}>Showing {filtered.length} of {streams.length} entries</div>}
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={Radio} label="Total streams" value={formatNumber(total)} tone="teal" />
+        {totalsByPlatform.slice(0, 3).map(t => (<KPICard key={t.platform} icon={Radio} label={t.platform} value={formatNumber(t.value)} />))}
+      </div>
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Date"><Input type="date" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+          <Field label="Platform">
+            <Select value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}>
+              {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
+          </Field>
+          <Field label="Product" full>
+            <Select value={form.releaseId} onChange={e => setForm({ ...form, releaseId: e.target.value })}>
+              {catalog.map(r => <option key={r.id} value={r.id}>{trackOptionLabel(r, true, artistMap[r.artistId] ? artistMap[r.artistId].name : null)}</option>)}
+            </Select>
+          </Field>
+          <Field label="Stream count"><Input type="number" min="0" required value={form.count} onChange={e => setForm({ ...form, count: e.target.value })} /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Log streams'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      {catalog.length === 0 && <div className="text-sm mb-4" style={{ color: C.textDim }}>Add a release to the catalog before logging streams.</div>}
+
+      <div className="flex gap-1 mb-4 flex-wrap border-b" style={{ borderColor: C.border }}>
+        {VIEWS.map(v => (
+          <button key={v.id} onClick={() => setView(v.id)}
+            className="text-sm px-3 py-2 inline-flex items-center gap-1.5"
+            style={{
+              color: view === v.id ? C.amber : C.textDim,
+              fontWeight: view === v.id ? 600 : 500,
+              borderBottom: '2px solid ' + (view === v.id ? C.amber : 'transparent'),
+              marginBottom: -1,
+            }}>
+            {v.label}
+            {v.count !== undefined && <span className="text-xs" style={{ color: C.textFaint, fontFamily: MONO_FONT }}>{v.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {view === 'leaderboard' && (
+        allMonths.length === 0 ? (
+          <EmptyState icon={Radio} title="No stream data yet" description="Log platform stream counts to see the leaderboard." />
+        ) : (
+          <div>
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+              <div style={{ maxWidth: 220 }}>
+                <Select value={currentMonth} onChange={e => setLeaderboardMonth(e.target.value)}>
+                  {allMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                </Select>
+              </div>
+              <div className="text-sm" style={{ color: C.textDim }}>
+                <span style={{ fontFamily: MONO_FONT, color: C.text, fontWeight: 600 }}>{formatNumber(grandTotal)}</span> total streams this period
+                {!previousMonth && <span style={{ color: C.textFaint }}> · no prior month to compare against</span>}
+              </div>
+            </div>
+            <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+              <table className="w-full" style={{ minWidth: 900 }}>
+                <thead>
+                  <tr>
+                    <Th>Rank</Th>
+                    {leaderboard.map(p => <Th key={p.platform}>{p.platform}</Th>)}
+                  </tr>
+                  <tr>
+                    <Th align="right">Total</Th>
+                    {leaderboard.map(p => (
+                      <Th key={p.platform}>
+                        {!p.hasData ? <span style={{ color: C.red, fontWeight: 500 }}>Missing reports</span> : (
+                          <span style={{ fontFamily: MONO_FONT, fontWeight: 600, color: C.text }}>
+                            {formatNumber(p.totalCurrent)}
+                            {p.totalPctChange !== null && (
+                              <span style={{ color: p.totalPctChange >= 0 ? C.teal : C.red, marginLeft: 6, fontWeight: 500 }}>
+                                {p.totalPctChange >= 0 ? '+' : ''}{p.totalPctChange.toFixed(1)}%
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </Th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[0, 1, 2, 3, 4].map(rankIdx => (
+                    <tr key={rankIdx}>
+                      <Td mono align="right">{rankIdx + 1}</Td>
+                      {leaderboard.map(p => {
+                        const row = p.rows[rankIdx];
+                        return (
+                          <Td key={p.platform}>
+                            {!row ? <span style={{ color: C.textFaint }}>—</span> : (
+                              <div style={{ lineHeight: 1.5 }}>
+                                <div style={{ fontWeight: 500 }}>{row.title}</div>
+                                <div className="text-xs" style={{ color: C.textFaint }}>{row.artistName}</div>
+                                <div className="text-xs" style={{ fontFamily: MONO_FONT }}>
+                                  {formatNumber(row.count)} streams
+                                  {row.pctChange !== null && (
+                                    <span style={{ color: row.pctChange >= 0 ? C.teal : C.red, marginLeft: 6 }}>
+                                      {row.pctChange >= 0 ? '+' : ''}{row.pctChange.toFixed(1)}%
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs" style={{ color: C.textFaint }}>Previous: {row.prevRank ? '#' + row.prevRank : 'N/A'}</div>
+                              </div>
+                            )}
+                          </Td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      )}
+
+      {view === 'trend' && (
+        trend.length === 0 ? (
+          <EmptyState icon={Radio} title={filtersActive ? 'No matching streams' : 'No stream data yet'} description={filtersActive ? 'Try widening the date range or clearing the search.' : 'Log platform stream counts to see trends over time.'} />
+        ) : (
+          <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="text-xs mb-3" style={{ color: C.textFaint }}>Streams by month</div>
+            <div style={{ height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                  <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? Math.round(v / 1000) + 'k' : v} />
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Line type="monotone" dataKey="value" stroke={C.teal} strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )
+      )}
+
+      {view === 'log' && (
+        sorted.length === 0 ? (
+          <EmptyState icon={Radio} title={filtersActive ? 'No matching streams' : 'No stream data yet'} description={filtersActive ? 'Try widening the date range or clearing the search.' : 'Log platform stream counts to see them here.'} />
+        ) : (
+          <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+            <table className="w-full" style={{ minWidth: 640 }}>
+              <thead><tr><Th>Date</Th><Th>Platform</Th><Th>Product</Th><Th>Artist</Th><Th align="right">Streams</Th><Th align="right">Actions</Th></tr></thead>
+              <tbody>
+                {sorted.map(s => {
+                  const rel = releaseMap[s.releaseId];
+                  return (
+                    <tr key={s.id}>
+                      <Td mono>{formatDate(s.date)}</Td>
+                      <Td><Badge tone="teal">{s.platform}</Badge></Td>
+                      <Td>{rel ? rel.title : 'Unknown'}</Td>
+                      <Td>{rel && artistMap[rel.artistId] ? artistMap[rel.artistId].name : '—'}</Td>
+                      <Td align="right" mono>{formatNumber(s.count)}</Td>
+                      <Td align="right">
+                        {confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
+                          <span className="inline-flex gap-3 justify-end">
+                            <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                            <button onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                          </span>
+                        ) : <span style={{ color: C.textFaint }}>—</span>}
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
+  const today = todayStr();
+  const [calMonth, setCalMonth] = useState(todayStr().slice(0, 7));
+  const [filterArtist, setFilterArtist] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedId, setSelectedId] = useState(null);
+
+  function shiftMonth(delta) {
+    const [y, m] = calMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setCalMonth(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  function goToday() { setCalMonth(todayStr().slice(0, 7)); }
+
+  const filtered = catalog.filter(c => {
+    if (filterArtist !== 'all' && c.artistId !== filterArtist) return false;
+    if (filterStatus !== 'all' && c.status !== filterStatus) return false;
+    return true;
+  });
+
+  const [year, monthNum] = calMonth.split('-').map(Number);
+  const firstOfMonth = new Date(year, monthNum - 1, 1);
+  const startWeekday = firstOfMonth.getDay();
+  const totalDays = new Date(year, monthNum, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= totalDays; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const releasesByDay = useMemo(() => {
+    const map = {};
+    filtered.forEach(r => {
+      if (!r.releaseDate || monthKey(r.releaseDate) !== calMonth) return;
+      const day = parseInt(r.releaseDate.slice(8, 10), 10);
+      map[day] = map[day] || [];
+      map[day].push(r);
+    });
+    return map;
+  }, [filtered, calMonth]);
+
+  const otherEventsByDay = useMemo(() => {
+    const map = {};
+    function add(dateStr, tone) {
+      if (!dateStr || monthKey(dateStr) !== calMonth) return;
+      const day = parseInt(dateStr.slice(8, 10), 10);
+      map[day] = map[day] || [];
+      map[day].push(tone);
+    }
+    tasks.forEach(t => { if (t.status === 'Open') add(t.dueDate, 'task'); });
+    roster.forEach(a => { if (a.contractExpiration) add(a.contractExpiration, 'contract'); });
+    catalog.forEach(c => { if (c.licenseExpiration) add(c.licenseExpiration, 'license'); });
+    return map;
+  }, [tasks, roster, catalog, calMonth]);
+
+  const alsoComingUp = useMemo(() => {
+    const items = [];
+    tasks.forEach(t => {
+      if (t.status !== 'Open' || !t.dueDate || t.dueDate < today) return;
+      items.push({ id: 'task-' + t.id, type: 'Task', tone: 'amber', label: t.title, sub: t.assignee, date: t.dueDate });
+    });
+    roster.forEach(a => {
+      if (!a.contractExpiration || a.contractExpiration < today) return;
+      const st = expirationStatus(a.contractExpiration);
+      if (st.label === 'Active') return;
+      items.push({ id: 'contract-' + a.id, type: 'Contract', tone: st.tone, label: a.name + "'s contract", sub: st.label, date: a.contractExpiration });
+    });
+    catalog.forEach(c => {
+      if (!c.licenseExpiration || c.licenseExpiration < today) return;
+      const st = expirationStatus(c.licenseExpiration);
+      if (st.label === 'Active') return;
+      items.push({ id: 'license-' + c.id, type: 'License', tone: st.tone, label: c.title + ' license', sub: st.label, date: c.licenseExpiration });
+    });
+    return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+  }, [tasks, roster, catalog, today]);
+
+  const upcoming = useMemo(() => {
+    return filtered.filter(r => r.releaseDate && r.releaseDate >= today).sort((a, b) => a.releaseDate.localeCompare(b.releaseDate)).slice(0, 8);
+  }, [filtered, today]);
+
+  const selected = selectedId ? catalog.find(r => r.id === selectedId) || null : null;
+
+  const monthLabelText = firstOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const releasesThisMonth = filtered.filter(r => r.releaseDate && monthKey(r.releaseDate) === calMonth).length;
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return (
+    <div>
+      <SectionHeader title="Release Calendar" description="Every release plotted on the calendar, plus what's coming up next — your release radar. Click any release to see the full details." />
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="Artist">
+            <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
+              <option value="all">All artists</option>
+              {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">All statuses</option>
+              {RELEASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={Disc3} label="Releases this month" value={releasesThisMonth} />
+        <KPICard icon={Calendar} label="Upcoming releases" value={upcoming.length} tone="amber" />
+      </div>
+
+      {selected && (
+        <div className="rounded border p-4 mb-6 flex items-start gap-4 flex-wrap" style={{ background: C.panel, borderColor: C.amber }}>
+          <ArtworkThumb release={selected} size={72} radius={8} />
+          <div style={{ minWidth: 200, flex: 1 }}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div style={{ fontWeight: 600, fontSize: 16 }}>{selected.title}</div>
+              <button onClick={() => setSelectedId(null)} className="text-xs" style={{ color: C.textFaint }}>Close</button>
+            </div>
+            <div className="text-sm mb-2" style={{ color: C.textDim }}>{artistMap[selected.artistId] ? artistMap[selected.artistId].name : 'Unknown artist'}</div>
+            <div className="flex items-center gap-1.5 flex-wrap mb-3">
+              <Badge>{selected.type}</Badge>
+              <Badge tone={releaseStatusTone(selected.status)}>{selected.status}</Badge>
+              {selected.hasVideo && <Badge tone="default"><Video size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />Video</Badge>}
+              {selected.licenseExpiration && <Badge tone={expirationStatus(selected.licenseExpiration).tone}>License {expirationStatus(selected.licenseExpiration).label.toLowerCase()}</Badge>}
+            </div>
+            <div className="text-xs" style={{ color: C.textFaint, lineHeight: 1.7 }}>
+              <div>Release date: <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatDate(selected.releaseDate)}</span></div>
+              {selected.upc && <div>UPC: <span style={{ color: C.text, fontFamily: MONO_FONT }}>{selected.upc}</span></div>}
+              {selected.isrc && <div>ISRC: <span style={{ color: C.text, fontFamily: MONO_FONT }}>{selected.isrc}</span></div>}
+              {selected.licenseExpiration && <div>License expires: <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatDate(selected.licenseExpiration)}</span></div>}
+              <div>Entered by: <span style={{ color: C.text }}>{selected.enteredBy || 'Unknown'}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => shiftMonth(-1)} style={{ color: C.textDim }}><ChevronLeft size={18} /></button>
+          <div className="flex items-center gap-3">
+            <div style={{ fontWeight: 600 }}>{monthLabelText}</div>
+            <button onClick={goToday} className="text-xs px-2 py-1 rounded" style={{ border: '1px solid ' + C.border, color: C.textFaint }}>Today</button>
+          </div>
+          <button onClick={() => shiftMonth(1)} style={{ color: C.textDim }}><ChevronRight size={18} /></button>
+        </div>
+        <div className="flex items-center gap-3 mb-3 text-xs" style={{ color: C.textFaint }}>
+          <span className="flex items-center gap-1"><span style={{ width: 5, height: 5, borderRadius: 9999, background: C.amber, display: 'inline-block' }}></span> Task due</span>
+          <span className="flex items-center gap-1"><span style={{ width: 5, height: 5, borderRadius: 9999, background: C.red, display: 'inline-block' }}></span> Contract or license expiring</span>
+        </div>
+        <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {WEEKDAYS.map(w => <div key={w} className="text-center text-xs" style={{ color: C.textFaint, padding: '4px 0' }}>{w}</div>)}
+        </div>
+        <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {cells.map((day, i) => {
+            const dateStr = day ? calMonth + '-' + String(day).padStart(2, '0') : null;
+            const isToday = dateStr === today;
+            const dayReleases = day ? (releasesByDay[day] || []) : [];
+            const dayEvents = day ? (otherEventsByDay[day] || []) : [];
+            return (
+              <div key={i} className="rounded" style={{ minHeight: 84, background: day ? C.bg : 'transparent', border: '1px solid ' + (day ? (isToday ? C.amber : C.border) : 'transparent'), padding: 5 }}>
+                {day && <div className="text-xs mb-1" style={{ color: isToday ? C.amber : C.textFaint, fontWeight: isToday ? 700 : 500 }}>{day}</div>}
+                {dayReleases.slice(0, 2).map(r => (
+                  <button key={r.id} onClick={() => setSelectedId(r.id)} className="flex items-center gap-1 mb-1 text-left w-full" style={{ background: selectedId === r.id ? C.amberSoft : 'transparent', borderRadius: 3, padding: '1px 2px' }}>
+                    <ArtworkThumb release={r} size={14} radius={3} />
+                    <span style={{ minWidth: 0, lineHeight: 1.25 }}>
+                      <span style={{ display: 'block', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: r.status === 'Released' ? C.teal : r.status === 'Processing' ? C.textFaint : C.amber }}>{r.title}</span>
+                      <span style={{ display: 'block', fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.textFaint }}>{artistMap[r.artistId] ? artistMap[r.artistId].name : ''}</span>
+                    </span>
+                  </button>
+                ))}
+                {dayReleases.length > 2 && <div className="text-xs" style={{ color: C.textFaint }}>+{dayReleases.length - 2} more</div>}
+                {dayEvents.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    {dayEvents.slice(0, 4).map((tone, di) => (
+                      <span key={di} style={{ width: 5, height: 5, borderRadius: 9999, background: tone === 'task' ? C.amber : C.red, flexShrink: 0 }}></span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="text-xs mb-3" style={{ color: C.textFaint }}>Up next</div>
+      {upcoming.length === 0 ? (
+        <EmptyState icon={Disc3} title="Nothing scheduled" description="Releases with a future date will show up here." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 560 }}>
+            <thead><tr><Th></Th><Th>Product</Th><Th>Artist</Th><Th>Date</Th><Th align="right">Days away</Th><Th>Status</Th></tr></thead>
+            <tbody>
+              {upcoming.map(r => {
+                const daysAway = Math.round((new Date(r.releaseDate) - new Date(today)) / 86400000);
+                return (
+                  <tr key={r.id} onClick={() => setSelectedId(r.id)} style={{ cursor: 'pointer', background: selectedId === r.id ? C.amberSoft : 'transparent' }}>
+                    <Td><ArtworkThumb release={r} size={32} /></Td>
+                    <Td>{r.title}</Td>
+                    <Td>{artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown'}</Td>
+                    <Td mono>{formatDate(r.releaseDate)}</Td>
+                    <Td align="right" mono>{daysAway === 0 ? 'Today' : daysAway + 'd'}</Td>
+                    <Td><Badge tone={releaseStatusTone(r.status)}>{r.status}</Badge></Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="text-xs mb-3 mt-6" style={{ color: C.textFaint }}>Also coming up</div>
+      {alsoComingUp.length === 0 ? (
+        <div className="text-sm" style={{ color: C.textDim }}>No open task due dates or expirations in the near term.</div>
+      ) : (
+        <div className="rounded border" style={{ borderColor: C.border, background: C.panel }}>
+          {alsoComingUp.map(item => (
+            <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid ' + C.border }}>
+              <div className="flex items-center gap-2">
+                <span style={{ width: 6, height: 6, borderRadius: 9999, background: item.tone === 'red' ? C.red : C.amber, flexShrink: 0 }}></span>
+                <div>
+                  <div className="text-sm">{item.label}</div>
+                  <div className="text-xs" style={{ color: C.textFaint }}>{item.type} · {item.sub}</div>
+                </div>
+              </div>
+              <div className="text-xs" style={{ color: C.textFaint, fontFamily: MONO_FONT }}>{formatDate(item.date)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MasterGrossSection({ masterGross, update, roster, revenue, labelSettings, updateLabelSettings, canEdit = true }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const empty = { month: todayStr().slice(0, 7), totalGross: '', swiftFee: String(labelSettings.swiftFee) };
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+  const [feeInput, setFeeInput] = useState(String(labelSettings.swiftFee));
+
+  function openAdd() { setForm({ ...empty, swiftFee: String(labelSettings.swiftFee) }); setEditing(null); setShowForm(true); }
+  function openEdit(g) { setForm({ month: g.month, totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function save(e) {
+    e.preventDefault();
+    const totalGross = Number(form.totalGross);
+    const swiftFee = Number(form.swiftFee);
+    if (!form.month || totalGross < 0 || swiftFee < 0) return;
+    const payload = { id: form.month, month: form.month, totalGross, swiftFee };
+    if (editing) update(masterGross.map(g => g.id === editing ? payload : g));
+    else update([...masterGross.filter(g => g.month !== form.month), payload]);
+    closeForm();
+  }
+  function remove(id) { update(masterGross.filter(g => g.id !== id)); setConfirmId(null); }
+  function saveFee(e) {
+    e.preventDefault();
+    const fee = Number(feeInput);
+    if (fee < 0) return;
+    updateLabelSettings({ ...labelSettings, swiftFee: fee });
+  }
+
+  const sorted = [...masterGross].sort((a, b) => b.month.localeCompare(a.month));
+  const totals = companyFinanceTotals(roster, revenue, masterGross);
+
+  return (
+    <div>
+      <SectionHeader title="Master Gross" description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat swift fee split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={DollarSign} label="Total gross (all months)" value={formatCurrency(totals.totalGross)} tone="teal" />
+        <KPICard icon={Wallet} label="Total swift fees" value={formatCurrency(totals.totalSwift)} />
+        <KPICard icon={TrendingUp} label="Tracked gross (revenue rows)" value={formatCurrency(totals.trackedGross)} />
+        <KPICard icon={ClipboardList} label="Untracked gap" value={formatCurrency(totals.untrackedGap)} tone={Math.abs(totals.untrackedGap) > 0.01 ? 'amber' : 'teal'} sub={Math.abs(totals.untrackedGap) > 0.01 ? 'Reconciliation flag, not an error' : 'Fully reconciled'} />
+      </div>
+
+      {canEdit && (
+        <form onSubmit={saveFee} className="rounded border p-4 mb-6 flex items-end gap-3 flex-wrap" style={{ background: C.panel, borderColor: C.border }}>
+          <Field label="Default swift fee for new months (USD)"><Input type="number" min="0" step="0.01" value={feeInput} onChange={e => setFeeInput(e.target.value)} style={{ maxWidth: 160 }} /></Field>
+          <Btn variant="ghost" type="submit">Save default</Btn>
+        </form>
+      )}
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Month"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} disabled={!!editing} /></Field>
+          <Field label="Total gross received (USD)"><Input type="number" min="0" step="0.01" required value={form.totalGross} onChange={e => setForm({ ...form, totalGross: e.target.value })} /></Field>
+          <Field label="Swift fee (USD)"><Input type="number" min="0" step="0.01" required value={form.swiftFee} onChange={e => setForm({ ...form, swiftFee: e.target.value })} /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Log month'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      {sorted.length === 0 ? (
+        <EmptyState icon={DollarSign} title="No months logged yet" description="Log the distributor's real gross and swift fee for a month to start splitting it across artists." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 620 }}>
+            <thead><tr><Th>Month</Th><Th align="right">Total gross</Th><Th align="right">Swift fee</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
+            <tbody>
+              {sorted.map(g => {
+                const trackedThisMonth = revByMonth(revenue)[g.month] || 0;
+                const gap = g.totalGross - trackedThisMonth;
+                return (
+                  <tr key={g.id}>
+                    <Td mono>{g.month}</Td>
+                    <Td align="right" mono>{formatCurrency(g.totalGross)}</Td>
+                    <Td align="right" mono>{formatCurrency(g.swiftFee)}</Td>
+                    <Td align="right" mono>{formatCurrency(g.totalGross - g.swiftFee)}</Td>
+                    <Td align="right" mono>{formatCurrency(trackedThisMonth)}{Math.abs(gap) > 0.01 && <span style={{ color: C.amber }}> ({gap > 0 ? '+' : ''}{formatCurrency(gap)})</span>}</Td>
+                    <Td align="right">
+                      {confirmId === g.id ? <ConfirmInline onConfirm={() => remove(g.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
+                        <span className="inline-flex gap-3 justify-end">
+                          <button onClick={() => openEdit(g)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button onClick={() => setConfirmId(g.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                        </span>
+                      ) : <span style={{ color: C.textFaint }}>—</span>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// `requireGenerate` gates the statement behind an explicit Generate click —
+// used by the artist portal, where an artist picks the period they want a
+// statement for. The team-side view leaves it off and stays live.
+function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false }) {
+  const [periodMode, setPeriodMode] = useState('all');
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
+  const [generated, setGenerated] = useState(null);
+  const [rangeError, setRangeError] = useState('');
+
+  const artistSlug = slug(artist.name);
+  const artistRevenue = useMemo(() => revenue.filter(r => r.artistSlug === artistSlug), [revenue, artistSlug]);
+  const availableMonths = useMemo(() => Array.from(new Set(artistRevenue.map(r => r.month))).sort().reverse(), [artistRevenue]);
+  const earliestMonth = availableMonths.length ? availableMonths[availableMonths.length - 1] : '';
+  const latestMonth = availableMonths.length ? availableMonths[0] : '';
+
+  // The period actually on screen. Gated: whatever was last generated.
+  // Ungated: follows the controls live, as before.
+  const shown = requireGenerate ? generated : { mode: periodMode, start: rangeStart, end: rangeEnd };
+
+  const monthsToShow = !shown ? []
+    : shown.mode === 'all'
+      ? availableMonths
+      : availableMonths.filter(m => (!shown.start || m >= shown.start) && (!shown.end || m <= shown.end));
+
+  const monthRows = monthsToShow.map(month => {
+    const tracks = artistRevenue.filter(r => r.month === month);
+    const gross = tracks.reduce((s, r) => s + r.earning, 0);
+    const swift = swiftShareFor(artistSlug, month, revenue, masterGross);
+    const net = gross - swift;
+    const artistShare = net * (artist.artistPct != null ? artist.artistPct : 0);
+    return { month, tracks, gross, swift, net, artistShare };
+  });
+
+  // Totals for the statement are summed from the rows on screen, so the
+  // headline figures always reconcile against the breakdown below them.
+  const periodTotals = monthRows.reduce((a, m) => ({
+    gross: a.gross + m.gross, swift: a.swift + m.swift, net: a.net + m.net, artistShare: a.artistShare + m.artistShare,
+  }), { gross: 0, swift: 0, net: 0, artistShare: 0 });
+
+  const lifetime = artistLifetime(artist, revenue, masterGross);
+  const recoupment = recoupmentForArtist(artist, ledger, revenue, masterGross);
+  const artistPayouts = (payouts || []).filter(p => p.artistSlug === artistSlug).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+
+  function periodLabel() {
+    if (!shown) return '';
+    if (shown.mode === 'all' || (!shown.start && !shown.end)) return 'All periods';
+    return (shown.start ? monthLabel(shown.start) : '…') + ' – ' + (shown.end ? monthLabel(shown.end) : '…');
+  }
+  function startCustomRange() {
+    setPeriodMode('range');
+    setRangeError('');
+    if (!rangeStart && !rangeEnd && availableMonths.length) { setRangeStart(earliestMonth); setRangeEnd(latestMonth); }
+  }
+  function generate() {
+    if (periodMode === 'range') {
+      if (!rangeStart || !rangeEnd) { setRangeError('Pick both a start and an end month.'); return; }
+      if (rangeStart > rangeEnd) { setRangeError('The start month has to come before the end month.'); return; }
+    }
+    setRangeError('');
+    setGenerated({ mode: periodMode, start: rangeStart, end: rangeEnd });
+  }
+  function exportCsv() {
+    exportRowsToCsv((artist.name.replace(/\s+/g, '-').toLowerCase() || 'artist') + '-statement', ['Month', 'Track', 'Gross earning'],
+      monthRows.flatMap(m => m.tracks.map(t => [m.month, t.title, t.earning])));
+  }
+
+  return (
+    <div>
+      <div className="imss-print-hide rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="mb-4">
+          <div className="text-xs mb-2" style={{ color: C.textFaint }}>Period</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { setPeriodMode('all'); setRangeError(''); }} className="text-sm px-3 py-1.5 rounded"
+              style={{ background: periodMode === 'all' ? C.amberSoft : 'transparent', color: periodMode === 'all' ? C.amber : C.textDim, border: '1px solid ' + (periodMode === 'all' ? 'transparent' : C.border), fontWeight: periodMode === 'all' ? 600 : 500 }}>
+              All periods
+            </button>
+            <button onClick={startCustomRange} className="text-sm px-3 py-1.5 rounded"
+              style={{ background: periodMode === 'range' ? C.amberSoft : 'transparent', color: periodMode === 'range' ? C.amber : C.textDim, border: '1px solid ' + (periodMode === 'range' ? 'transparent' : C.border), fontWeight: periodMode === 'range' ? 600 : 500 }}>
+              Custom range
+            </button>
+            {periodMode === 'range' && (
+              <>
+                <Input type="month" value={rangeStart} min={earliestMonth || undefined} max={latestMonth || undefined} onChange={e => { setRangeStart(e.target.value); setRangeError(''); }} style={{ maxWidth: 150 }} />
+                <span className="text-sm" style={{ color: C.textFaint }}>to</span>
+                <Input type="month" value={rangeEnd} min={earliestMonth || undefined} max={latestMonth || undefined} onChange={e => { setRangeEnd(e.target.value); setRangeError(''); }} style={{ maxWidth: 150 }} />
+              </>
+            )}
+          </div>
+          {periodMode === 'range' && availableMonths.length > 0 && (
+            <div className="text-xs mt-2" style={{ color: C.textFaint }}>
+              You have earnings from {monthLabel(earliestMonth)} to {monthLabel(latestMonth)}.
+            </div>
+          )}
+          {rangeError && (
+            <div className="rounded px-3 py-2 text-xs mt-3" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{rangeError}</div>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {requireGenerate && (
+            <Btn variant="primary" onClick={generate}>
+              <FileText size={14} /> {generated ? 'Regenerate statement' : 'Generate statement'}
+            </Btn>
+          )}
+          {shown && <Btn variant="ghost" onClick={exportCsv}><Download size={14} /> Export to CSV</Btn>}
+          {shown && <Btn variant="ghost" onClick={() => window.print()}><Printer size={14} /> Print / save as PDF</Btn>}
+        </div>
+      </div>
+
+      {!shown ? (
+        <EmptyState icon={FileText} title="Choose a period to generate your statement"
+          description="Pick all periods or a custom month range above, then hit Generate statement." />
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-3 mb-6">
+            <KPICard icon={DollarSign} label="Gross earnings" value={formatCurrency(periodTotals.gross)} />
+            <KPICard icon={Wallet} label="Swift share" value={formatCurrency(periodTotals.swift)} />
+            <KPICard icon={TrendingUp} label="Your share" value={formatCurrency(periodTotals.artistShare)} tone="teal" sub={Math.round((artist.artistPct != null ? artist.artistPct : 0) * 100) + '% of net'} />
+            <KPICard icon={ClipboardList} label={recoupment.balance > 0 ? 'Unrecouped balance' : 'Fully recouped'} value={formatCurrency(recoupment.balance > 0 ? recoupment.unrecouped : recoupment.dueOnTop)} tone={recoupment.balance > 0 ? 'red' : 'teal'} />
+          </div>
+
+          <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+            <div style={{ fontWeight: 600 }}>{periodLabel()}</div>
+            <div className="text-xs" style={{ color: C.textFaint }}>
+              {monthRows.length} {monthRows.length === 1 ? 'month' : 'months'} with earnings
+              {shown.mode !== 'all' && <> · lifetime to date {formatCurrency(lifetime.artistShare)}</>}
+            </div>
+          </div>
+
+          {monthRows.length === 0 ? (
+            <EmptyState icon={DollarSign} title="No earnings in that period"
+              description="Nothing was logged for the months you picked. Try a wider range, or choose all periods." />
+          ) : (
+            monthRows.map(({ month, tracks, gross, swift, artistShare }) => (
+              <div key={month} className="rounded border p-4 mb-5" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                  <div style={{ fontWeight: 600 }}>{monthLabel(month)}</div>
+                  <div className="text-sm" style={{ color: C.textFaint }}>
+                    Gross <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(gross)}</span>
+                    {' · '}Swift share <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(swift)}</span>
+                    {' · '}Your share <span style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT }}>{formatCurrency(artistShare)}</span>
+                  </div>
+                </div>
+                <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.bg }}>
+                  <table className="w-full" style={{ minWidth: 320 }}>
+                    <thead><tr><Th>Track</Th><Th align="right">Gross earning</Th></tr></thead>
+                    <tbody>
+                      {tracks.map(t => (
+                        <tr key={t.id}>
+                          <Td>{t.title}</Td>
+                          <Td align="right" mono>{formatCurrency(t.earning)}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
+
+          {artistPayouts.length > 0 && (
+            <div className="mt-2">
+              <div className="text-sm mb-2" style={{ fontWeight: 600 }}>Payout history</div>
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 500 }}>
+                  <thead><tr><Th>Period</Th><Th align="right">Your share</Th><Th>Status</Th></tr></thead>
+                  <tbody>
+                    {artistPayouts.map(p => (
+                      <tr key={p.id}>
+                        <Td mono>{p.periodStart} – {p.periodEnd}</Td>
+                        <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
+                        <Td><Badge tone={p.status === 'paid' ? 'teal' : 'amber'}>{p.status}</Badge></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function BackupSection({ allData, updaters, dataVersion }) {
+  const [confirmRestore, setConfirmRestore] = useState(null);
+  const [error, setError] = useState('');
+  const [restored, setRestored] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const BACKUP_KEYS = ['roster', 'catalog', 'revenue', 'streams', 'payouts', 'masterGross', 'labelSettings', 'staff', 'tasks', 'ledger', 'accessRequests'];
+
+  function downloadBackup() {
+    const payload = { exportedAt: new Date().toISOString(), dataVersion, source: 'IMSS Records Dashboard' };
+    BACKUP_KEYS.forEach(k => { payload[k] = allData[k]; });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'imss-records-backup-' + todayStr() + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadWorkbook() {
+    const wb = XLSX.utils.book_new();
+    BACKUP_KEYS.forEach(k => {
+      const val = allData[k];
+      if (!Array.isArray(val) || val.length === 0) return;
+      const flat = val.map(row => {
+        const out = {};
+        Object.entries(row).forEach(([field, v]) => { out[field] = typeof v === 'object' && v !== null ? JSON.stringify(v) : v; });
+        return out;
+      });
+      const ws = XLSX.utils.json_to_sheet(flat);
+      XLSX.utils.book_append_sheet(wb, ws, k.slice(0, 31));
+    });
+    XLSX.writeFile(wb, 'imss-records-full-export-' + todayStr() + '.xlsx');
+  }
+
+  // labelSettings is an object; every other section is a list.
+  const validSection = (data, k) => k === 'labelSettings' ? !!data[k] && typeof data[k] === 'object' && !Array.isArray(data[k]) : Array.isArray(data[k]);
+
+  function handleFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setError(''); setRestored(false);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const foundKeys = BACKUP_KEYS.filter(k => validSection(parsed, k));
+        if (foundKeys.length === 0) { setError("That file doesn't look like an IMSS Records backup — no recognizable data found."); return; }
+        setConfirmRestore(parsed);
+      } catch (err) {
+        setError('That file could not be read. Make sure it is the .json backup downloaded from this dashboard.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function applyRestore() {
+    if (!confirmRestore) return;
+    BACKUP_KEYS.forEach(k => {
+      if (updaters[k] && validSection(confirmRestore, k)) updaters[k](confirmRestore[k]);
+    });
+    setConfirmRestore(null);
+    setRestored(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function cancelRestore() {
+    setConfirmRestore(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Backup &amp; Restore" description="Download a full snapshot of everything in this dashboard, or restore from a previous one. This is the safety net until the dashboard is connected to a real database." />
+
+      {restored && (
+        <div className="rounded px-3 py-2 text-xs mb-6" style={{ background: C.tealSoft, color: C.teal, border: '1px solid ' + C.teal }}>Backup restored successfully.</div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div style={{ fontWeight: 600 }} className="mb-1">Download backup</div>
+        <div className="text-sm mb-3" style={{ color: C.textDim }}>One JSON file with everything — roster, catalog, revenue, streams, earnings, payouts, expenses, team, and tasks. Keep this somewhere safe; it's the only copy outside this browser.</div>
+        <div className="flex gap-2 flex-wrap">
+          <Btn variant="primary" onClick={downloadBackup}><FileDown size={14} /> Download full backup (JSON)</Btn>
+          <Btn variant="ghost" onClick={downloadWorkbook}><FileSpreadsheet size={14} /> Download as Excel workbook</Btn>
+        </div>
+        <div className="text-xs mt-2" style={{ color: C.textFaint }}>The Excel workbook is for reviewing data by hand — restore only works from the JSON file, since it preserves exact structure.</div>
+      </div>
+
+      <div className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+        <div style={{ fontWeight: 600 }} className="mb-1">Restore from backup</div>
+        <div className="text-sm mb-3" style={{ color: C.textDim }}>This replaces everything currently in the dashboard with what's in the file. Download a fresh backup first if you want to keep what's here now.</div>
+        <input ref={fileInputRef} type="file" accept="application/json" onChange={handleFile} className="text-sm" style={{ color: C.textDim }} />
+        {error && <div className="text-xs mt-2" style={{ color: C.red }}>{error}</div>}
+        {confirmRestore && (
+          <div className="rounded border p-3 mt-3" style={{ borderColor: C.amber, background: C.amberSoft }}>
+            <div className="text-sm mb-3">
+              Restore this backup{confirmRestore.exportedAt ? ', created ' + new Date(confirmRestore.exportedAt).toLocaleString() : ''}? This overwrites all current data and can't be undone from here.
+            </div>
+            <div className="flex gap-2">
+              <Btn variant="primary" onClick={applyRestore}>Yes, restore</Btn>
+              <Btn variant="ghost" onClick={cancelRestore}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ArtistRequestsSection({ artistRequests, update, roster, sessionName, pmScope = null }) {
+  const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
+  const visibleArtistIds = new Set(visibleRoster.map(a => a.id));
+  const visibleRequests = pmScope ? artistRequests.filter(r => visibleArtistIds.has(r.artistId)) : artistRequests;
+  const [filterArtist, setFilterArtist] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [expandedId, setExpandedId] = useState(null);
+  const [responseText, setResponseText] = useState('');
+
+  const filtered = visibleRequests.filter(r => {
+    if (filterArtist !== 'all' && r.artistId !== filterArtist) return false;
+    if (filterStatus !== 'all' && r.status !== filterStatus) return false;
+    return true;
+  });
+  const sorted = [...filtered].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  const openCount = visibleRequests.filter(r => r.status !== 'Resolved').length;
+
+  function toggleExpand(r) {
+    if (expandedId === r.id) { setExpandedId(null); return; }
+    setExpandedId(r.id);
+    setResponseText(r.response || '');
+  }
+  function updateStatus(id, status) {
+    update(artistRequests.map(r => r.id === id ? { ...r, status, ...(status === 'Resolved' ? { resolvedAt: new Date().toISOString() } : {}) } : r));
+  }
+  function submitResponse(id) {
+    if (!responseText.trim()) return;
+    update(artistRequests.map(r => r.id === id ? { ...r, response: responseText.trim(), respondedBy: sessionName, status: r.status === 'Open' ? 'In Progress' : r.status } : r));
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Artist Requests" description="Everything artists have asked for — meetings, marketing support, tour funding, and more." />
+
+      {pmScope && (
+        <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          Showing only requests from artists assigned to you as Product Manager ({visibleRequests.length} of {artistRequests.length} total).
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={MessageSquare} label="Open requests" value={openCount} tone={openCount > 0 ? 'amber' : undefined} />
+      </div>
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="Artist">
+            <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
+              <option value="all">All artists</option>
+              {visibleRoster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">All</option>
+              {REQUEST_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+        </div>
+      </div>
+
+      {sorted.length === 0 ? (
+        <EmptyState icon={MessageSquare} title="No requests" description="Requests artists submit from their portal will show up here." />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {sorted.map(r => {
+            const artist = roster.find(a => a.id === r.artistId);
+            const expanded = expandedId === r.id;
+            return (
+              <div key={r.id} className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+                <button onClick={() => toggleExpand(r)} className="w-full text-left p-4 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <Badge tone="teal">{artist ? artist.name : 'Unknown'}</Badge>
+                      <Badge>{r.category}</Badge>
+                      <Badge tone={r.status === 'Resolved' ? 'teal' : r.status === 'In Progress' ? 'amber' : 'default'}>{r.status}</Badge>
+                    </div>
+                    <div style={{ fontWeight: 600 }}>{r.title}</div>
+                    <div className="text-xs mt-0.5" style={{ color: C.textFaint }}>{formatDate(r.submittedAt.slice(0, 10))}</div>
+                  </div>
+                  <ChevronDown size={16} color={C.textFaint} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                </button>
+                {expanded && (
+                  <div className="px-4 pb-4">
+                    <div className="rounded p-3 text-sm mb-3" style={{ background: C.bg, color: C.textDim }}>{r.message}</div>
+                    <Field label="Response" full><TextArea rows={3} value={responseText} onChange={e => setResponseText(e.target.value)} placeholder="Reply to the artist…" /></Field>
+                    <div className="flex gap-2 flex-wrap mt-2">
+                      <Btn variant="primary" onClick={() => submitResponse(r.id)}>Send response</Btn>
+                      {REQUEST_STATUSES.filter(s => s !== r.status).map(s => (
+                        <Btn key={s} variant="ghost" onClick={() => updateStatus(r.id, s)}>Mark {s}</Btn>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TasksSection({ tasks, update, staff, roster, catalog }) {
+  const empty = { title: '', assignee: staff[0] ? staff[0].name : '', dueDate: todayStr(), status: 'Open', notes: '', artistId: '', releaseId: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+  const [filterAssignee, setFilterAssignee] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('Open');
+  const [filterArtist, setFilterArtist] = useState('all');
+  const [view, setView] = useState('list');
+
+  function openAdd() { setForm({ ...empty, assignee: staff[0] ? staff[0].name : '' }); setEditing(null); setShowForm(true); }
+  function openEdit(t) { setForm({ ...empty, ...t }); setEditing(t.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function setFormArtist(artistId) { setForm(f => ({ ...f, artistId, releaseId: '' })); }
+  function save(e) {
+    e.preventDefault();
+    if (!form.title.trim() || !form.assignee) return;
+    if (editing) update(tasks.map(t => t.id === editing ? { ...form, id: editing } : t));
+    else update([...tasks, { ...form, id: uid(), createdAt: todayStr() }]);
+    closeForm();
+  }
+  function remove(id) { update(tasks.filter(t => t.id !== id)); setConfirmId(null); }
+  function toggleDone(t) { update(tasks.map(x => x.id === t.id ? { ...x, status: x.status === 'Done' ? 'Open' : 'Done' } : x)); }
+
+  const formReleases = form.artistId ? catalog.filter(c => c.artistId === form.artistId) : [];
+
+  const filtered = tasks.filter(t => {
+    if (filterAssignee !== 'all' && t.assignee !== filterAssignee) return false;
+    if (filterStatus !== 'all' && t.status !== filterStatus) return false;
+    if (filterArtist !== 'all' && t.artistId !== filterArtist) return false;
+    return true;
+  });
+  const sorted = [...filtered].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+  const openCount = tasks.filter(t => t.status === 'Open').length;
+  const overdueCount = tasks.filter(t => t.status === 'Open' && t.dueDate && t.dueDate < todayStr()).length;
+
+  const workload = useMemo(() => {
+    const map = {};
+    staff.forEach(s => { map[s.name] = { name: s.name, open: 0, overdue: 0 }; });
+    tasks.forEach(t => {
+      if (t.status !== 'Open') return;
+      if (!map[t.assignee]) map[t.assignee] = { name: t.assignee, open: 0, overdue: 0 };
+      map[t.assignee].open += 1;
+      if (t.dueDate && t.dueDate < todayStr()) map[t.assignee].overdue += 1;
+    });
+    return Object.values(map).sort((a, b) => b.open - a.open);
+  }, [tasks, staff]);
+  const maxOpen = Math.max(1, ...workload.map(w => w.open));
+
+  function linkBadge(t) {
+    const artist = t.artistId ? roster.find(a => a.id === t.artistId) : null;
+    const release = t.releaseId ? catalog.find(c => c.id === t.releaseId) : null;
+    if (!artist) return null;
+    return <Badge>{release ? release.title : artist.name}</Badge>;
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Tasks" description="Shared to-dos across the team — assign, track, and close out." action={<Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add task</Btn>} />
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={ClipboardList} label="Open tasks" value={openCount} />
+        <KPICard icon={ClipboardList} label="Overdue" value={overdueCount} tone={overdueCount > 0 ? 'red' : undefined} />
+      </div>
+
+      <div className="imss-print-hide flex items-center gap-1 mb-6">
+        {[['list', 'List'], ['workload', 'Workload']].map(([id, label]) => (
+          <button key={id} onClick={() => setView(id)} className="text-sm px-3 py-1.5 rounded"
+            style={{ background: view === id ? C.amberSoft : 'transparent', color: view === id ? C.amber : C.textDim, border: '1px solid ' + (view === id ? 'transparent' : C.border), fontWeight: view === id ? 600 : 500 }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'workload' ? (
+        workload.every(w => w.open === 0) ? (
+          <EmptyState icon={ClipboardList} title="No open tasks" description="Workload per person shows up here once tasks are assigned." />
+        ) : (
+          <div className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="flex flex-col gap-3">
+              {workload.filter(w => w.open > 0).map(w => (
+                <div key={w.name}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span>{w.name}</span>
+                    <span style={{ color: C.textFaint }}>{w.open} open{w.overdue > 0 ? ' · ' + w.overdue + ' overdue' : ''}</span>
+                  </div>
+                  <div className="rounded-full overflow-hidden" style={{ height: 6, background: C.panel2 }}>
+                    <div style={{ height: 6, width: (w.open / maxOpen * 100) + '%', background: w.overdue > 0 ? C.red : C.amber }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      ) : (
+        <>
+          <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+            <div className="imss-form-grid gap-3">
+              <Field label="Assignee">
+                <Select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
+                  <option value="all">Everyone</option>
+                  {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Artist">
+                <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
+                  <option value="all">All artists</option>
+                  {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Status">
+                <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                  <option value="all">All</option>
+                  {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </Field>
+            </div>
+          </div>
+
+          <ExportBar filename="imss-tasks" headers={['Task', 'Assignee', 'Artist', 'Release', 'Due Date', 'Status', 'Notes']} rows={sorted.map(t => {
+            const artist = t.artistId ? roster.find(a => a.id === t.artistId) : null;
+            const release = t.releaseId ? catalog.find(c => c.id === t.releaseId) : null;
+            return [t.title, t.assignee, artist ? artist.name : '', release ? release.title : '', t.dueDate || '', t.status, t.notes || ''];
+          })} />
+
+          {showForm && (
+            <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+              <Field label="Task" full><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Confirm split sheet" /></Field>
+              <Field label="Assignee">
+                <Select value={form.assignee} onChange={e => setForm({ ...form, assignee: e.target.value })}>
+                  {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Due date"><Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></Field>
+              <Field label="Related artist">
+                <Select value={form.artistId} onChange={e => setFormArtist(e.target.value)}>
+                  <option value="">— none —</option>
+                  {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Related release">
+                <Select value={form.releaseId} onChange={e => setForm({ ...form, releaseId: e.target.value })} disabled={!form.artistId}>
+                  <option value="">— none —</option>
+                  {formReleases.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </Select>
+              </Field>
+              <Field label="Status">
+                <Select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                  {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </Field>
+              <Field label="Notes" full><TextArea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></Field>
+              <div className="imss-span-2 flex gap-2 mt-1">
+                <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add task'}</Btn>
+                <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+              </div>
+            </form>
+          )}
+
+          {sorted.length === 0 ? (
+            <EmptyState icon={ClipboardList} title="Nothing here" description="Add a task to get the team aligned on what's next." />
+          ) : (
+            <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+              <table className="w-full" style={{ minWidth: 680 }}>
+                <thead><tr><Th></Th><Th>Task</Th><Th>Assignee</Th><Th>Related to</Th><Th>Due</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
+                <tbody>
+                  {sorted.map(t => {
+                    const overdue = t.status === 'Open' && t.dueDate && t.dueDate < todayStr();
+                    return (
+                      <tr key={t.id} style={{ opacity: t.status === 'Done' ? 0.55 : 1 }}>
+                        <Td><input type="checkbox" checked={t.status === 'Done'} onChange={() => toggleDone(t)} /></Td>
+                        <Td style={{ textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>{t.title}</Td>
+                        <Td>{t.assignee}</Td>
+                        <Td>{linkBadge(t) || '—'}</Td>
+                        <Td mono style={{ color: overdue ? C.red : undefined }}>{t.dueDate ? formatDate(t.dueDate) : '—'}</Td>
+                        <Td><Badge tone={t.status === 'Done' ? 'teal' : overdue ? 'red' : 'amber'}>{overdue ? 'Overdue' : t.status}</Badge></Td>
+                        <Td align="right">
+                          {confirmId === t.id ? <ConfirmInline onConfirm={() => remove(t.id)} onCancel={() => setConfirmId(null)} /> : (
+                            <span className="inline-flex gap-3 justify-end">
+                              <button onClick={() => openEdit(t)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                              <button onClick={() => setConfirmId(t.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                            </span>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ActivityLogSection({ activityLog }) {
+  const [search, setSearch] = useState('');
+  const filtered = activityLog.filter(e => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (e.actor || '').toLowerCase().includes(q) || (e.section || '').toLowerCase().includes(q);
+  });
+
+  return (
+    <div>
+      <SectionHeader title="Activity Log" description="A running record of who changed what across the dashboard." />
+      <div className="flex items-center gap-2 mb-6 rounded border px-3 py-2" style={{ borderColor: C.border, background: C.panel, maxWidth: 320 }}>
+        <Search size={14} color={C.textFaint} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter by person or section" className="w-full text-sm bg-transparent" style={{ color: C.text, fontFamily: HEADING_FONT, border: 'none' }} />
+      </div>
+      <ExportBar filename="imss-activity-log" headers={['When', 'Who', 'What']} rows={filtered.map(e => [new Date(e.timestamp).toLocaleString(), e.actor, e.actor + ' ' + e.action + ' ' + e.section])} />
+      {filtered.length === 0 ? (
+        <EmptyState icon={History} title="Nothing logged yet" description="Changes made across the dashboard will show up here as they happen." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 480 }}>
+            <thead><tr><Th>When</Th><Th>Who</Th><Th>What</Th></tr></thead>
+            <tbody>
+              {filtered.map(e => (
+                <tr key={e.id}>
+                  <Td mono>{new Date(e.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Td>
+                  <Td>{e.actor}</Td>
+                  <Td>{e.actor} {e.action} {e.section}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatementsSection({ roster, revenue, masterGross, ledger, payouts }) {
+  const activeArtists = roster.filter(a => a.status === 'Active');
+  const defaultArtist = activeArtists[0] || roster[0] || null;
+  const [selectedArtist, setSelectedArtist] = useState(defaultArtist ? defaultArtist.id : '');
+  const artist = roster.find(a => a.id === selectedArtist) || null;
+
+  return (
+    <div>
+      <SectionHeader title="Statements" description="A per-artist royalty statement, generated on demand from revenue and master gross." />
+      <div className="rounded border p-4 mb-6 imss-print-hide" style={{ background: C.panel, borderColor: C.border }}>
+        <Field label="Artist">
+          <Select value={selectedArtist} onChange={e => setSelectedArtist(e.target.value)}>
+            {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        </Field>
+      </div>
+      {artist ? (
+        <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
+      ) : (
+        <EmptyState icon={DollarSign} title="No artists on roster" description="Add an artist to the roster to generate a statement." />
+      )}
+    </div>
+  );
+}
+
+function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue, masterGross, canEdit = true, isAdmin = false, sessionName = '', pmScope = null }) {
+  // A Product Manager only sees the ledger for the artists they manage — never
+  // company-wide overhead, and never another PM's roster.
+  const roster = useMemo(() => pmScope ? fullRoster.filter(a => a.productManager === pmScope) : fullRoster, [fullRoster, pmScope]);
+  const scopedNames = useMemo(() => new Set(roster.map(a => a.name)), [roster]);
+  const ledger = useMemo(() => pmScope ? rawLedger.filter(l => l.artist && scopedNames.has(l.artist)) : rawLedger, [rawLedger, pmScope, scopedNames]);
+  const empty = { type: 'expense', artist: '', category: LEDGER_CATEGORIES[0], description: '', amount: '', date: todayStr(), recoupable: false, enteredBy: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+  const [filterArtist, setFilterArtist] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+
+  function openAdd() { setForm(empty); setEditing(null); setShowForm(true); }
+  function openEdit(x) { setForm({ type: x.type, artist: x.artist || '', category: x.category, description: x.description || '', amount: String(x.amount), date: x.date, recoupable: !!x.recoupable, enteredBy: x.enteredBy || '' }); setEditing(x.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function save(e) {
+    e.preventDefault();
+    const amt = Number(form.amount);
+    if (!amt || amt <= 0) return;
+    const approval = isAdmin
+      ? { approvalStatus: 'Approved', approvedBy: sessionName, approvedAt: todayStr() }
+      : { approvalStatus: 'Pending', approvedBy: '', approvedAt: '' };
+    const payload = { ...form, artist: form.artist || null, amount: amt, recoupable: form.type === 'expense' && !!form.recoupable, createdAt: Date.parse(form.date) || Date.now(), ...approval };
+    if (editing) update(ledger.map(x => x.id === editing ? { ...payload, id: editing } : x));
+    else update([...ledger, { ...payload, id: uid() }]);
+    closeForm();
+  }
+  function remove(id) { update(ledger.filter(x => x.id !== id)); setConfirmId(null); }
+  function approveEntry(id) { update(ledger.map(x => x.id === id ? { ...x, approvalStatus: 'Approved', approvedBy: sessionName, approvedAt: todayStr() } : x)); }
+  function rejectEntry(id) { update(ledger.map(x => x.id === id ? { ...x, approvalStatus: 'Rejected', approvedBy: sessionName, approvedAt: todayStr() } : x)); }
+
+  const approvedLedger = useMemo(() => ledger.filter(x => (x.approvalStatus || 'Approved') === 'Approved'), [ledger]);
+  const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, approvedLedger, revenue, masterGross) })).filter(r => r.spent > 0), [roster, approvedLedger, revenue, masterGross]);
+
+  const filtered = ledger.filter(x => {
+    if (filterArtist !== 'all' && (filterArtist === '__general__' ? x.artist : x.artist !== filterArtist)) return false;
+    if (filterType !== 'all' && x.type !== filterType) return false;
+    return true;
+  });
+  const sorted = [...filtered].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const totals = ledgerTotals(filtered.filter(x => (x.approvalStatus || 'Approved') === 'Approved'));
+  const totalRecoupable = filtered.filter(x => x.type === 'expense' && x.recoupable).reduce((s, x) => s + x.amount, 0);
+  const pendingCount = ledger.filter(x => x.approvalStatus === 'Pending').length;
+
+  return (
+    <div>
+      <SectionHeader title="Ledger" description="Non-royalty income and expenses — advances, recording costs, marketing spend, and anything else that isn't distributor revenue. Recoupable expenses reduce what an artist is due until their share covers them." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add entry</Btn>} />
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={TrendingUp} label="Income" value={formatCurrency(totals.income)} tone="teal" />
+        <KPICard icon={Wallet} label="Expense" value={formatCurrency(totals.expense)} />
+        <KPICard icon={DollarSign} label="Net" value={formatCurrency(totals.net)} tone={totals.net < 0 ? 'red' : 'teal'} />
+        <KPICard icon={ClipboardList} label="Pending approval" value={pendingCount} tone={pendingCount ? 'amber' : undefined} />
+      </div>
+
+      {!isAdmin && pendingCount > 0 && (
+        <div className="rounded px-3 py-2 text-xs mb-6" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          Entries you log need Admin approval before they count toward recoupment or the label P&amp;L.
+        </div>
+      )}
+
+      <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
+        <div className="imss-form-grid gap-3">
+          <Field label="Type">
+            <Select value={filterType} onChange={e => setFilterType(e.target.value)}>
+              <option value="all">Income + expense</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </Select>
+          </Field>
+          <Field label="Artist">
+            <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
+              <option value="all">All artists</option>
+              <option value="__general__">Label Ops (no artist)</option>
+              {roster.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+            </Select>
+          </Field>
+        </div>
+      </div>
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Type">
+            <Select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </Select>
+          </Field>
+          <Field label="Artist (optional)">
+            <Select value={form.artist} onChange={e => setForm({ ...form, artist: e.target.value })}>
+              <option value="">Label Ops (no artist)</option>
+              {roster.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Category">
+            <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+              {LEDGER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </Field>
+          <Field label="Amount (USD)"><Input type="number" min="0" step="0.01" required value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></Field>
+          <Field label="Date"><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+          <Field label="Description" full><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Studio time for Afterglow" /></Field>
+          {form.type === 'expense' && (
+            <Field label="Recoupable">
+              <label className="flex items-center gap-2 text-sm" style={{ color: C.text, paddingTop: 7 }}>
+                <input type="checkbox" checked={form.recoupable} onChange={e => setForm({ ...form, recoupable: e.target.checked })} />
+                Deduct from this artist's future earnings
+              </label>
+            </Field>
+          )}
+          <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add entry'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      <ExportBar filename="imss-ledger" headers={['Date', 'Type', 'Artist', 'Category', 'Description', 'Recoupable', 'Amount']} rows={sorted.map(x => [x.date, x.type, x.artist || 'Label Ops', x.category, x.description || '', x.recoupable ? 'Yes' : 'No', x.amount])} />
+
+      <div className="text-xs mb-3" style={{ color: C.textFaint }}>Recoupment status by artist</div>
+      {recoupmentByArtist.length === 0 ? (
+        <EmptyState icon={Wallet} title="No recoupable expenses yet" description="Mark an expense as recoupable and it'll show progress here as the artist earns it back." />
+      ) : (
+        <div className="rounded border overflow-x-auto mb-6" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 620 }}>
+            <thead><tr><Th>Artist</Th><Th align="right">Spent (recoupable)</Th><Th align="right">Earned (artist share)</Th><Th align="right">Balance</Th></tr></thead>
+            <tbody>
+              {recoupmentByArtist.map(r => (
+                <tr key={r.artist.id}>
+                  <Td>{r.artist.name}</Td>
+                  <Td align="right" mono>{formatCurrency(r.spent)}</Td>
+                  <Td align="right" mono>{formatCurrency(r.earned)}</Td>
+                  <Td align="right" mono>
+                    {r.balance > 0
+                      ? <span style={{ color: C.red, fontWeight: 600 }}>{formatCurrency(r.unrecouped)} unrecouped</span>
+                      : <span style={{ color: C.teal, fontWeight: 600 }}>Fully recouped{r.dueOnTop > 0 ? ' · ' + formatCurrency(r.dueOnTop) + ' due' : ''}</span>}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="text-xs mb-3" style={{ color: C.textFaint }}>Entry log</div>
+      {sorted.length === 0 ? (
+        <EmptyState icon={DollarSign} title="No ledger entries recorded" description="Add a recording cost, advance, marketing spend, or non-royalty income to start tracking it." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 720 }}>
+            <thead><tr><Th>Date</Th><Th>Type</Th><Th>Artist</Th><Th>Category</Th><Th>Description</Th><Th>Recoupable</Th><Th align="right">Amount</Th><Th>Approval</Th><Th align="right">Actions</Th></tr></thead>
+            <tbody>
+              {sorted.map(x => {
+                const approval = x.approvalStatus || 'Approved';
+                return (
+                  <tr key={x.id}>
+                    <Td mono>{formatDate(x.date)}</Td>
+                    <Td><Badge tone={x.type === 'income' ? 'teal' : 'default'}>{x.type}</Badge></Td>
+                    <Td>{x.artist || 'Label Ops'}</Td>
+                    <Td><Badge>{x.category}</Badge></Td>
+                    <Td>{x.description || '—'}</Td>
+                    <Td>{x.type === 'expense' && x.recoupable ? <Badge tone="amber">Yes</Badge> : <Badge>No</Badge>}</Td>
+                    <Td align="right" mono>{formatCurrency(x.amount)}</Td>
+                    <Td>
+                      <Badge tone={approval === 'Approved' ? 'teal' : approval === 'Rejected' ? 'red' : 'amber'}>{approval}</Badge>
+                      {isAdmin && approval === 'Pending' && (
+                        <span className="inline-flex gap-2 ml-2">
+                          <button onClick={() => approveEntry(x.id)} className="text-xs" style={{ color: C.teal }}>Approve</button>
+                          <button onClick={() => rejectEntry(x.id)} className="text-xs" style={{ color: C.red }}>Reject</button>
+                        </span>
+                      )}
+                    </Td>
+                    <Td align="right">
+                      {confirmId === x.id ? <ConfirmInline onConfirm={() => remove(x.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
+                        <span className="inline-flex gap-3 justify-end">
+                          <button onClick={() => openEdit(x)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button onClick={() => setConfirmId(x.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                        </span>
+                      ) : <span style={{ color: C.textFaint }}>—</span>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BudgetSection({ labelBudgets, update, ledger, roster, canEdit = true }) {
+  const expenses = useMemo(() => ledger.filter(x => x.type === 'expense'), [ledger]);
+  const empty = { category: LEDGER_CATEGORIES[0], allocated: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+
+  function openAdd() { setForm(empty); setEditing(null); setShowForm(true); }
+  function openEdit(b) { setForm({ ...b, allocated: String(b.allocated) }); setEditing(b.id); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditing(null); }
+  function save(e) {
+    e.preventDefault();
+    const amt = Number(form.allocated);
+    if (!amt || amt < 0) return;
+    const payload = { ...form, allocated: amt };
+    if (editing) update(labelBudgets.map(b => b.id === editing ? { ...payload, id: editing } : b));
+    else update([...labelBudgets, { ...payload, id: uid() }]);
+    closeForm();
+  }
+  function remove(id) { update(labelBudgets.filter(b => b.id !== id)); setConfirmId(null); }
+
+  const categoriesWithBudget = new Set(labelBudgets.map(b => b.category));
+  const availableCategories = LEDGER_CATEGORIES.filter(c => editing ? true : !categoriesWithBudget.has(c));
+
+  const spendByCategory = useMemo(() => {
+    const map = {};
+    expenses.forEach(x => { map[x.category] = (map[x.category] || 0) + x.amount; });
+    return map;
+  }, [expenses]);
+
+  const rows = labelBudgets.map(b => {
+    const spent = spendByCategory[b.category] || 0;
+    const remaining = b.allocated - spent;
+    const pct = b.allocated > 0 ? Math.min(100, Math.round((spent / b.allocated) * 100)) : 0;
+    return { ...b, spent, remaining, pct };
+  }).sort((a, b) => b.allocated - a.allocated);
+
+  const totalAllocated = labelBudgets.reduce((s, b) => s + b.allocated, 0);
+  const totalSpentAcrossBudgeted = rows.reduce((s, r) => s + r.spent, 0);
+  const totalSpentOverall = expenses.reduce((s, x) => s + x.amount, 0);
+  const unbudgetedSpend = totalSpentOverall - totalSpentAcrossBudgeted;
+  const artistTiedSpend = expenses.filter(x => x.artist).reduce((s, x) => s + x.amount, 0);
+  const labelOpsSpend = totalSpentOverall - artistTiedSpend;
+
+  return (
+    <div>
+      <SectionHeader title="Budget" description="Label-wide budget planning by category, tracked against everything logged in Expenses — artist-specific and label operations alike. Visible to team members only." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Allocate budget</Btn>} />
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={DollarSign} label="Total allocated" value={formatCurrency(totalAllocated)} />
+        <KPICard icon={DollarSign} label="Spent (budgeted categories)" value={formatCurrency(totalSpentAcrossBudgeted)} tone="amber" />
+        <KPICard icon={Wallet} label="Remaining" value={formatCurrency(totalAllocated - totalSpentAcrossBudgeted)} tone={(totalAllocated - totalSpentAcrossBudgeted) < 0 ? 'red' : 'teal'} />
+        <KPICard icon={Users} label="Artist-tied spend" value={formatCurrency(artistTiedSpend)} sub={formatCurrency(labelOpsSpend) + ' label ops'} />
+      </div>
+
+      {showForm && (
+        <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Category">
+            <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} disabled={!!editing}>
+              {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </Field>
+          <Field label="Allocated amount"><Input type="number" min="0" step="0.01" value={form.allocated} onChange={e => setForm({ ...form, allocated: e.target.value })} /></Field>
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add allocation'}</Btn>
+            <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+
+      {rows.length === 0 ? (
+        <EmptyState icon={DollarSign} title="No budget allocated yet" description="Set an allocation per category to start tracking spend against it." />
+      ) : (
+        <div className="flex flex-col gap-3 mb-6">
+          {rows.map(r => (
+            <div key={r.id} className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Badge>{r.category}</Badge>
+                  {r.pct >= 100 && <Badge tone="red">Over budget</Badge>}
+                  {r.pct >= 80 && r.pct < 100 && <Badge tone="amber">Nearly spent</Badge>}
+                </div>
+                <div className="text-xs" style={{ color: C.textFaint }}>{formatCurrency(r.spent)} of {formatCurrency(r.allocated)} spent</div>
+              </div>
+              <div className="rounded-full overflow-hidden" style={{ height: 8, background: C.panel2 }}>
+                <div style={{ height: 8, width: r.pct + '%', background: r.remaining < 0 ? C.red : C.amber }} />
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <div className="text-xs" style={{ color: C.textFaint }}>Remaining: <span style={{ color: r.remaining < 0 ? C.red : C.teal, fontFamily: MONO_FONT }}>{formatCurrency(r.remaining)}</span></div>
+                {canEdit && (
+                  confirmId === r.id ? <ConfirmInline onConfirm={() => remove(r.id)} onCancel={() => setConfirmId(null)} /> : (
+                    <span className="inline-flex gap-3">
+                      <button onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                      <button onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {unbudgetedSpend > 0 && (
+        <div className="rounded px-3 py-2 text-xs" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+          {formatCurrency(unbudgetedSpend)} has been spent in categories with no budget allocation yet — add an allocation above to start tracking it.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger, canEdit = true }) {
+  const empty = { artistId: roster[0] ? roster[0].id : '', periodStart: todayStr().slice(0, 7), periodEnd: todayStr().slice(0, 7), notes: '' };
+  const [form, setForm] = useState(empty);
+  const [confirmId, setConfirmId] = useState(null);
+
+  const selectedArtist = roster.find(a => a.id === form.artistId) || null;
+  const preview = selectedArtist ? payoutStatementFor(selectedArtist, form.periodStart, form.periodEnd, revenue, masterGross) : null;
+
+  function generateStatement(status) {
+    if (!selectedArtist || !preview || form.periodStart > form.periodEnd) return;
+    const stmt = {
+      id: uid(), artist: selectedArtist.name, artistSlug: slug(selectedArtist.name),
+      periodStart: form.periodStart, periodEnd: form.periodEnd,
+      grossEarning: preview.gross, swiftShare: preview.swift, netAfterSwift: preview.net,
+      artistPct: preview.artistPct, artistShare: preview.artistShare, labelShare: preview.labelShare,
+      status, createdAt: Date.now(), notes: form.notes,
+    };
+    update([...payouts, stmt]);
+    setForm({ ...empty, artistId: form.artistId });
+  }
+  function markPaid(id) { update(payouts.map(p => p.id === id ? { ...p, status: 'paid' } : p)); }
+  function remove(id) { update(payouts.filter(p => p.id !== id)); setConfirmId(null); }
+
+  const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, ledger, revenue, masterGross) })), [roster, ledger, revenue, masterGross]);
+  const pnl = labelPnL(roster, revenue, masterGross, ledger);
+  const sortedPayouts = [...payouts].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd) || b.createdAt - a.createdAt);
+
+  return (
+    <div>
+      <SectionHeader title="Payouts" description="Generate a payout statement for an artist over any period — computed live from revenue and master gross, per the swift-fee split formula." />
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <KPICard icon={DollarSign} label="Label earnings (lifetime)" value={formatCurrency(pnl.labelEarn)} tone="teal" />
+        <KPICard icon={TrendingUp} label="Ledger income" value={formatCurrency(pnl.ledgerIncome)} />
+        <KPICard icon={Wallet} label="Ledger expense" value={formatCurrency(pnl.ledgerExpense)} />
+        <KPICard icon={ClipboardList} label="Label net profit (P&L)" value={formatCurrency(pnl.netProfit)} tone={pnl.netProfit < 0 ? 'red' : 'teal'} />
+      </div>
+
+      {canEdit && (
+        <div className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+          <Field label="Artist">
+            <Select value={form.artistId} onChange={e => setForm({ ...form, artistId: e.target.value })}>
+              {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Period start"><Input type="month" value={form.periodStart} onChange={e => setForm({ ...form, periodStart: e.target.value })} /></Field>
+          <Field label="Period end"><Input type="month" value={form.periodEnd} onChange={e => setForm({ ...form, periodEnd: e.target.value })} /></Field>
+          <Field label="Notes" full><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Wired via ACH" /></Field>
+
+          {preview && (
+            <div className="imss-span-2 rounded border p-3 flex flex-wrap gap-4" style={{ background: C.bg, borderColor: C.border }}>
+              <div className="text-xs" style={{ color: C.textFaint }}>Gross <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.gross)}</div></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Swift share <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.swift)}</div></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Net <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.net)}</div></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Artist share ({Math.round(preview.artistPct * 100)}%) <div style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.artistShare)}</div></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Label share <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.labelShare)}</div></div>
+            </div>
+          )}
+          <div className="imss-span-2 flex gap-2 mt-1">
+            <Btn variant="ghost" onClick={() => generateStatement('draft')}>Save as draft</Btn>
+            <Btn variant="primary" onClick={() => generateStatement('paid')}>Generate &amp; mark paid</Btn>
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs mb-3" style={{ color: C.textFaint }}>Recoupment status by artist</div>
+      <div className="rounded border overflow-x-auto mb-6" style={{ borderColor: C.border, background: C.panel }}>
+        <table className="w-full" style={{ minWidth: 620 }}>
+          <thead><tr><Th>Artist</Th><Th align="right">Spent (recoupable)</Th><Th align="right">Earned (artist share)</Th><Th align="right">Balance</Th></tr></thead>
+          <tbody>
+            {recoupmentByArtist.map(r => (
+              <tr key={r.artist.id}>
+                <Td>{r.artist.name}</Td>
+                <Td align="right" mono>{formatCurrency(r.spent)}</Td>
+                <Td align="right" mono>{formatCurrency(r.earned)}</Td>
+                <Td align="right" mono>
+                  {r.balance > 0
+                    ? <span style={{ color: C.red, fontWeight: 600 }}>{formatCurrency(r.unrecouped)} unrecouped</span>
+                    : <span style={{ color: C.teal, fontWeight: 600 }}>Fully recouped{r.dueOnTop > 0 ? ' · ' + formatCurrency(r.dueOnTop) + ' due' : ''}</span>}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ExportBar filename="imss-payout-statements" headers={['Artist', 'Period start', 'Period end', 'Gross', 'Swift share', 'Net', 'Artist %', 'Artist share', 'Label share', 'Status']} rows={sortedPayouts.map(p => [p.artist, p.periodStart, p.periodEnd, p.grossEarning, p.swiftShare, p.netAfterSwift, p.artistPct, p.artistShare, p.labelShare, p.status])} />
+
+      <div className="text-xs mb-3" style={{ color: C.textFaint }}>Statement history</div>
+      {sortedPayouts.length === 0 ? (
+        <EmptyState icon={Wallet} title="No payout statements yet" description="Generate one above to see it here." />
+      ) : (
+        <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+          <table className="w-full" style={{ minWidth: 800 }}>
+            <thead><tr><Th>Period</Th><Th>Artist</Th><Th align="right">Gross</Th><Th align="right">Net</Th><Th align="right">Artist share</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
+            <tbody>
+              {sortedPayouts.map(p => (
+                <tr key={p.id}>
+                  <Td mono>{p.periodStart} – {p.periodEnd}</Td>
+                  <Td>{p.artist}</Td>
+                  <Td align="right" mono>{formatCurrency(p.grossEarning)}</Td>
+                  <Td align="right" mono>{formatCurrency(p.netAfterSwift)}</Td>
+                  <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
+                  <Td><Badge tone={p.status === 'paid' ? 'teal' : 'amber'}>{p.status}</Badge></Td>
+                  <Td align="right">
+                    {confirmId === p.id ? <ConfirmInline onConfirm={() => remove(p.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
+                      <span className="inline-flex gap-3 justify-end">
+                        {p.status === 'draft' && <button onClick={() => markPaid(p.id)} style={{ color: C.teal }}><CheckCircle2 size={14} /></button>}
+                        <button onClick={() => setConfirmId(p.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                      </span>
+                    ) : <span style={{ color: C.textFaint }}>—</span>}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImportSection({ roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams }) {
+  const [mode, setMode] = useState(null);
+  const [step, setStep] = useState('choose');
+  const [fileName, setFileName] = useState('');
+  const [parseError, setParseError] = useState('');
+  const [summary, setSummary] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const [headers, setHeaders] = useState([]);
+  const [rawRows, setRawRows] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [groups, setGroups] = useState([]);
+
+  const [summaryHeaders, setSummaryHeaders] = useState([]);
+  const [summaryRows, setSummaryRows] = useState([]);
+  const [summaryForm, setSummaryForm] = useState({ title: '', isrc: '', upc: '', artistChoice: '__new__', newArtistName: '', period: '', storeCol: 0, amountCol: 0, quantityCol: '' });
+
+  function reset() {
+    setMode(null); setStep('choose'); setFileName(''); setParseError(''); setSummary(null);
+    setHeaders([]); setRawRows([]); setMapping({}); setGroups([]);
+    setSummaryHeaders([]); setSummaryRows([]);
+    setSummaryForm({ title: '', isrc: '', upc: '', artistChoice: '__new__', newArtistName: '', period: '', storeCol: 0, amountCol: 0, quantityCol: '' });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handleFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setParseError('');
+    setFileName(file.name);
+
+    if (mode === 'summary') {
+      Papa.parse(file, {
+        skipEmptyLines: true,
+        complete: (results) => {
+          const table = extractPivotTable(results.data);
+          if (!table) { setParseError("Couldn't find a store-by-store table in that file."); return; }
+          setSummaryHeaders(table.headers);
+          setSummaryRows(table.rows);
+          const storeGuess = guessColumnIndex(table.headers, ['service', 'store', 'platform', 'dsp', 'source'], false);
+          const amountGuess = guessColumnIndex(table.headers, ['total royalt', 'total revenue', 'net revenue', 'royalt'], true);
+          const quantityGuess = guessColumnIndex(table.headers, ['stream', 'quantity', 'units'], false);
+          setSummaryForm(f => ({
+            ...f,
+            title: guessReleaseTitleFromFilename(file.name),
+            storeCol: storeGuess >= 0 ? storeGuess : 0,
+            amountCol: amountGuess >= 0 ? amountGuess : table.headers.length - 1,
+            quantityCol: quantityGuess >= 0 ? quantityGuess : '',
+            artistChoice: roster[0] ? roster[0].id : '__new__',
+          }));
+          setStep('map');
+        },
+        error: (err) => setParseError('Could not read that file: ' + err.message),
+      });
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: h => String(h).trim(),
+      complete: (results) => {
+        const fields = results.meta && results.meta.fields ? results.meta.fields : [];
+        if (!fields.length || !results.data.length) {
+          setParseError("Couldn't find any rows in that file — check it's a CSV with a header row.");
+          return;
+        }
+        setHeaders(fields);
+        setRawRows(results.data);
+        setMapping(guessMapping(fields));
+        setStep('map');
+      },
+      error: (err) => setParseError('Could not read that file: ' + err.message),
+    });
+  }
+
+  function downloadSample() {
+    const rows = [
+      ['Period', 'Store', 'Track Title', 'ISRC', 'Artist Name', 'Quantity', 'Net Revenue'],
+      ['2026-08', 'Spotify', 'Glass Static', 'US-IM1-24-00123', 'Nova Reyes', '154302', '412.18'],
+      ['2026-08', 'Apple Music', 'Halflight', 'US-IM1-25-00045', 'Nova Reyes', '48210', '96.40'],
+      ['2026-08', 'Spotify', 'Low Tide Radio', 'US-IM1-24-00198', 'Marlowe Grey', '61230', '163.05'],
+      ['2026-08', 'YouTube Music', 'Midnight Static', '', 'Nova Reyes', '9800', '8.10'],
+      ['2026-08', 'Spotify', 'New Wave', '', 'The Coastals', '22110', '58.90'],
+    ];
+    const csv = rows.map(r => r.map(v => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v)).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'sample-royalty-statement.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadSampleSummary() {
+    const rows = [
+      ['EMPIRE Summary Royalty Report'],
+      [],
+      ['Totals', '', '', '82.14'],
+      [],
+      ['Service', 'Quantity', 'Net Revenue'],
+      ['Spotify', '12500', '61.20'],
+      ['Apple Music', '4300', '15.40'],
+      ['YouTube Music', '900', '5.54'],
+    ];
+    const csv = rows.map(r => r.map(v => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v)).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'sample-song-royalties-summary.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function proceedToReview() {
+    setGroups(buildImportGroups(rawRows, mapping, catalog, roster));
+    setStep('review');
+  }
+
+  function updateGroup(key, patch) {
+    setGroups(gs => gs.map(g => g.key === key ? { ...g, ...patch } : g));
+  }
+
+  function confirmImport() {
+    let nextRoster = [...roster];
+    let nextCatalog = [...catalog];
+    const newArtistIdByName = {};
+    const resolved = groups.map(g => {
+      if (g.releaseChoice === '__skip__') return { ...g, resolvedReleaseId: null };
+      if (g.releaseChoice === '__create__') {
+        let artistId = g.artistChoice;
+        if (g.artistChoice === '__new__') {
+          const name = (g.newArtistName || g.artistNameRaw || 'Unknown Artist').trim();
+          const nameKey = normalizeStr(name);
+          if (newArtistIdByName[nameKey]) {
+            artistId = newArtistIdByName[nameKey];
+          } else {
+            const newId = uid();
+            nextRoster.push({ id: newId, name, genre: '', royaltyRate: 50, artistPct: 0.5, distroLabel: 'IMSS Records', signedDate: todayStr(), email: '', status: 'Active', notes: 'Added via CSV import.' });
+            newArtistIdByName[nameKey] = newId;
+            artistId = newId;
+          }
+        }
+        const newReleaseId = uid();
+        nextCatalog.push({ id: newReleaseId, artistId, title: g.title, type: 'Single', releaseDate: todayStr(), isrc: g.isrc || '', upc: g.upc || '', status: 'Released' });
+        return { ...g, resolvedReleaseId: newReleaseId };
+      }
+      return { ...g, resolvedReleaseId: g.releaseChoice };
+    });
+
+    // Revenue is one row per track per month (per the finance spec) — rows from
+    // multiple stores for the same track/month get summed into a single entry.
+    const revenueByKey = {};
+    const streamAdds = [];
+    let skippedRows = 0;
+
+    resolved.forEach(g => {
+      if (!g.resolvedReleaseId) { skippedRows += g.rowIndices.length; return; }
+      const release = nextCatalog.find(c => c.id === g.resolvedReleaseId);
+      const artist = nextRoster.find(a => a.id === release.artistId);
+      g.rowIndices.forEach(idx => {
+        const row = rawRows[idx];
+        const amountVal = mapping.amount ? parseAmount(row[mapping.amount]) : null;
+        if (amountVal === null) { skippedRows += 1; return; }
+        const dateVal = mapping.date ? parseStatementDate(row[mapping.date]) : null;
+        const month = (dateVal || todayStr()).slice(0, 7);
+        const storeRaw = mapping.store ? row[mapping.store] : '';
+        if (artist) {
+          const artistSlug = slug(artist.name);
+          const key = artistSlug + '_' + slug(release.title) + '_' + month;
+          if (!revenueByKey[key]) {
+            revenueByKey[key] = { id: key, artist: artist.name, artistSlug, title: release.title, month, earning: 0, type: release.type || 'Single', epAlbum: null, releaseDate: release.releaseDate || null, approvalStatus: 'Approved', approvedBy: 'Import', approvedAt: todayStr() };
+          }
+          revenueByKey[key].earning += amountVal;
+        }
+        if (mapping.quantity) {
+          const qty = parseQuantity(row[mapping.quantity]);
+          if (qty > 0) {
+            streamAdds.push({ id: uid(), date: dateVal || todayStr(), platform: guessPlatform(storeRaw), releaseId: release.id, count: qty });
+          }
+        }
+      });
+    });
+
+    const revenueAdds = Object.values(revenueByKey);
+    updateRoster(nextRoster);
+    updateCatalog(nextCatalog);
+    if (revenueAdds.length) updateRevenue([...revenue.filter(r => !revenueByKey[r.id]), ...revenueAdds]);
+    if (streamAdds.length) updateStreams([...streams, ...streamAdds]);
+
+    setSummary({
+      revenueCount: revenueAdds.length,
+      streamCount: streamAdds.length,
+      newArtistCount: nextRoster.length - roster.length,
+      newReleaseCount: nextCatalog.length - catalog.length,
+      skippedRows,
+    });
+    setStep('done');
+  }
+
+  function confirmSummaryImport() {
+    let nextRoster = [...roster];
+    let nextCatalog = [...catalog];
+    let artistId = summaryForm.artistChoice;
+    if (artistId === '__new__') {
+      const name = (summaryForm.newArtistName || 'Unknown Artist').trim();
+      const newId = uid();
+      nextRoster.push({ id: newId, name, genre: '', royaltyRate: 50, artistPct: 0.5, distroLabel: 'IMSS Records', signedDate: todayStr(), email: '', status: 'Active', notes: 'Added via CSV import.' });
+      artistId = newId;
+    }
+    const artist = nextRoster.find(a => a.id === artistId);
+
+    const title = summaryForm.title.trim() || '(untitled product)';
+    let release = nextCatalog.find(c => c.artistId === artistId && (
+      (summaryForm.isrc && normalizeIsrc(c.isrc) === normalizeIsrc(summaryForm.isrc)) ||
+      (summaryForm.upc && String(c.upc || '').replace(/[^0-9]/g, '') === summaryForm.upc.replace(/[^0-9]/g, '')) ||
+      normalizeStr(c.title) === normalizeStr(title)
+    ));
+    let createdRelease = false;
+    if (!release) {
+      release = { id: uid(), artistId, title, type: 'Single', releaseDate: todayStr(), isrc: summaryForm.isrc || '', upc: summaryForm.upc || '', status: 'Released' };
+      nextCatalog.push(release);
+      createdRelease = true;
+    }
+
+    const month = summaryForm.period || todayStr().slice(0, 7);
+    const dateVal = summaryForm.period ? summaryForm.period + '-01' : todayStr();
+    const streamAdds = [];
+    let skippedRows = 0;
+    let earningTotal = 0;
+
+    summaryRows.forEach(row => {
+      const storeRaw = (row[summaryForm.storeCol] || '').trim();
+      const amountVal = parseAmount(row[summaryForm.amountCol]);
+      if (amountVal === null) { skippedRows += 1; return; }
+      earningTotal += amountVal;
+      if (summaryForm.quantityCol !== '' && summaryForm.quantityCol !== null && summaryForm.quantityCol !== undefined) {
+        const qty = parseQuantity(row[summaryForm.quantityCol]);
+        if (qty > 0) streamAdds.push({ id: uid(), date: dateVal, platform: guessPlatform(storeRaw), releaseId: release.id, count: qty });
+      }
+    });
+
+    const revenueAdds = [];
+    if (artist && earningTotal > 0) {
+      const artistSlug = slug(artist.name);
+      const key = artistSlug + '_' + slug(release.title) + '_' + month;
+      revenueAdds.push({ id: key, artist: artist.name, artistSlug, title: release.title, month, earning: earningTotal, type: release.type || 'Single', epAlbum: null, releaseDate: release.releaseDate || null, approvalStatus: 'Approved', approvedBy: 'Import', approvedAt: todayStr() });
+    }
+
+    updateRoster(nextRoster);
+    updateCatalog(nextCatalog);
+    if (revenueAdds.length) updateRevenue([...revenue.filter(r => r.id !== revenueAdds[0].id), ...revenueAdds]);
+    if (streamAdds.length) updateStreams([...streams, ...streamAdds]);
+
+    setSummary({
+      earningsCount: revenueAdds.length,
+      streamCount: streamAdds.length,
+      newArtistCount: nextRoster.length - roster.length,
+      newReleaseCount: createdRelease ? 1 : 0,
+      skippedRows,
+    });
+    setStep('done');
+  }
+
+  const canReview = !!mapping.amount && (!!mapping.title || !!mapping.isrc);
+  const matchedCount = groups.filter(g => g.releaseChoice !== '__create__' && g.releaseChoice !== '__skip__').length;
+  const canReviewSummary = !!summaryForm.title.trim() && !!summaryForm.period && (summaryForm.artistChoice !== '__new__' || !!summaryForm.newArtistName.trim());
+
+  return (
+    <div>
+      <SectionHeader title="Import" description="Upload a royalty statement CSV from a distributor or DSP. IMSS Records matches it to your roster and catalog, and logs the earnings automatically — including the store-by-store breakdown artists see." />
+
+      {step === 'choose' && (
+        <div className="imss-form-grid gap-4">
+          <button onClick={() => { setMode('detail'); setStep('upload'); }} className="text-left rounded border p-5" style={{ background: C.panel, borderColor: C.borderLight }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Per-product detail report</div>
+            <div className="text-sm" style={{ color: C.textDim }}>Each row is one product's earnings — DistroKid, CD Baby, or TuneCore-style exports with a title, ISRC, and amount per line.</div>
+          </button>
+          <button onClick={() => { setMode('summary'); setStep('upload'); }} className="text-left rounded border p-5" style={{ background: C.panel, borderColor: C.borderLight }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Store breakdown for one product</div>
+            <div className="text-sm" style={{ color: C.textDim }}>Each row is one store's total for a single song — EMPIRE-style summary reports, like the "royalties_summary" exports per track.</div>
+          </button>
+        </div>
+      )}
+
+      {step === 'upload' && (
+        <div>
+          <div className="rounded border p-8 text-center mb-4" style={{ borderColor: C.borderLight, borderStyle: 'dashed', background: C.panel }}>
+            <FileText size={22} style={{ color: C.textFaint, margin: '0 auto 10px' }} />
+            <div style={{ fontWeight: 600 }}>Upload a statement</div>
+            <div className="text-sm mt-1 mb-4" style={{ color: C.textDim }}>
+              {mode === 'summary' ? 'A store-by-store summary report for one product, straight from EMPIRE.' : 'CSV files from DistroKid, CD Baby, TuneCore, or any distributor export.'}
+            </div>
+            <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="text-sm mx-auto block" style={{ color: C.textDim, maxWidth: 280 }} />
+          </div>
+          {parseError && <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{parseError}</div>}
+          <div className="flex items-center justify-between">
+            <button onClick={mode === 'summary' ? downloadSampleSummary : downloadSample} className="inline-flex items-center gap-1.5 text-xs" style={{ color: C.textDim }}>
+              <Download size={12} /> Download a sample CSV to try it out
+            </button>
+            <button onClick={reset} className="text-xs" style={{ color: C.textFaint }}>Change file type</button>
+          </div>
+        </div>
+      )}
+
+      {step === 'map' && mode === 'detail' && (
+        <div>
+          <div className="flex items-center gap-2 mb-4 text-sm" style={{ color: C.textDim }}>
+            <FileText size={14} /> {fileName} · {rawRows.length} rows detected
+          </div>
+          <div className="rounded border p-4 mb-5 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+            {Object.keys(IMPORT_FIELD_LABELS).map(field => (
+              <Field key={field} label={IMPORT_FIELD_LABELS[field] + (field === 'amount' ? ' (required)' : '')}>
+                <Select value={mapping[field] || ''} onChange={e => setMapping({ ...mapping, [field]: e.target.value })}>
+                  <option value="">— none —</option>
+                  {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                </Select>
+              </Field>
+            ))}
+          </div>
+
+          {!canReview && (
+            <div className="text-xs mb-4" style={{ color: C.amber }}>Map at least a revenue amount and a product name or ISRC to continue.</div>
+          )}
+
+          <div className="rounded border overflow-x-auto mb-5" style={{ borderColor: C.border, background: C.panel }}>
+            <div className="text-xs px-4 pt-3 pb-2" style={{ color: C.textFaint }}>Preview — first 5 rows</div>
+            <table className="w-full" style={{ minWidth: 560 }}>
+              <thead><tr>{headers.map(h => <Th key={h}>{h}</Th>)}</tr></thead>
+              <tbody>
+                {rawRows.slice(0, 5).map((row, i) => (
+                  <tr key={i}>{headers.map(h => <Td key={h}>{row[h]}</Td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex gap-2">
+            <Btn variant="primary" onClick={proceedToReview} disabled={!canReview}>Continue</Btn>
+            <Btn variant="ghost" onClick={reset}>Start over</Btn>
+          </div>
+        </div>
+      )}
+
+      {step === 'map' && mode === 'summary' && (
+        <div>
+          <div className="flex items-center gap-2 mb-4 text-sm" style={{ color: C.textDim }}>
+            <FileText size={14} /> {fileName} · {summaryRows.length} store rows detected
+          </div>
+
+          <div className="rounded border p-4 mb-5 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+            <Field label="Product name"><Input value={summaryForm.title} onChange={e => setSummaryForm({ ...summaryForm, title: e.target.value })} placeholder="e.g. Play Pretend" /></Field>
+            <Field label="ISRC (optional)"><Input value={summaryForm.isrc} onChange={e => setSummaryForm({ ...summaryForm, isrc: e.target.value })} /></Field>
+            <Field label="UPC (optional)"><Input value={summaryForm.upc} onChange={e => setSummaryForm({ ...summaryForm, upc: e.target.value })} /></Field>
+            <Field label="Artist">
+              <Select value={summaryForm.artistChoice} onChange={e => setSummaryForm({ ...summaryForm, artistChoice: e.target.value })}>
+                {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                <option value="__new__">+ New artist</option>
+              </Select>
+            </Field>
+            {summaryForm.artistChoice === '__new__' && (
+              <Field label="New artist name"><Input value={summaryForm.newArtistName} onChange={e => setSummaryForm({ ...summaryForm, newArtistName: e.target.value })} /></Field>
+            )}
+            <Field label="Statement period"><Input type="month" value={summaryForm.period} onChange={e => setSummaryForm({ ...summaryForm, period: e.target.value })} /></Field>
+            <Field label="Store / platform column">
+              <Select value={summaryForm.storeCol} onChange={e => setSummaryForm({ ...summaryForm, storeCol: Number(e.target.value) })}>
+                {summaryHeaders.map((h, i) => <option key={i} value={i}>{(h || '(blank)') + ' — col ' + (i + 1)}</option>)}
+              </Select>
+            </Field>
+            <Field label="Revenue column">
+              <Select value={summaryForm.amountCol} onChange={e => setSummaryForm({ ...summaryForm, amountCol: Number(e.target.value) })}>
+                {summaryHeaders.map((h, i) => <option key={i} value={i}>{(h || '(blank)') + ' — col ' + (i + 1)}</option>)}
+              </Select>
+            </Field>
+            <Field label="Streams column (optional)">
+              <Select value={summaryForm.quantityCol} onChange={e => setSummaryForm({ ...summaryForm, quantityCol: e.target.value === '' ? '' : Number(e.target.value) })}>
+                <option value="">— none —</option>
+                {summaryHeaders.map((h, i) => <option key={i} value={i}>{(h || '(blank)') + ' — col ' + (i + 1)}</option>)}
+              </Select>
+            </Field>
+          </div>
+
+          {!canReviewSummary && (
+            <div className="text-xs mb-4" style={{ color: C.amber }}>Add a product name, a statement period, and an artist to continue.</div>
+          )}
+
+          <div className="rounded border overflow-x-auto mb-5" style={{ borderColor: C.border, background: C.panel }}>
+            <div className="text-xs px-4 pt-3 pb-2" style={{ color: C.textFaint }}>Preview — first 6 stores</div>
+            <table className="w-full" style={{ minWidth: 420 }}>
+              <thead><tr><Th>Store</Th>{summaryForm.quantityCol !== '' && <Th align="right">Streams</Th>}<Th align="right">Revenue</Th></tr></thead>
+              <tbody>
+                {summaryRows.slice(0, 6).map((row, i) => (
+                  <tr key={i}>
+                    <Td>{row[summaryForm.storeCol]}</Td>
+                    {summaryForm.quantityCol !== '' && <Td align="right" mono>{formatNumber(parseQuantity(row[summaryForm.quantityCol]))}</Td>}
+                    <Td align="right" mono>{formatCurrency(parseAmount(row[summaryForm.amountCol]) || 0)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex gap-2">
+            <Btn variant="primary" onClick={() => setStep('review')} disabled={!canReviewSummary}>Continue</Btn>
+            <Btn variant="ghost" onClick={reset}>Start over</Btn>
+          </div>
+        </div>
+      )}
+
+      {step === 'review' && mode === 'detail' && (
+        <div>
+          <div className="text-sm mb-4" style={{ color: C.textDim }}>
+            {groups.length} unique products found across {rawRows.length} rows. {matchedCount} matched an existing release automatically — review the rest below.
+          </div>
+          <div className="rounded border overflow-x-auto mb-5" style={{ borderColor: C.border, background: C.panel }}>
+            <table className="w-full" style={{ minWidth: 760 }}>
+              <thead><tr><Th>Product</Th><Th>From CSV</Th><Th align="right">Rows</Th><Th align="right">Total</Th><Th>Match to</Th></tr></thead>
+              <tbody>
+                {groups.map(g => (
+                  <tr key={g.key} style={{ opacity: g.releaseChoice === '__skip__' ? 0.5 : 1 }}>
+                    <Td>
+                      {g.title}
+                      {g.isrc && <div className="text-xs" style={{ color: C.textFaint, fontFamily: MONO_FONT }}>{g.isrc}</div>}
+                    </Td>
+                    <Td>{g.artistNameRaw || '—'}</Td>
+                    <Td align="right" mono>{g.rowIndices.length}</Td>
+                    <Td align="right" mono>{formatCurrency(g.totalAmount)}</Td>
+                    <Td>
+                      <Select value={g.releaseChoice} onChange={e => updateGroup(g.key, { releaseChoice: e.target.value })} style={{ minWidth: 180 }}>
+                        <option value="__create__">Create new release</option>
+                        <option value="__skip__">Skip these rows</option>
+                        {catalog.map(c => {
+                          const a = roster.find(x => x.id === c.artistId);
+                          return <option key={c.id} value={c.id}>{trackOptionLabel(c, true, a ? a.name : null)}</option>;
+                        })}
+                      </Select>
+                      {g.releaseChoice === '__create__' && (
+                        <div className="mt-2">
+                          <Select value={g.artistChoice} onChange={e => updateGroup(g.key, { artistChoice: e.target.value })} style={{ minWidth: 180 }}>
+                            {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            <option value="__new__">+ New artist</option>
+                          </Select>
+                          {g.artistChoice === '__new__' && (
+                            <Input className="mt-2" placeholder="New artist name" value={g.newArtistName} onChange={e => updateGroup(g.key, { newArtistName: e.target.value })} style={{ minWidth: 180 }} />
+                          )}
+                        </div>
+                      )}
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2">
+            <Btn variant="primary" onClick={confirmImport}>Import {rawRows.length} rows</Btn>
+            <Btn variant="ghost" onClick={() => setStep('map')}>Back to mapping</Btn>
+          </div>
+        </div>
+      )}
+
+      {step === 'review' && mode === 'summary' && (
+        <div>
+          <div className="text-sm mb-4" style={{ color: C.textDim }}>
+            Every store below will be logged as earnings for <strong>{summaryForm.title || '(untitled product)'}</strong> in {summaryForm.period ? monthLabel(summaryForm.period) : 'the selected period'} — store-by-store, so it's still visible that way afterward.
+          </div>
+          <div className="rounded border overflow-x-auto mb-5" style={{ borderColor: C.border, background: C.panel }}>
+            <table className="w-full" style={{ minWidth: 420 }}>
+              <thead><tr><Th>Store</Th>{summaryForm.quantityCol !== '' && <Th align="right">Streams</Th>}<Th align="right">Revenue</Th></tr></thead>
+              <tbody>
+                {summaryRows.map((row, i) => (
+                  <tr key={i}>
+                    <Td>{row[summaryForm.storeCol]}</Td>
+                    {summaryForm.quantityCol !== '' && <Td align="right" mono>{formatNumber(parseQuantity(row[summaryForm.quantityCol]))}</Td>}
+                    <Td align="right" mono>{formatCurrency(parseAmount(row[summaryForm.amountCol]) || 0)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2">
+            <Btn variant="primary" onClick={confirmSummaryImport}>Import {summaryRows.length} store rows</Btn>
+            <Btn variant="ghost" onClick={() => setStep('map')}>Back</Btn>
+          </div>
+        </div>
+      )}
+
+      {step === 'done' && summary && (
+        <div>
+          <div className="rounded border p-6 mb-5" style={{ background: C.tealSoft, borderColor: C.teal }}>
+            <div className="flex items-center gap-2 mb-2" style={{ color: C.teal, fontWeight: 600 }}>
+              <CheckCircle2 size={16} /> Import complete
+            </div>
+            <div className="text-sm" style={{ color: C.text }}>
+              {summary.revenueCount !== undefined && <>Added {formatNumber(summary.revenueCount)} revenue {summary.revenueCount === 1 ? 'entry' : 'entries'}</>}
+              {summary.earningsCount !== undefined && <>Added {formatNumber(summary.earningsCount)} revenue {summary.earningsCount === 1 ? 'entry' : 'entries'} to the Revenue tab</>}
+              {summary.streamCount > 0 && <> and {formatNumber(summary.streamCount)} stream {summary.streamCount === 1 ? 'entry' : 'entries'}</>}.
+              {summary.newReleaseCount > 0 && <> Created {summary.newReleaseCount} new {summary.newReleaseCount === 1 ? 'release' : 'releases'}.</>}
+              {summary.newArtistCount > 0 && <> Added {summary.newArtistCount} new {summary.newArtistCount === 1 ? 'artist' : 'artists'} to the roster.</>}
+              {summary.skippedRows > 0 && <> Skipped {summary.skippedRows} {summary.skippedRows === 1 ? 'row' : 'rows'} with no usable amount.</>}
+            </div>
+          </div>
+          <Btn variant="primary" onClick={reset}>Import another file</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
+  const [mode, setMode] = useState(null);
+  const [teamId, setTeamId] = useState(staff[0] ? staff[0].id : '');
+  const [artistId, setArtistId] = useState(roster[0] ? roster[0].id : '');
+
+  function continueAsTeam() {
+    const member = staff.find(s => s.id === teamId);
+    if (!member) return;
+    onEnterTeam({ name: member.name, role: member.role, permissions: permissionsFor(member) });
+  }
+  function continueAsBootstrapAdmin() {
+    onEnterTeam({ name: 'Admin (setup)', role: 'Admin', permissions: permissionsFor({ role: 'Admin' }) });
+  }
+
+  return (
+    <div style={{ background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text }} className="w-full rounded-lg border flex items-center justify-center imss-gate">
+      <style>{GLOBAL_STYLES}</style>
+      <div className="imss-bg-blob imss-bg-blob-1"></div>
+      <div className="imss-bg-blob imss-bg-blob-2"></div>
+      <div className="imss-bg-blob imss-bg-blob-3"></div>
+      <div className="imss-bg-blob imss-bg-blob-4"></div>
+      <div className="imss-glass-layer w-full" style={{ maxWidth: 380, padding: 24 }}>
+        <div className="flex items-center gap-2 mb-1 justify-center">
+          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 34, width: 'auto' }} />
+        </div>
+        <div className="text-sm text-center mb-6" style={{ color: C.textFaint }}>Who's signing in?</div>
+
+        {!mode && (
+          <div className="flex flex-col gap-3">
+            <button onClick={() => setMode('team')} className="rounded border p-4 text-left" style={{ background: C.panel, borderColor: C.borderLight }}>
+              <div className="flex items-center gap-2 mb-1"><UserCog size={16} color={C.amber} /><span style={{ fontWeight: 600 }}>Team member</span></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Admin, Finance, or any role your Admin sets up — access is scoped to what they've granted you.</div>
+            </button>
+            <button onClick={() => setMode('artist')} className="rounded border p-4 text-left" style={{ background: C.panel, borderColor: C.borderLight }}>
+              <div className="flex items-center gap-2 mb-1"><Eye size={16} color={C.teal} /><span style={{ fontWeight: 600 }}>Artist</span></div>
+              <div className="text-xs" style={{ color: C.textFaint }}>View-only — your catalog and your statements, nothing else.</div>
+            </button>
+          </div>
+        )}
+
+        {mode === 'team' && (
+          <div className="rounded border p-4" style={{ background: C.panel, borderColor: C.borderLight }}>
+            {staff.length === 0 ? (
+              <>
+                <div className="text-sm mb-3" style={{ color: C.textDim }}>No team members yet. Continue as a temporary Admin to add your team — you can replace this with real accounts right away from the Team tab.</div>
+                <div className="flex gap-2">
+                  <Btn variant="primary" onClick={continueAsBootstrapAdmin}>Continue as Admin</Btn>
+                  <Btn variant="ghost" onClick={() => setMode(null)}><ArrowLeft size={14} /> Back</Btn>
+                </div>
+              </>
+            ) : (
+              <>
+                <Field label="Your name">
+                  <Select value={teamId} onChange={e => setTeamId(e.target.value)}>
+                    {staff.map(s => <option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
+                  </Select>
+                </Field>
+                <div className="flex gap-2 mt-3">
+                  <Btn variant="primary" onClick={continueAsTeam}>Continue</Btn>
+                  <Btn variant="ghost" onClick={() => setMode(null)}><ArrowLeft size={14} /> Back</Btn>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {mode === 'artist' && (
+          <div className="rounded border p-4" style={{ background: C.panel, borderColor: C.borderLight }}>
+            <Field label="Which artist are you?">
+              <Select value={artistId} onChange={e => setArtistId(e.target.value)}>
+                {roster.length === 0 && <option value="">No artists on the roster yet</option>}
+                {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+            </Field>
+            <div className="flex gap-2 mt-3">
+              <Btn variant="primary" onClick={() => artistId && onEnterArtist(artistId)}>Continue</Btn>
+              <Btn variant="ghost" onClick={() => setMode(null)}><ArrowLeft size={14} /> Back</Btn>
+            </div>
+          </div>
+        )}
+
+        <div className="text-xs text-center mt-6" style={{ color: C.textFaint, lineHeight: 1.6 }}>
+          This is a soft access split for a clean artist view, not secure authentication — anyone with access to this dashboard's link can pick either option.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, labelSettings, onLogout }) {
+  const [tab, setTab] = useState('overview');
+  const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
+  const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
+  const aSlug = useMemo(() => slug(artist.name), [artist.name]);
+
+  const myRevenue = useMemo(() => revenue.filter(r => r.artistSlug === aSlug), [revenue, aSlug]);
+  const myStreams = useMemo(() => streams.filter(s => releaseIds.has(s.releaseId)), [streams, releaseIds]);
+
+  const totalRevenue = myRevenue.reduce((s, r) => s + r.earning, 0);
+  const totalStreams = myStreams.reduce((s, r) => s + r.count, 0);
+
+  const lifetime = useMemo(() => artistLifetime(artist, revenue, masterGross), [artist, revenue, masterGross]);
+  const recoupment = useMemo(() => recoupmentForArtist(artist, ledger, revenue, masterGross), [artist, ledger, revenue, masterGross]);
+  const myExpenses = useMemo(() => [...ledger.filter(x => x.artist === artist.name && x.type === 'expense')].sort((a, b) => (b.date || '').localeCompare(a.date || '')), [ledger, artist.name]);
+  const recoupable = recoupment.spent;
+  const remainingRecoupable = recoupment.unrecouped;
+  const netAfterRecoupment = recoupment.dueOnTop;
+  const myPayouts = useMemo(() => [...payouts.filter(p => p.artistSlug === aSlug)].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [payouts, aSlug]);
+  const paid = myPayouts.filter(p => p.status === 'paid').reduce((s, p) => s + (p.artistShare || 0), 0);
+  const balance = netAfterRecoupment - paid;
+  const isFunded = artist.fundingTier === 'Funded';
+  const totalSpent = myExpenses.reduce((s, x) => s + x.amount, 0);
+  const budgetRemaining = (artist.annualBudget || 0) - totalSpent;
+  const budgetPct = artist.annualBudget > 0 ? Math.min(100, Math.round((totalSpent / artist.annualBudget) * 100)) : 0;
+
+  const spendByCategory = useMemo(() => {
+    const map = {};
+    myExpenses.forEach(x => { map[x.category] = (map[x.category] || 0) + x.amount; });
+    return Object.entries(map).map(([category, value]) => ({ category, value })).sort((a, b) => b.value - a.value);
+  }, [myExpenses]);
+
+  const spendByMonth = useMemo(() => {
+    const map = {};
+    myExpenses.forEach(x => { const k = monthKey(x.date); map[k] = (map[k] || 0) + x.amount; });
+    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
+  }, [myExpenses]);
+
+  const monthlyRevenue = useMemo(() => {
+    const map = {};
+    myRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + r.earning; });
+    return Object.keys(map).sort().map(k => ({ month: monthLabel(k), value: map[k] }));
+  }, [myRevenue]);
+
+  const platformTotals = useMemo(() => {
+    const map = {};
+    myStreams.forEach(s => { map[s.platform] = (map[s.platform] || 0) + s.count; });
+    return Object.keys(map).map(k => ({ name: k, value: map[k] }));
+  }, [myStreams]);
+
+  const topSongs = useMemo(() => {
+    const map = {};
+    myRevenue.forEach(r => {
+      if (!map[r.title]) map[r.title] = { id: r.title, title: r.title, value: 0 };
+      map[r.title].value += r.earning;
+    });
+    return Object.values(map).sort((a, b) => b.value - a.value).slice(0, 5);
+  }, [myRevenue]);
+
+  const sortedMyRevenue = [...myRevenue].sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+
+  const EMPTY_REV_FILTERS = { startDate: '', endDate: '', type: 'all', product: 'all' };
+  const [revFilters, setRevFilters] = useState(EMPTY_REV_FILTERS);
+  const [revGroupBy, setRevGroupBy] = useState('none');
+  // Nothing is listed until the artist picks a period and hits Generate, so the
+  // tab answers the question they asked rather than dumping the whole history.
+  const [revGenerated, setRevGenerated] = useState(null);
+  const [revError, setRevError] = useState('');
+  function resetRevFilters() { setRevFilters(EMPTY_REV_FILTERS); setRevGenerated(null); setRevError(''); }
+  function generateRevenue() {
+    if (revFilters.startDate && revFilters.endDate && revFilters.startDate > revFilters.endDate) {
+      setRevError('The "from" date has to come before the "to" date.');
+      return;
+    }
+    setRevError('');
+    setRevGenerated({ ...revFilters });
+  }
+
+  const filteredMyRevenue = useMemo(() => {
+    if (!revGenerated) return [];
+    return sortedMyRevenue.filter(r => {
+      if (revGenerated.startDate && (r.month + '-01') < revGenerated.startDate) return false;
+      if (revGenerated.endDate && (r.month + '-01') > revGenerated.endDate) return false;
+      if (revGenerated.type !== 'all' && r.type !== revGenerated.type) return false;
+      if (revGenerated.product !== 'all' && r.title !== revGenerated.product) return false;
+      return true;
+    });
+  }, [sortedMyRevenue, revGenerated]);
+  const revFiltersActive = !!(revGenerated && (revGenerated.startDate || revGenerated.endDate || revGenerated.type !== 'all' || revGenerated.product !== 'all'));
+  const filteredRevTotal = filteredMyRevenue.reduce((s, r) => s + r.earning, 0);
+  const revTypes = useMemo(() => Array.from(new Set(myRevenue.map(r => r.type).filter(Boolean))), [myRevenue]);
+  function revPeriodLabel() {
+    if (!revGenerated) return '';
+    const s = revGenerated.startDate, e = revGenerated.endDate;
+    if (!s && !e) return 'All periods';
+    return (s ? formatDate(s) : '…') + ' – ' + (e ? formatDate(e) : '…');
+  }
+
+  const revByType = useMemo(() => {
+    const map = {};
+    filteredMyRevenue.forEach(r => { map[r.type] = (map[r.type] || 0) + r.earning; });
+    return Object.entries(map).map(([type, value]) => ({ type, value })).sort((a, b) => b.value - a.value);
+  }, [filteredMyRevenue]);
+
+  const revByProduct = useMemo(() => {
+    const map = {};
+    filteredMyRevenue.forEach(r => {
+      const key = r.title;
+      if (!map[key]) map[key] = { title: r.title, total: 0, entries: [] };
+      map[key].total += r.earning;
+      map[key].entries.push(r);
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [filteredMyRevenue]);
+
+  const myNotices = useMemo(() => [...notices.filter(n => n.audience === 'all' || n.audience === artist.id)].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [notices, artist.id]);
+
+  const needsToKnow = [];
+  if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
+
+  const TABS = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'work' },
+    { id: 'releases', label: 'Releases', icon: Disc3, group: 'work' },
+    { id: 'profile', label: 'Profile', icon: UserCog, group: 'work' },
+    { id: 'requests', label: 'Requests', icon: MessageSquare, group: 'work' },
+    { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'money' },
+    { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'money' },
+    { id: 'statements', label: 'Statements', icon: Eye, group: 'money' },
+    isFunded && { id: 'budget', label: 'Budget & Expenses', icon: ClipboardList, group: 'money' },
+  ].filter(Boolean);
+
+  const myArtistRequests = useMemo(() => [...artistRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [artistRequests, artist.id]);
+  const openRequestCount = myArtistRequests.filter(r => r.status !== 'Resolved').length;
+  const [requestForm, setRequestForm] = useState({ category: REQUEST_CATEGORIES[0], title: '', message: '' });
+  const [expandedRequestId, setExpandedRequestId] = useState(null);
+  function submitArtistRequest() {
+    if (!requestForm.title.trim() || !requestForm.message.trim()) return;
+    const request = { id: uid(), artistId: artist.id, ...requestForm, status: 'Open', submittedAt: new Date().toISOString(), respondedBy: '', response: '', resolvedAt: '' };
+    updateArtistRequests([request, ...artistRequests]);
+    setRequestForm({ category: REQUEST_CATEGORIES[0], title: '', message: '' });
+  }
+
+  const mySubmissions = useMemo(() => [...releaseSubmissions.filter(s => s.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [releaseSubmissions, artist.id]);
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const emptySubmitForm = { title: '', type: 'Single', genre: artist.genre || '', proposedDate: '', artworkUrl: '', notes: '', collaborators: [], primaryArtists: [], distributionDocs: makeDistributionDocs(), explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits() };
+  const [submitForm, setSubmitForm] = useState(emptySubmitForm);
+  const [newSubmitCollab, setNewSubmitCollab] = useState({ name: '', role: 'Feature', splitPercent: '' });
+  const [newSubmitPrimaryArtist, setNewSubmitPrimaryArtist] = useState('');
+  const submitArtworkRef = useRef(null);
+  const sendsTo = artist.productManager || 'Admin';
+  function handleSubmitArtwork(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    resizeImageFile(file, 400, dataUrl => setSubmitForm(f => ({ ...f, artworkUrl: dataUrl })));
+  }
+  function toggleSubmitDoc(docId) { setSubmitForm(f => ({ ...f, distributionDocs: f.distributionDocs.map(d => d.id === docId ? { ...d, attached: !d.attached } : d) })); }
+  function setSubmitDocNote(docId, note) { setSubmitForm(f => ({ ...f, distributionDocs: f.distributionDocs.map(d => d.id === docId ? { ...d, note } : d) })); }
+  function addSubmitCollaborator() {
+    if (!newSubmitCollab.name.trim()) return;
+    setSubmitForm(f => ({ ...f, collaborators: [...f.collaborators, { ...newSubmitCollab, splitPercent: Number(newSubmitCollab.splitPercent) || 0 }] }));
+    setNewSubmitCollab({ name: '', role: 'Feature', splitPercent: '' });
+  }
+  function removeSubmitCollaborator(idx) { setSubmitForm(f => ({ ...f, collaborators: f.collaborators.filter((_, i) => i !== idx) })); }
+  function addSubmitPrimaryArtist() {
+    if (!newSubmitPrimaryArtist.trim()) return;
+    setSubmitForm(f => ({ ...f, primaryArtists: [...(f.primaryArtists || []), newSubmitPrimaryArtist.trim()] }));
+    setNewSubmitPrimaryArtist('');
+  }
+  function removeSubmitPrimaryArtist(idx) { setSubmitForm(f => ({ ...f, primaryArtists: f.primaryArtists.filter((_, i) => i !== idx) })); }
+  function submitReleaseSubmission() {
+    if (!submitForm.title.trim()) return;
+    const submission = { id: uid(), artistId: artist.id, ...submitForm, sentTo: sendsTo, status: 'Pending', submittedAt: new Date().toISOString(), reviewedBy: '', reviewedAt: '' };
+    updateReleaseSubmissions([submission, ...releaseSubmissions]);
+    setSubmitForm(emptySubmitForm);
+    setNewSubmitCollab({ name: '', role: 'Feature', splitPercent: '' });
+    if (submitArtworkRef.current) submitArtworkRef.current.value = '';
+    setShowSubmitForm(false);
+  }
+
+  const myProfileRequests = useMemo(() => [...profileRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [profileRequests, artist.id]);
+  const myPendingRequest = myProfileRequests.find(r => r.status === 'Pending');
+  const [profileForm, setProfileForm] = useState({ photoUrl: artist.photoUrl || '', bio: artist.bio || '', email: artist.email || '' });
+  const profileInputRef = useRef(null);
+
+  function handleProfilePhoto(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    resizeImageFile(file, 300, dataUrl => setProfileForm(f => ({ ...f, photoUrl: dataUrl })));
+  }
+  function submitProfileRequest() {
+    const changes = {};
+    PROFILE_EDITABLE_FIELDS.forEach(f => {
+      const current = artist[f.key] || '';
+      const proposed = profileForm[f.key] || '';
+      if (proposed !== current) changes[f.key] = proposed;
+    });
+    if (Object.keys(changes).length === 0) return;
+    const request = { id: uid(), artistId: artist.id, changes, submittedAt: new Date().toISOString(), status: 'Pending', reviewedBy: '', reviewedAt: '' };
+    updateProfileRequests([request, ...profileRequests]);
+    if (profileInputRef.current) profileInputRef.current.value = '';
+  }
+
+  return (
+    <div style={{ background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text }} className="w-full rounded-lg border overflow-hidden imss-portal">
+      <style>{GLOBAL_STYLES}</style>
+      <div className="imss-bg-blob imss-bg-blob-1"></div>
+      <div className="imss-bg-blob imss-bg-blob-2"></div>
+      <div className="imss-bg-blob imss-bg-blob-3"></div>
+      <div className="imss-bg-blob imss-bg-blob-4"></div>
+      <div className="imss-print-hide imss-glass-layer flex items-center justify-between flex-wrap gap-2 px-5 py-4" style={{ borderBottom: '1px solid ' + C.border, background: C.panel }}>
+        <div className="flex items-center gap-2">
+          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 22, width: 'auto' }} />
+          <span className="text-xs" style={{ color: C.textFaint }}>· Artist Access</span>
+        </div>
+        <button onClick={onLogout} className="imss-btn rounded inline-flex items-center gap-1.5 text-xs px-3 py-1.5" style={{ border: '1px solid ' + C.border, color: C.textDim }}>
+          <LogOut size={12} /> Switch user
+        </button>
+      </div>
+
+      <div className="imss-content" style={{ padding: 24 }}>
+        <div className="imss-content-inner">
+        <div className="rounded border p-4 mb-6 flex items-center gap-4 flex-wrap justify-between" style={{ background: C.panel, borderColor: C.border }}>
+          <div className="flex items-center gap-4 flex-wrap">
+            <Avatar name={artist.name} photoUrl={artist.photoUrl} size={64} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 18 }}>{artist.name}</div>
+              <div className="text-sm" style={{ color: C.textFaint }}>{artist.genre || 'No genre set'}{artist.subGenre ? ' · ' + artist.subGenre : ''} · {artist.royaltyRate}% royalty rate</div>
+              {(artist.productManager || artist.anr) && (
+                <div className="text-xs mt-1" style={{ color: C.textFaint }}>
+                  {artist.productManager && <span>Product Manager: {artist.productManager}</span>}
+                  {artist.productManager && artist.anr && <span> · </span>}
+                  {artist.anr && <span>A&amp;R: {artist.anr}</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {(myNotices.length > 0 || needsToKnow.length > 0) && (
+          <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
+            <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>Worth knowing</div>
+            {myNotices.length > 0 && (
+              <div className="flex flex-col gap-3 mb-3">
+                {myNotices.map(n => (
+                  <div key={n.id} className="rounded p-3" style={{ background: C.panel, border: '1px solid ' + C.border }}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
+                      <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(n.createdAt)}</div>
+                    </div>
+                    <div className="text-sm mt-1" style={{ color: C.textDim }}>{n.message}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {needsToKnow.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                {needsToKnow.map((n, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.text }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 9999, background: n.tone === 'red' ? C.red : C.amber, flexShrink: 0 }}></span>
+                    {n.text}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="imss-print-hide flex items-center gap-1 mb-6 flex-wrap border-b" style={{ borderColor: C.border }}>
+          {(() => {
+            let lastGroup = null;
+            const out = [];
+            TABS.forEach(t => {
+              if (lastGroup !== null && t.group !== lastGroup) {
+                out.push(<div key={'div-' + t.id} style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '6px 4px' }}></div>);
+              }
+              lastGroup = t.group;
+              const Icon = t.icon;
+              out.push(
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className="text-sm px-3 py-2 inline-flex items-center gap-1.5"
+                  style={{ color: tab === t.id ? C.amber : C.textDim, fontWeight: tab === t.id ? 600 : 500, borderBottom: '2px solid ' + (tab === t.id ? C.amber : 'transparent'), marginBottom: -1 }}>
+                  <Icon size={14} />
+                  {t.label}
+                  {t.id === 'requests' && openRequestCount > 0 && (
+                    <span style={{ background: C.amber, color: '#1A1500', borderRadius: 9999, fontSize: 10, fontWeight: 700, minWidth: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{openRequestCount}</span>
+                  )}
+                </button>
+              );
+            });
+            return out;
+          })()}
+        </div>
+
+        {tab === 'overview' && (
+          <div>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <KPICard icon={DollarSign} label="Total revenue" value={formatCurrency(totalRevenue)} tone="teal" />
+              <KPICard icon={Radio} label="Total streams" value={formatNumber(totalStreams)} />
+              <KPICard icon={Disc3} label="Releases" value={artistCatalog.length} sub={artistCatalog.filter(c => c.status === 'Released').length + ' released'} tone="amber" />
+              <KPICard icon={Wallet} label="Balance owed" value={formatCurrency(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />
+              {isFunded && <KPICard icon={Wallet} label="Budget remaining" value={formatCurrency(budgetRemaining)} tone={budgetRemaining < 0 ? 'red' : 'teal'} sub={'of ' + formatCurrency(artist.annualBudget || 0)} />}
+            </div>
+
+            <div className="imss-grid-2 gap-4 mb-6">
+              <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="text-xs mb-3" style={{ color: C.textFaint }}>Revenue by month</div>
+                <div style={{ height: 220 }}>
+                  {monthlyRevenue.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No revenue yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyRevenue}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                        <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                        <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+              <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="text-xs mb-3" style={{ color: C.textFaint }}>Streams by platform</div>
+                <div style={{ height: 220 }}>
+                  {platformTotals.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No stream data yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
+                          {platformTotals.map((p) => (<Cell key={p.name} fill={PLATFORM_COLORS[p.name] || C.textFaint} />))}
+                        </Pie>
+                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                        <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Top songs by revenue</div>
+              {topSongs.length === 0 ? (
+                <div className="p-4 text-sm" style={{ color: C.textDim }}>No revenue recorded yet.</div>
+              ) : (
+                <table className="w-full">
+                  <tbody>
+                    {topSongs.map(r => (
+                      <tr key={r.id}>
+                        <Td>{r.title}</Td>
+                        <Td align="right" mono>{formatCurrency(r.value)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'releases' && (
+          <div>
+            <div className="flex justify-end mb-4">
+              <Btn variant="primary" onClick={() => setShowSubmitForm(!showSubmitForm)}><Plus size={14} /> Submit new release</Btn>
+            </div>
+
+            {showSubmitForm && (
+              <form onSubmit={e => { e.preventDefault(); submitReleaseSubmission(); }} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
+                <Field label="Title" full><Input required value={submitForm.title} onChange={e => setSubmitForm({ ...submitForm, title: e.target.value })} placeholder="Working title" /></Field>
+                <Field label="Additional primary artists" full>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    <Badge tone="teal">{artist.name} (you)</Badge>
+                    {(submitForm.primaryArtists || []).map((name, i) => (
+                      <Badge key={i}>{name} <button type="button" onClick={() => removeSubmitPrimaryArtist(i)} style={{ marginLeft: 4, color: C.textFaint }}>×</button></Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input value={newSubmitPrimaryArtist} onChange={e => setNewSubmitPrimaryArtist(e.target.value)} placeholder="Add a co-primary artist (for joint releases)" style={{ flex: 1 }} />
+                    <Btn variant="ghost" type="button" onClick={addSubmitPrimaryArtist}>Add</Btn>
+                  </div>
+                </Field>
+                <Field label="Type">
+                  <Select value={submitForm.type} onChange={e => setSubmitForm({ ...submitForm, type: e.target.value })}>
+                    {RELEASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Genre"><Input value={submitForm.genre} onChange={e => setSubmitForm({ ...submitForm, genre: e.target.value })} placeholder="e.g. Alt-Pop" /></Field>
+                <Field label="Proposed release date"><Input type="date" value={submitForm.proposedDate} onChange={e => setSubmitForm({ ...submitForm, proposedDate: e.target.value })} /></Field>
+                <Field label="Artwork (optional)" full>
+                  <input ref={submitArtworkRef} type="file" accept="image/*" onChange={handleSubmitArtwork} className="text-xs" style={{ color: C.textDim }} />
+                </Field>
+
+                <div className="imss-span-2">
+                  <div className="text-xs mb-2" style={{ color: C.textFaint }}>Collaborators &amp; splits — you keep the remainder ({Math.max(0, 100 - submitForm.collaborators.reduce((s, c) => s + c.splitPercent, 0))}%)</div>
+                  <div className="rounded border p-3" style={{ borderColor: C.border, background: C.bg }}>
+                    {submitForm.collaborators.length > 0 && (
+                      <div className="flex flex-col gap-1.5 mb-2">
+                        {submitForm.collaborators.map((c, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span>{c.name} <span style={{ color: C.textFaint }}>· {c.role} · {c.splitPercent}%</span></span>
+                            <button type="button" onClick={() => removeSubmitCollaborator(i)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2 flex-wrap">
+                      <Input value={newSubmitCollab.name} onChange={e => setNewSubmitCollab({ ...newSubmitCollab, name: e.target.value })} placeholder="Name" style={{ flex: 1, minWidth: 120 }} />
+                      <Select value={newSubmitCollab.role} onChange={e => setNewSubmitCollab({ ...newSubmitCollab, role: e.target.value })} style={{ width: 130 }}>
+                        {COLLABORATOR_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                      </Select>
+                      <Input type="number" min="0" max="100" value={newSubmitCollab.splitPercent} onChange={e => setNewSubmitCollab({ ...newSubmitCollab, splitPercent: e.target.value })} placeholder="Split %" style={{ width: 90 }} />
+                      <Btn variant="ghost" type="button" onClick={addSubmitCollaborator}>Add</Btn>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="imss-span-2">
+                  <div className="text-xs mb-2" style={{ color: C.textFaint }}>Track metadata (for the distributor sheet)</div>
+                  <div className="rounded border p-3 imss-form-grid gap-3" style={{ borderColor: C.border, background: C.bg }}>
+                    <Field label="Duration"><Input value={submitForm.duration} onChange={e => setSubmitForm({ ...submitForm, duration: e.target.value })} placeholder="mm:ss" /></Field>
+                    <Field label="Explicit / Clean">
+                      <Select value={submitForm.explicit} onChange={e => setSubmitForm({ ...submitForm, explicit: e.target.value })}>
+                        {EXPLICIT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </Select>
+                    </Field>
+                    <Field label="Dolby Atmos">
+                      <label className="flex items-center gap-2 text-sm" style={{ paddingTop: 8 }}>
+                        <input type="checkbox" checked={submitForm.dolbyAtmos} onChange={e => setSubmitForm({ ...submitForm, dolbyAtmos: e.target.checked })} /> Dolby Atmos mix available
+                      </label>
+                    </Field>
+                    <Field label="Performed by" full><Input value={submitForm.credits.performedBy} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, performedBy: e.target.value } })} placeholder="How you want your name(s) credited" /></Field>
+                    <Field label="Written by"><Input value={submitForm.credits.writtenBy} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, writtenBy: e.target.value } })} /></Field>
+                    <Field label="Produced by"><Input value={submitForm.credits.producedBy} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, producedBy: e.target.value } })} /></Field>
+                    <Field label="Recording engineer"><Input value={submitForm.credits.recordingEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, recordingEngineer: e.target.value } })} /></Field>
+                    <Field label="Mixing engineer"><Input value={submitForm.credits.mixingEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, mixingEngineer: e.target.value } })} /></Field>
+                    <Field label="Mastering engineer"><Input value={submitForm.credits.masteringEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, masteringEngineer: e.target.value } })} /></Field>
+                    <Field label="Dolby engineer"><Input value={submitForm.credits.dolbyEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, dolbyEngineer: e.target.value } })} /></Field>
+                    <Field label="Lyrics" full><TextArea rows={3} value={submitForm.lyrics} onChange={e => setSubmitForm({ ...submitForm, lyrics: e.target.value })} placeholder="Paste lyrics, or note where they're stored" /></Field>
+                  </div>
+                </div>
+
+                <Field label="Notes for the label" full><TextArea rows={3} value={submitForm.notes} onChange={e => setSubmitForm({ ...submitForm, notes: e.target.value })} placeholder="Anything else your PM should know?" /></Field>
+
+                <div className="imss-span-2">
+                  <div className="text-xs mb-2" style={{ color: C.textFaint }}>
+                    Distribution package{missingRequiredDocs(submitForm.distributionDocs) > 0 && <span style={{ color: C.amber }}> — {missingRequiredDocs(submitForm.distributionDocs)} required item{missingRequiredDocs(submitForm.distributionDocs) === 1 ? '' : 's'} not marked ready yet</span>}
+                  </div>
+                  <div className="rounded border p-3" style={{ borderColor: C.border, background: C.bg }}>
+                    <div className="flex flex-col gap-2">
+                      {submitForm.distributionDocs.map(d => (
+                        <div key={d.id} className="flex items-center gap-2 flex-wrap">
+                          <label className="flex items-center gap-2 text-sm" style={{ minWidth: 160, color: d.attached ? C.textFaint : C.text, textDecoration: d.attached ? 'line-through' : 'none' }}>
+                            <input type="checkbox" checked={d.attached} onChange={() => toggleSubmitDoc(d.id)} />
+                            {d.label}
+                          </label>
+                          {!d.attached && (d.required ? <Badge tone="amber">Not ready</Badge> : <Badge>Optional</Badge>)}
+                          <Input value={d.note} onChange={e => setSubmitDocNote(d.id, e.target.value)} placeholder="Where is it? (e.g. in my Drive folder)" style={{ flex: 1, minWidth: 160 }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="imss-span-2 flex items-center gap-3 mt-1 flex-wrap">
+                  <Btn variant="primary" type="submit">Send package to {sendsTo}</Btn>
+                  <Btn variant="ghost" onClick={() => setShowSubmitForm(false)}>Cancel</Btn>
+                  <div className="text-xs" style={{ color: C.textFaint }}>Your {artist.productManager ? 'PM' : 'label rep'} will review it before it becomes an official release.</div>
+                </div>
+              </form>
+            )}
+
+            {mySubmissions.length > 0 && (
+              <div className="rounded border mb-6" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Your submissions</div>
+                <table className="w-full">
+                  <tbody>
+                    {mySubmissions.map(s => (
+                      <tr key={s.id}>
+                        <Td>{s.title}<div className="text-xs" style={{ color: C.textFaint }}>{s.type}{s.proposedDate ? ' · ' + formatDate(s.proposedDate) : ''}{s.sentTo ? ' · sent to ' + s.sentTo : ''}</div></Td>
+                        <Td align="right"><Badge tone={s.status === 'Approved' ? 'teal' : s.status === 'Rejected' ? 'red' : 'amber'}>{s.status}</Badge></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Title', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'Has Video', 'Collaborators']} rows={artistCatalog.map(r => [
+              r.title,
+              r.type,
+              r.releaseDate || '',
+              r.isrc || '',
+              r.upc || '',
+              r.status,
+              r.primaryMarket || '',
+              r.secondaryMarket || '',
+              r.hasVideo ? 'Yes' : 'No',
+              (r.collaborators || []).map(c => c.name + ' (' + c.role + ', ' + c.splitPercent + '%)').join('; '),
+            ])} />
+
+            {artistCatalog.length === 0 ? (
+              <EmptyState icon={Disc3} title="No releases yet" description="Releases the label adds for you will show up here." />
+            ) : (
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
+                {artistCatalog.map(r => {
+                  const prog = checklistProgress(r.checklist);
+                  return (
+                    <div key={r.id} className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+                      <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
+                        <ArtworkThumb release={r} size="100%" radius={0} />
+                        {r.status !== 'Released' && prog.total > 0 && (
+                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'rgba(0,0,0,0.45)' }}>
+                            <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(r.releaseDate)}</div>
+                        <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, marginTop: 2 }}>{r.title}</div>
+                        {r.primaryArtists && r.primaryArtists.length > 0 && (
+                          <div style={{ fontStyle: 'italic', fontSize: 13, color: C.textDim, marginTop: 1 }}>with {r.primaryArtists.join(' & ')}</div>
+                        )}
+                        {r.collaborators && r.collaborators.length > 0 && (
+                          <div style={{ fontStyle: 'italic', fontSize: 13, color: C.textDim, marginTop: 1 }}>feat. {r.collaborators.map(c => c.name).join(', ')}</div>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          <Badge tone={releaseStatusTone(r.status)}>{r.status}</Badge>
+                          <Badge>{r.type}</Badge>
+                          {r.hasVideo && <Badge><Video size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />Video</Badge>}
+                        </div>
+                        {(r.primaryMarket || r.secondaryMarket) && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {r.primaryMarket && <Badge tone="teal"><Globe size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{r.primaryMarket}</Badge>}
+                            {r.secondaryMarket && <Badge>+ {r.secondaryMarket}</Badge>}
+                          </div>
+                        )}
+                        {r.status !== 'Released' && prog.total > 0 && (
+                          <div className="text-xs mt-1.5" style={{ color: C.textFaint }}>{prog.done}/{prog.total} production tasks</div>
+                        )}
+                        {(r.isrc || r.upc) && (
+                          <div className="text-xs mt-2" style={{ color: C.textFaint, lineHeight: 1.5 }}>
+                            {r.isrc && <div>ISRC {r.isrc}</div>}
+                            {r.upc && <div>UPC {r.upc}</div>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'profile' && (
+          <div>
+            <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="text-sm" style={{ color: C.textDim }}>
+                You can update your photo, bio, and contact email here. Changes are reviewed by your Product Manager or Admin before they go live — everything else on your profile (royalty rate, contract terms, team assignments) is managed by the label directly.
+              </div>
+            </div>
+
+            {myPendingRequest && (
+              <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
+                <div className="text-xs mb-2" style={{ color: C.amber, fontWeight: 600 }}>Awaiting review</div>
+                <div className="flex flex-col gap-1.5">
+                  {Object.entries(myPendingRequest.changes).map(([key, value]) => {
+                    const field = PROFILE_EDITABLE_FIELDS.find(f => f.key === key);
+                    return (
+                      <div key={key} className="text-sm" style={{ color: C.text }}>
+                        {field ? field.label : key}: {key === 'photoUrl' ? 'New photo submitted' : <span style={{ fontStyle: 'italic' }}>"{value}"</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-xs mt-2" style={{ color: C.textFaint }}>Submitted {new Date(myPendingRequest.submittedAt).toLocaleString()}</div>
+              </div>
+            )}
+
+            <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="text-xs mb-3" style={{ color: C.textFaint }}>Propose changes</div>
+              <div className="flex items-center gap-3 mb-4">
+                <Avatar name={artist.name} photoUrl={profileForm.photoUrl} size={64} />
+                <div className="flex flex-col gap-1">
+                  <input ref={profileInputRef} type="file" accept="image/*" onChange={handleProfilePhoto} className="text-xs" style={{ color: C.textDim, maxWidth: 220 }} />
+                  {profileForm.photoUrl && <button type="button" onClick={() => setProfileForm(f => ({ ...f, photoUrl: '' }))} className="text-xs text-left" style={{ color: C.textFaint }}>Remove photo</button>}
+                </div>
+              </div>
+              <div className="imss-form-grid gap-3">
+                <Field label="Contact email" full><Input type="email" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></Field>
+                <Field label="Bio" full><TextArea rows={4} value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="A short bio the label can use for press and pitches." /></Field>
+              </div>
+              <Btn variant="primary" onClick={submitProfileRequest}>Submit for review</Btn>
+            </div>
+
+            {myProfileRequests.length > 0 && (
+              <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Request history</div>
+                <table className="w-full">
+                  <tbody>
+                    {myProfileRequests.map(r => (
+                      <tr key={r.id}>
+                        <Td mono>{formatDate(r.submittedAt.slice(0, 10))}</Td>
+                        <Td>{Object.keys(r.changes).map(k => (PROFILE_EDITABLE_FIELDS.find(f => f.key === k) || {}).label || k).join(', ')}</Td>
+                        <Td><Badge tone={r.status === 'Approved' ? 'teal' : r.status === 'Rejected' ? 'red' : 'amber'}>{r.status}</Badge></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'requests' && (
+          <div>
+            <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="text-xs mb-3" style={{ color: C.textFaint }}>New request</div>
+              <div className="imss-form-grid gap-3 mb-3">
+                <Field label="Category">
+                  <Select value={requestForm.category} onChange={e => setRequestForm({ ...requestForm, category: e.target.value })}>
+                    {REQUEST_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Title"><Input value={requestForm.title} onChange={e => setRequestForm({ ...requestForm, title: e.target.value })} placeholder="One line summary" /></Field>
+                <Field label="Details" full><TextArea rows={3} value={requestForm.message} onChange={e => setRequestForm({ ...requestForm, message: e.target.value })} placeholder="Give your PM or Admin what they need to help." /></Field>
+              </div>
+              <Btn variant="primary" onClick={submitArtistRequest}>Submit request</Btn>
+            </div>
+
+            {myArtistRequests.length === 0 ? (
+              <EmptyState icon={MessageSquare} title="No requests yet" description="Need something from the label — a meeting, marketing support, tour funding? Submit it above." />
+            ) : (
+              <div className="flex flex-col gap-3">
+                {myArtistRequests.map(r => {
+                  const expanded = expandedRequestId === r.id;
+                  return (
+                    <div key={r.id} className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+                      <button onClick={() => setExpandedRequestId(expanded ? null : r.id)} className="w-full text-left p-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <Badge>{r.category}</Badge>
+                            <Badge tone={r.status === 'Resolved' ? 'teal' : r.status === 'In Progress' ? 'amber' : 'default'}>{r.status}</Badge>
+                          </div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{r.title}</div>
+                          <div className="text-xs mt-0.5" style={{ color: C.textFaint }}>{formatDate(r.submittedAt.slice(0, 10))}</div>
+                        </div>
+                        <ChevronDown size={16} color={C.textFaint} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                      </button>
+                      {expanded && (
+                        <div className="px-4 pb-4">
+                          <div className="rounded p-3 text-sm" style={{ background: C.bg, color: C.textDim }}>{r.message}</div>
+                          {r.response ? (
+                            <div className="rounded p-3 text-sm mt-2" style={{ background: C.tealSoft, border: '1px solid ' + C.teal }}>
+                              <div className="text-xs mb-1" style={{ color: C.teal, fontWeight: 600 }}>Response from {r.respondedBy || 'the label'}</div>
+                              <div style={{ color: C.text }}>{r.response}</div>
+                            </div>
+                          ) : (
+                            <div className="text-xs mt-2" style={{ color: C.textFaint }}>No response yet — your PM or Admin will get back to you here.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'revenue' && (
+          <div>
+            <div className="imss-print-hide rounded border p-4 mb-4" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="text-xs mb-3" style={{ color: C.textFaint }}>What do you want to see?</div>
+              <div className="imss-form-grid gap-3">
+                <Field label="From"><Input type="date" value={revFilters.startDate} onChange={e => setRevFilters({ ...revFilters, startDate: e.target.value })} /></Field>
+                <Field label="To"><Input type="date" value={revFilters.endDate} onChange={e => setRevFilters({ ...revFilters, endDate: e.target.value })} /></Field>
+                <Field label="Type">
+                  <Select value={revFilters.type} onChange={e => setRevFilters({ ...revFilters, type: e.target.value })}>
+                    <option value="all">All types</option>
+                    {revTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Product">
+                  <Select value={revFilters.product} onChange={e => setRevFilters({ ...revFilters, product: e.target.value })}>
+                    <option value="all">All products</option>
+                    {artistCatalog.map(c => <option key={c.id} value={c.title}>{c.title}</option>)}
+                  </Select>
+                </Field>
+              </div>
+              {revError && (
+                <div className="rounded px-3 py-2 text-xs mt-3" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{revError}</div>
+              )}
+              <div className="flex gap-2 flex-wrap mt-4">
+                <Btn variant="primary" onClick={generateRevenue}>
+                  <FileText size={14} /> {revGenerated ? 'Regenerate' : 'Generate'}
+                </Btn>
+                {revGenerated && <Btn variant="ghost" onClick={resetRevFilters}>Clear</Btn>}
+              </div>
+            </div>
+
+            {!revGenerated ? (
+              <EmptyState icon={DollarSign} title="Pick a period, then generate"
+                description="Choose the dates — and a type or product if you want to narrow it — then hit Generate to see exactly that revenue." />
+            ) : (
+            <>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <KPICard icon={DollarSign} label={revFiltersActive ? 'Revenue in this period' : 'Total revenue'} value={formatCurrency(filteredRevTotal)} tone="teal" />
+              <KPICard icon={ClipboardList} label="Entries" value={filteredMyRevenue.length} />
+            </div>
+
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+              <div style={{ fontWeight: 600 }}>{revPeriodLabel()}</div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Showing {filteredMyRevenue.length} of {myRevenue.length} entries</div>
+            </div>
+
+            <div className="imss-print-hide flex items-center gap-1 mb-4">
+              {[['none', 'Flat'], ['source', 'By type'], ['product', 'By product']].map(([id, label]) => (
+                <button key={id} onClick={() => setRevGroupBy(id)} className="text-sm px-3 py-1.5 rounded"
+                  style={{ background: revGroupBy === id ? C.amberSoft : 'transparent', color: revGroupBy === id ? C.amber : C.textDim, border: '1px solid ' + (revGroupBy === id ? 'transparent' : C.border), fontWeight: revGroupBy === id ? 600 : 500 }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Type', 'Product', 'Amount']} rows={filteredMyRevenue.map(r => [r.month, r.type, r.title, r.earning])} />
+
+            {filteredMyRevenue.length === 0 ? (
+              <EmptyState icon={DollarSign} title="Nothing in that period" description="No revenue was logged for what you picked. Try a wider date range, or clear the type and product filters." />
+            ) : revGroupBy === 'none' ? (
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 520 }}>
+                  <thead><tr><Th>Month</Th><Th>Type</Th><Th>Product</Th><Th align="right">Amount</Th></tr></thead>
+                  <tbody>
+                    {filteredMyRevenue.map((r, i) => (
+                      <tr key={i}>
+                        <Td mono>{monthLabel(r.month)}</Td>
+                        <Td><Badge>{r.type}</Badge></Td>
+                        <Td>{r.title}</Td>
+                        <Td align="right" mono>{formatCurrency(r.earning)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : revGroupBy === 'source' ? (
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 320 }}>
+                  <thead><tr><Th>Type</Th><Th align="right">Entries</Th><Th align="right">Total</Th></tr></thead>
+                  <tbody>
+                    {revByType.map(s => (
+                      <tr key={s.type}>
+                        <Td><Badge>{s.type}</Badge></Td>
+                        <Td align="right" mono>{filteredMyRevenue.filter(r => r.type === s.type).length}</Td>
+                        <Td align="right" mono>{formatCurrency(s.value)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {revByProduct.map(p => (
+                  <div key={p.title} className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+                    <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                      <div style={{ fontWeight: 500 }}>{p.title}</div>
+                      <div style={{ fontFamily: MONO_FONT, color: C.teal, fontWeight: 600 }}>{formatCurrency(p.total)}</div>
+                    </div>
+                    <table className="w-full">
+                      <tbody>
+                        {p.entries.sort((a, b) => (b.month || '').localeCompare(a.month || '')).map((r, i) => (
+                          <tr key={i}>
+                            <Td mono>{monthLabel(r.month)}</Td>
+                            <Td><Badge>{r.type}</Badge></Td>
+                            <Td align="right" mono>{formatCurrency(r.earning)}</Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            )}
+            </>
+            )}
+          </div>
+        )}
+
+        {tab === 'payouts' && (
+          <div>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <KPICard icon={DollarSign} label="Gross accrued" value={formatCurrency(lifetime.artistShare)} />
+              {recoupable > 0 && <KPICard icon={Wallet} label="Unrecouped balance" value={formatCurrency(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />}
+              <KPICard icon={DollarSign} label="Paid to date" value={formatCurrency(paid)} tone="teal" />
+              <KPICard icon={Wallet} label="Balance due" value={formatCurrency(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />
+            </div>
+
+            {recoupable > 0 && (
+              <div className="rounded px-3 py-2 text-xs mb-6" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
+                {formatCurrency(recoupable)} in expenses is being recouped before this balance is fully payable.
+                {isFunded && ' See the Budget & Expenses tab for the full breakdown.'}
+              </div>
+            )}
+
+            <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
+              {myPayouts.length === 0 ? (
+                <div className="p-4 text-sm" style={{ color: C.textDim }}>No payouts recorded yet.</div>
+              ) : (
+                <table className="w-full">
+                  <thead><tr><Th>Period</Th><Th>Status</Th><Th align="right">Amount</Th></tr></thead>
+                  <tbody>
+                    {myPayouts.map(p => (
+                      <tr key={p.id}>
+                        <Td mono>{p.periodStart} – {p.periodEnd}</Td>
+                        <Td><Badge tone={p.status === 'paid' ? 'teal' : undefined}>{p.status}</Badge></Td>
+                        <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'budget' && isFunded && (
+          <div>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <KPICard icon={DollarSign} label="Budget allocated" value={formatCurrency(artist.annualBudget || 0)} />
+              <KPICard icon={DollarSign} label="Spent" value={formatCurrency(totalSpent)} tone="amber" />
+              <KPICard icon={Wallet} label="Remaining" value={formatCurrency(budgetRemaining)} tone={budgetRemaining < 0 ? 'red' : 'teal'} />
+              <KPICard icon={ClipboardList} label="Logged expenses" value={myExpenses.length} />
+            </div>
+
+            <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs" style={{ color: C.textFaint }}>Budget used</div>
+                <div className="text-xs" style={{ color: C.textFaint }}>{budgetPct}%</div>
+              </div>
+              <div className="rounded-full overflow-hidden" style={{ height: 8, background: C.panel2 }}>
+                <div style={{ height: 8, width: budgetPct + '%', background: budgetRemaining < 0 ? C.red : C.amber }} />
+              </div>
+              {budgetRemaining < 0 && (
+                <div className="text-xs mt-2" style={{ color: C.red }}>Spend has gone {formatCurrency(Math.abs(budgetRemaining))} over the allocated budget.</div>
+              )}
+            </div>
+
+            <div className="imss-grid-2 gap-4 mb-6">
+              <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Spend by category</div>
+                {spendByCategory.length === 0 ? (
+                  <div className="p-4 text-sm" style={{ color: C.textDim }}>No expenses logged yet.</div>
+                ) : (
+                  <table className="w-full">
+                    <tbody>
+                      {spendByCategory.map(c => (
+                        <tr key={c.category}>
+                          <Td><Badge>{c.category}</Badge></Td>
+                          <Td align="right" mono>{formatCurrency(c.value)}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="rounded p-4 border" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="text-xs mb-3" style={{ color: C.textFaint }}>Spend by month</div>
+                <div style={{ height: 180 }}>
+                  {spendByMonth.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm" style={{ color: C.textFaint }}>No expenses yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={spendByMonth}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                        <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                        <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + Math.round(v / 1000) + 'k'} />
+                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                        <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-expenses'} headers={['Date', 'Category', 'Description', 'Recoupable', 'Amount']} rows={myExpenses.map(x => [x.date, x.category, x.description || '', x.recoupable ? 'Yes' : 'No', x.amount])} />
+
+            {myExpenses.length === 0 ? (
+              <EmptyState icon={DollarSign} title="No expenses logged" description="Spend charged against your budget will show up here." />
+            ) : (
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 560 }}>
+                  <thead><tr><Th>Date</Th><Th>Category</Th><Th>Description</Th><Th>Recoupable</Th><Th align="right">Amount</Th></tr></thead>
+                  <tbody>
+                    {myExpenses.map(x => (
+                      <tr key={x.id}>
+                        <Td mono>{formatDate(x.date)}</Td>
+                        <Td><Badge>{x.category}</Badge></Td>
+                        <Td>{x.description || '—'}</Td>
+                        <Td>{x.recoupable ? <Badge tone="amber">Yes</Badge> : <Badge>No</Badge>}</Td>
+                        <Td align="right" mono>{formatCurrency(x.amount)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'statements' && (
+          <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
+        )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', setActive }) {
+  const [query, setQuery] = useState('');
+  const [showNotifs, setShowNotifs] = useState(false);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const out = [];
+    roster.forEach(a => { if (a.name.toLowerCase().includes(q)) out.push({ label: a.name, type: 'Artist', tab: 'roster' }); });
+    catalog.forEach(c => {
+      if (c.title.toLowerCase().includes(q) || (c.isrc || '').toLowerCase().includes(q) || (c.upc || '').toLowerCase().includes(q)) out.push({ label: c.title, type: 'Product', tab: 'catalog' });
+    });
+    staff.forEach(s => { if (s.name.toLowerCase().includes(q)) out.push({ label: s.name, type: 'Team', tab: 'team' }); });
+    tasks.forEach(t => { if (t.title.toLowerCase().includes(q)) out.push({ label: t.title, type: 'Task', tab: 'tasks' }); });
+    notices.forEach(n => { if (n.title.toLowerCase().includes(q)) out.push({ label: n.title, type: 'Notice', tab: 'notices' }); });
+    return out.slice(0, 8);
+  }, [query, roster, catalog, staff, tasks, notices]);
+
+  const notifications = useMemo(() => {
+    const items = [];
+    const today = todayStr();
+    roster.forEach(a => {
+      if (!a.contractExpiration) return;
+      const st = expirationStatus(a.contractExpiration);
+      if (st && st.label !== 'Active') items.push({ id: 'contract-' + a.id, tone: st.tone, text: a.name + "'s contract " + st.label.toLowerCase(), tab: 'roster' });
+    });
+    catalog.forEach(c => {
+      if (!c.licenseExpiration) return;
+      const st = expirationStatus(c.licenseExpiration);
+      if (st && st.label !== 'Active') items.push({ id: 'license-' + c.id, tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase(), tab: 'catalog' });
+    });
+    catalog.forEach(c => {
+      if (c.status === 'Released') return;
+      const missing = missingRequiredDocs(c.distributionDocs);
+      if (missing > 0) items.push({ id: 'missing-docs-' + c.id, tone: 'amber', text: c.title + ' missing ' + missing + ' required distribution document' + (missing === 1 ? '' : 's'), tab: 'catalog' });
+    });
+    staff.forEach(s => {
+      if ((s.status || 'Active') !== 'Onboarding') return;
+      const prog = onboardingProgress(s);
+      items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team' });
+    });
+    catalog.forEach(c => {
+      if (!c.releaseDate || c.status === 'Released') return;
+      const days = Math.round((new Date(c.releaseDate) - new Date(today)) / 86400000);
+      if (days < 0 || days > 14) return;
+      const prog = checklistProgress(c.checklist);
+      const dueText = days === 0 ? 'releases today' : days === 1 ? 'releases tomorrow' : 'releases in ' + days + ' days';
+      if (prog.total > 0 && prog.pct < 100 && days <= 7) {
+        items.push({ id: 'release-risk-' + c.id, tone: 'red', text: c.title + ' ' + dueText + ' — checklist only ' + prog.pct + '% done', tab: 'catalog' });
+      } else {
+        items.push({ id: 'release-' + c.id, tone: days <= 3 ? 'red' : 'amber', text: c.title + ' ' + dueText, tab: 'calendar' });
+      }
+    });
+    tasks.forEach(t => {
+      if (t.status !== 'Open' || !t.dueDate || t.dueDate >= today) return;
+      items.push({ id: 'task-' + t.id, tone: 'red', text: 'Overdue: "' + t.title + '" (' + t.assignee + ')', tab: 'tasks' });
+    });
+    if (isAdmin) {
+      const pendingCount = revenue.filter(x => x.approvalStatus === 'Pending').length;
+      if (pendingCount > 0) {
+        items.push({ id: 'pending-earnings', tone: 'amber', text: pendingCount + ' revenue ' + (pendingCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'revenue' });
+      }
+      const pendingExpenseCount = ledger.filter(x => x.approvalStatus === 'Pending').length;
+      if (pendingExpenseCount > 0) {
+        items.push({ id: 'pending-expenses', tone: 'amber', text: pendingExpenseCount + ' ledger ' + (pendingExpenseCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'ledger' });
+      }
+      const pendingAccess = accessRequests.filter(r => r.status === 'Pending').length;
+      if (pendingAccess > 0) {
+        items.push({ id: 'pending-access', tone: 'red', text: pendingAccess + ' access ' + (pendingAccess === 1 ? 'change' : 'changes') + ' from Legal waiting on your approval', tab: 'access-requests' });
+      }
+      const pendingProfileCount = profileRequests.filter(r => r.status === 'Pending').length;
+      if (pendingProfileCount > 0) {
+        items.push({ id: 'pending-profile', tone: 'amber', text: pendingProfileCount + ' artist profile ' + (pendingProfileCount === 1 ? 'change' : 'changes') + ' waiting on review', tab: 'roster' });
+      }
+      const openRequestCount = artistRequests.filter(r => r.status === 'Open').length;
+      if (openRequestCount > 0) {
+        items.push({ id: 'open-artist-requests', tone: 'amber', text: openRequestCount + ' artist ' + (openRequestCount === 1 ? 'request' : 'requests') + ' waiting on a response', tab: 'artist-requests' });
+      }
+    }
+    const myPendingSubmissions = releaseSubmissions.filter(s => s.status === 'Pending' && (isAdmin || s.sentTo === sessionName));
+    if (myPendingSubmissions.length > 0) {
+      items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'catalog' });
+    }
+    return items.sort((a, b) => (a.tone === 'red' ? 0 : 1) - (b.tone === 'red' ? 0 : 1));
+  }, [roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, isAdmin, sessionName]);
+
+  return (
+    <div className="imss-print-hide flex items-center justify-between gap-3 mb-6 flex-wrap">
+      <div style={{ position: 'relative', maxWidth: 320, width: '100%' }}>
+        <div className="flex items-center gap-2 rounded px-3 py-2" style={{ background: C.panel2, border: '1px solid ' + C.border }}>
+          <Search size={14} color={C.textFaint} />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search artists, products, team" className="w-full text-sm bg-transparent" style={{ color: C.text, fontFamily: HEADING_FONT, border: 'none' }} />
+        </div>
+        {results.length > 0 && (
+          <div className="rounded border" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 20, background: C.panel, borderColor: C.borderLight }}>
+            {results.map((r, i) => (
+              <button key={i} onClick={() => { setActive(r.tab); setQuery(''); }} className="flex items-center justify-between w-full text-left px-3 py-2 text-sm hover:bg-white/5">
+                <span>{r.label}</span>
+                <span className="text-xs" style={{ color: C.textFaint }}>{r.type}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <button onClick={() => setShowNotifs(s => !s)} className="rounded inline-flex items-center gap-1.5 text-sm px-3 py-2" style={{ border: '1px solid ' + C.border, color: C.text }}>
+          <Bell size={14} /> Alerts
+          {notifications.length > 0 && <Badge tone="amber">{notifications.length}</Badge>}
+        </button>
+        {showNotifs && (
+          <div className="rounded border" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 20, background: C.panel, borderColor: C.borderLight, width: 320, maxHeight: 360, overflowY: 'auto' }}>
+            {notifications.length === 0 ? (
+              <div className="p-3 text-sm" style={{ color: C.textDim }}>You're all caught up.</div>
+            ) : notifications.map(n => (
+              <button key={n.id} onClick={() => { setActive(n.tab); setShowNotifs(false); }} className="flex items-start gap-2 w-full text-left px-3 py-2 text-sm hover:bg-white/5" style={{ borderBottom: '1px solid ' + C.border }}>
+                <span style={{ width: 6, height: 6, borderRadius: 9999, marginTop: 6, flexShrink: 0, background: n.tone === 'red' ? C.red : n.tone === 'amber' ? C.amber : C.teal }}></span>
+                {n.text}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function RecordLabelDashboard() {
+  const [roster, setRoster] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [revenue, setRevenue] = useState([]);
+  const [streams, setStreams] = useState([]);
+  const [payouts, setPayouts] = useState([]);
+  const [masterGross, setMasterGross] = useState([]);
+  const [labelSettings, setLabelSettings] = useState(SEED_LABEL_SETTINGS);
+  const [staff, setStaff] = useState(SEED_STAFF);
+  const [tasks, setTasks] = useState(SEED_TASKS);
+  const [ledger, setLedger] = useState(SEED_LEDGER);
+  const [notices, setNotices] = useState(SEED_NOTICES);
+  const [labelBudgets, setLabelBudgets] = useState(SEED_LABEL_BUDGETS);
+  const [profileRequests, setProfileRequests] = useState(SEED_PROFILE_REQUESTS);
+  const [accessRequests, setAccessRequests] = useState(SEED_ACCESS_REQUESTS);
+  const [artistRequests, setArtistRequests] = useState(SEED_ARTIST_REQUESTS);
+  const [releaseSubmissions, setReleaseSubmissions] = useState(SEED_RELEASE_SUBMISSIONS);
+  const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
+  const [loading, setLoading] = useState(true);
+  const [active, setActive] = useState('overview');
+  const [error, setError] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmReseed, setConfirmReseed] = useState(false);
+  const [session, setSession] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      let needsReseed = false;
+      try {
+        const versionRes = await window.storage.get('dataVersion', false);
+        if (!versionRes || versionRes.value !== DATA_VERSION) needsReseed = true;
+      } catch (e) {
+        needsReseed = true;
+      }
+
+      const jobs = [
+        ['roster', setRoster, SEED_ROSTER],
+        ['catalog', setCatalog, SEED_CATALOG],
+        ['revenue', setRevenue, SEED_REVENUE],
+        ['streams', setStreams, SEED_STREAMS],
+        ['payouts', setPayouts, SEED_PAYOUTS],
+        ['masterGross', setMasterGross, SEED_MASTER_GROSS],
+        ['labelSettings', setLabelSettings, SEED_LABEL_SETTINGS],
+        ['staff', setStaff, SEED_STAFF],
+        ['tasks', setTasks, SEED_TASKS],
+        ['ledger', setLedger, SEED_LEDGER],
+        ['notices', setNotices, SEED_NOTICES],
+        ['labelBudgets', setLabelBudgets, SEED_LABEL_BUDGETS],
+        ['profileRequests', setProfileRequests, SEED_PROFILE_REQUESTS],
+        ['accessRequests', setAccessRequests, SEED_ACCESS_REQUESTS],
+        ['artistRequests', setArtistRequests, SEED_ARTIST_REQUESTS],
+        ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
+        ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
+      ];
+      for (const [key, setter, seed] of jobs) {
+        if (needsReseed) {
+          if (!cancelled) setter(seed);
+          try { await window.storage.set(key, JSON.stringify(seed), false); } catch (e2) { /* ignore */ }
+          continue;
+        }
+        try {
+          const res = await window.storage.get(key, false);
+          const val = res && res.value ? JSON.parse(res.value) : seed;
+          if (!cancelled) setter(val);
+        } catch (e) {
+          if (!cancelled) setter(seed);
+          // Missing key: save the seed. Unreadable data: keep it on disk so nothing real is lost.
+          if (String(e && e.message).startsWith('not found')) {
+            try { await window.storage.set(key, JSON.stringify(seed), false); } catch (e2) { /* ignore */ }
+          } else if (!cancelled) {
+            setError('Some saved ' + key + ' data could not be read, so sample data is shown. Your saved copy is untouched until you edit that section.');
+          }
+        }
+      }
+      if (needsReseed) {
+        try { await window.storage.set('dataVersion', DATA_VERSION, false); } catch (e) { /* ignore */ }
+      }
+      if (!cancelled) setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function persist(key, value) {
+    try {
+      await window.storage.set(key, JSON.stringify(value), false);
+    } catch (e) {
+      setError('Could not save your last change. It may not persist after this session.');
+      setTimeout(() => setError(''), 4500);
+    }
+  }
+
+  function logChange(section, prevArr, nextArr) {
+    const actor = session && session.mode === 'team' ? session.name : (session && session.mode === 'artist' ? 'Artist portal' : 'Unknown');
+    let action = 'updated';
+    if (Array.isArray(prevArr) && Array.isArray(nextArr)) {
+      if (nextArr.length > prevArr.length) action = 'added an entry to';
+      else if (nextArr.length < prevArr.length) action = 'removed an entry from';
+    }
+    const entry = { id: uid(), timestamp: new Date().toISOString(), actor, section, action };
+    setActivityLog(prev => {
+      const next = [entry, ...prev].slice(0, 200);
+      persist('activityLog', next);
+      return next;
+    });
+  }
+
+  function updateRoster(next) { logChange('Roster', roster, next); setRoster(next); persist('roster', next); }
+  function updateCatalog(next) { logChange('Catalog', catalog, next); setCatalog(next); persist('catalog', next); }
+  function updateRevenue(next) { logChange('Revenue', revenue, next); setRevenue(next); persist('revenue', next); }
+  function updateStreams(next) { logChange('Streams', streams, next); setStreams(next); persist('streams', next); }
+  function updatePayouts(next) { logChange('Payouts', payouts, next); setPayouts(next); persist('payouts', next); }
+  function updateMasterGross(next) { logChange('Master gross', masterGross, next); setMasterGross(next); persist('masterGross', next); }
+  function updateLabelSettings(next) { setLabelSettings(next); persist('labelSettings', next); }
+  function updateStaff(next) { logChange('Team', staff, next); setStaff(next); persist('staff', next); }
+  function updateTasks(next) { logChange('Tasks', tasks, next); setTasks(next); persist('tasks', next); }
+  function updateLedger(next) { logChange('Ledger', ledger, next); setLedger(next); persist('ledger', next); }
+  function updateNotices(next) { logChange('Noticeboard', notices, next); setNotices(next); persist('notices', next); }
+  function updateLabelBudgets(next) { logChange('Budget', labelBudgets, next); setLabelBudgets(next); persist('labelBudgets', next); }
+  function updateProfileRequests(next) { logChange('Profile requests', profileRequests, next); setProfileRequests(next); persist('profileRequests', next); }
+  function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
+  function updateArtistRequests(next) { logChange('Artist requests', artistRequests, next); setArtistRequests(next); persist('artistRequests', next); }
+  function updateReleaseSubmissions(next) { logChange('Release submissions', releaseSubmissions, next); setReleaseSubmissions(next); persist('releaseSubmissions', next); }
+
+  function clearAll() {
+    updateRoster([]); updateCatalog([]); updateRevenue([]); updateStreams([]); updatePayouts([]);
+    updateMasterGross([]); updateLabelSettings(SEED_LABEL_SETTINGS);
+    updateTasks([]); updateLedger([]); updateNotices([]); updateLabelBudgets([]); updateProfileRequests([]); updateArtistRequests([]); updateReleaseSubmissions([]); updateAccessRequests([]);
+    setConfirmReset(false);
+  }
+
+  function reseedSample() {
+    updateRoster(SEED_ROSTER); updateCatalog(SEED_CATALOG); updateRevenue(SEED_REVENUE); updateStreams(SEED_STREAMS);
+    updatePayouts(SEED_PAYOUTS); updateMasterGross(SEED_MASTER_GROSS); updateLabelSettings(SEED_LABEL_SETTINGS);
+    updateStaff(SEED_STAFF); updateTasks(SEED_TASKS); updateLedger(SEED_LEDGER); updateNotices(SEED_NOTICES); updateLabelBudgets(SEED_LABEL_BUDGETS); updateProfileRequests(SEED_PROFILE_REQUESTS); updateArtistRequests(SEED_ARTIST_REQUESTS); updateReleaseSubmissions(SEED_RELEASE_SUBMISSIONS); updateAccessRequests(SEED_ACCESS_REQUESTS);
+    window.storage.set('dataVersion', DATA_VERSION, false).catch(() => {});
+    setConfirmReseed(false);
+  }
+
+  const artistMap = useMemo(() => Object.fromEntries(roster.map(a => [a.id, a])), [roster]);
+  const releaseMap = useMemo(() => Object.fromEntries(catalog.map(r => [r.id, r])), [catalog]);
+  const approvedRevenue = useMemo(() => revenue.filter(e => (e.approvalStatus || 'Approved') === 'Approved'), [revenue]);
+  const approvedLedger = useMemo(() => ledger.filter(x => (x.approvalStatus || 'Approved') === 'Approved'), [ledger]);
+
+  const perms = session && session.mode === 'team' ? session.permissions : {};
+  const isAdmin = session && session.mode === 'team' && session.role === 'Admin';
+  const isLegal = session && session.mode === 'team' && session.role === 'Legal';
+  // Legal sees and edits everything an Admin does; only approving access
+  // changes is Admin-only.
+  const isPrivileged = isAdmin || isLegal;
+  const pendingAccessCount = accessRequests.filter(r => r.status === 'Pending').length;
+  const canEdit = !!perms.edits;
+  const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
+
+  const NAV = [
+    perms.analytics && { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Analytics' },
+    perms.analytics && { id: 'streams', label: 'Streams', icon: Radio, group: 'Analytics' },
+
+    perms.roster && { id: 'roster', label: 'Roster', icon: Users, group: 'Artists & Catalog' },
+    perms.roster && { id: 'artist-requests', label: 'Artist Requests', icon: MessageSquare, group: 'Artists & Catalog' },
+    perms.catalog && { id: 'catalog', label: 'Catalog', icon: Disc3, group: 'Artists & Catalog' },
+    session && session.mode === 'team' && { id: 'calendar', label: 'Release Calendar', icon: Calendar, group: 'Artists & Catalog' },
+    perms.edits && perms.catalog && { id: 'import', label: 'Import', icon: Upload, group: 'Artists & Catalog' },
+
+    perms.royalties && { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'Finance' },
+    perms.royalties && { id: 'mastergross', label: 'Master Gross', icon: Coins, group: 'Finance' },
+    perms.spend && { id: 'ledger', label: 'Ledger', icon: Wallet, group: 'Finance' },
+    perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Finance' },
+    perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Finance' },
+    perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Finance' },
+
+    isPrivileged && { id: 'team', label: 'Team', icon: UserCog, group: 'Team' },
+    isPrivileged && { id: 'access-requests', label: 'Access Requests', icon: ShieldCheck, group: 'Team' },
+    session && session.mode === 'team' && { id: 'tasks', label: 'Tasks', icon: ClipboardList, group: 'Team' },
+    perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: 'Team' },
+    session && session.mode === 'team' && { id: 'activity', label: 'Activity Log', icon: History, group: 'Team' },
+
+    isPrivileged && { id: 'backup', label: 'Backup & Restore', icon: FileDown, group: 'System' },
+  ].filter(Boolean);
+
+  useEffect(() => {
+    if (session && session.mode === 'team' && NAV.length && !NAV.find(n => n.id === active)) {
+      setActive(NAV[0].id);
+    }
+    // eslint-disable-next-line
+  }, [session, staff]);
+
+  const shellStyle = { background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text };
+
+  if (loading) {
+    return (
+      <div style={shellStyle} className="w-full rounded-lg border flex flex-col items-center justify-center gap-2 imss-gate" >
+        <style>{GLOBAL_STYLES}</style>
+        <div className="imss-bg-blob imss-bg-blob-1"></div>
+        <div className="imss-bg-blob imss-bg-blob-2"></div>
+        <div className="imss-glass-layer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 28, width: 'auto' }} />
+          <div className="text-sm" style={{ color: C.textDim }}>Loading…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
+  }
+
+  if (session.mode === 'artist') {
+    const artist = roster.find(a => a.id === session.artistId);
+    if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} labelSettings={labelSettings} onLogout={() => setSession(null)} />;
+  }
+
+  return (
+    <div style={shellStyle} className="w-full rounded-lg border overflow-hidden imss-shell">
+      <style>{GLOBAL_STYLES}</style>
+      <div className="imss-bg-blob imss-bg-blob-1"></div>
+      <div className="imss-bg-blob imss-bg-blob-2"></div>
+      <div className="imss-bg-blob imss-bg-blob-3"></div>
+      <div className="imss-bg-blob imss-bg-blob-4"></div>
+      <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={() => setSession(null)} />
+      <div className="flex-1 min-w-0 imss-content">
+        <div className="imss-content-inner">
+        <TopBar roster={roster} catalog={catalog} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} setActive={setActive} />
+        {error && (
+          <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
+        )}
+        {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
+        {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={masterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} />}
+        {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} />}
+        {active === 'roster' && <RosterSection roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
+        {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
+        {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
+        {active === 'backup' && <BackupSection
+          allData={{ roster, catalog, revenue, streams, payouts, masterGross, labelSettings, staff, tasks, ledger, accessRequests }}
+          updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests }}
+          dataVersion={DATA_VERSION}
+        />}
+        {active === 'catalog' && <CatalogSection catalog={catalog} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name} />}
+        {active === 'calendar' && <ReleaseCalendarSection catalog={catalog} roster={roster} artistMap={artistMap} tasks={tasks} />}
+        {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
+        {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalog} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
+        {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
+        {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} canEdit={canEdit} />}
+        {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={masterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
+        {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}
+        {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
+        {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} payouts={payouts} />}
+        {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalog} />}
+        {active === 'activity' && <ActivityLogSection activityLog={activityLog} />}
+        <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
+          {confirmReset ? (
+            <span className="inline-flex gap-2">
+              Clear all data?
+              <button onClick={clearAll} style={{ color: C.red, fontWeight: 600 }}>Yes</button>
+              <button onClick={() => setConfirmReset(false)} style={{ color: C.textDim }}>Cancel</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmReset(true)}>Clear all data</button>
+          )}
+          <div className="mt-2">
+            {confirmReseed ? (
+              <span className="inline-flex gap-2">
+                Overwrite with sample data?
+                <button onClick={reseedSample} style={{ color: C.amber, fontWeight: 600 }}>Yes</button>
+                <button onClick={() => setConfirmReseed(false)} style={{ color: C.textDim }}>Cancel</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmReseed(true)}>Reset to sample data</button>
+            )}
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+  );
+}
