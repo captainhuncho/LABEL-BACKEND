@@ -14,10 +14,10 @@ npm test           # finance baseline
 
 ## Deploying
 
-Pushing to `main` deploys to https://ops.imssrecords.com:
-`.github/workflows/deploy.yml` runs tests, builds, and uploads `dist/` over
-FTPS to hosting.com (secrets `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`).
-`public/.htaccess` forces HTTPS and sets cache headers there.
+Vercel project `label-backend` is linked to the GitHub repo: every push to
+`main` builds and goes live at https://ops.imssrecords.com. Supabase env vars
+are set in Vercel. `vercel.json` sets security and cache headers; Vercel
+handles HTTPS.
 
 ## Backend (Supabase)
 
