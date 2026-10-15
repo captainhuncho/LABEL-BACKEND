@@ -174,6 +174,12 @@ export const GLOBAL_STYLES = `
   .imss-dash-retail li { grid-template-columns: minmax(0, 1fr) 92px; }
   .imss-dash-retail .imss-ledger-bar { display: none; }
 }
+.imss-people { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; padding: 4px 6px; background: rgba(20,23,26,0.85); border: 1px solid rgba(255,255,255,0.18); border-radius: 10px; cursor: text; transition: border-color 0.18s ease, box-shadow 0.18s ease; }
+.imss-people:focus-within { border-color: rgba(231,162,61,0.75); box-shadow: 0 0 0 3px rgba(231,162,61,0.2); }
+.imss-people input, .imss-people input:focus { flex: 1 1 120px; min-width: 100px; height: 28px; background: transparent; border: none !important; box-shadow: none !important; outline: none; color: ${C.text}; font: 13px ${HEADING_FONT}; padding: 0 4px; }
+.imss-people-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 10px; border-radius: 9999px; background: rgba(255,255,255,0.08); border: 1px solid ${C.border}; color: ${C.text}; font-size: 13px; font-weight: 500; }
+.imss-people-chip button { display: inline-flex; padding: 3px; border-radius: 9999px; color: ${C.textDim}; }
+.imss-people-chip button:hover { color: ${C.text}; background: rgba(255,255,255,0.08); }
 .imss-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9999px; border: 1px solid; font-size: 13px; font-weight: 600; }
 .imss-chip small { font-size: 11px; font-weight: 500; opacity: 0.85; }
 .imss-chip button { display: inline-flex; margin-left: 2px; color: inherit; opacity: 0.8; }

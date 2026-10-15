@@ -8,7 +8,7 @@ import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutSta
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
-import { ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
+import { ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
 function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmReset, onReseed, confirmReseed, setConfirmReseed, sessionName, onLogout }) {
   return (
@@ -1914,13 +1914,13 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
                   <input type="checkbox" checked={form.dolbyAtmos} onChange={e => setForm({ ...form, dolbyAtmos: e.target.checked })} /> Dolby Atmos mix available
                 </label>
               </Field>
-              <Field label="Performed by" full><Input value={form.credits.performedBy} onChange={e => setForm({ ...form, credits: { ...form.credits, performedBy: e.target.value } })} placeholder="Artist name(s) as credited" /></Field>
-              <Field label="Written by"><Input value={form.credits.writtenBy} onChange={e => setForm({ ...form, credits: { ...form.credits, writtenBy: e.target.value } })} /></Field>
-              <Field label="Produced by"><Input value={form.credits.producedBy} onChange={e => setForm({ ...form, credits: { ...form.credits, producedBy: e.target.value } })} /></Field>
-              <Field label="Recording engineer"><Input value={form.credits.recordingEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, recordingEngineer: e.target.value } })} /></Field>
-              <Field label="Mixing engineer"><Input value={form.credits.mixingEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, mixingEngineer: e.target.value } })} /></Field>
-              <Field label="Mastering engineer"><Input value={form.credits.masteringEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, masteringEngineer: e.target.value } })} /></Field>
-              <Field label="Dolby engineer"><Input value={form.credits.dolbyEngineer} onChange={e => setForm({ ...form, credits: { ...form.credits, dolbyEngineer: e.target.value } })} /></Field>
+              <Field label="Performed by" full><PeopleInput label="Performed by" value={form.credits.performedBy} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, performedBy: v } }))} placeholder="Artist name, then Enter" /></Field>
+              <Field label="Written by"><PeopleInput label="Written by" value={form.credits.writtenBy} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, writtenBy: v } }))} placeholder="Type a name, then Enter" /></Field>
+              <Field label="Produced by"><PeopleInput label="Produced by" value={form.credits.producedBy} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, producedBy: v } }))} placeholder="Type a name, then Enter" /></Field>
+              <Field label="Recording engineer"><PeopleInput label="Recording engineer" value={form.credits.recordingEngineer} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, recordingEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
+              <Field label="Mixing engineer"><PeopleInput label="Mixing engineer" value={form.credits.mixingEngineer} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, mixingEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
+              <Field label="Mastering engineer"><PeopleInput label="Mastering engineer" value={form.credits.masteringEngineer} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, masteringEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
+              <Field label="Dolby engineer"><PeopleInput label="Dolby engineer" value={form.credits.dolbyEngineer} onChange={v => setForm(f => ({ ...f, credits: { ...f.credits, dolbyEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
               <Field label="Lyrics" full><TextArea rows={3} value={form.lyrics} onChange={e => setForm({ ...form, lyrics: e.target.value })} placeholder="Paste lyrics, or note where they're stored" /></Field>
             </div>
           </div>
@@ -5399,13 +5399,13 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <input type="checkbox" checked={submitForm.dolbyAtmos} onChange={e => setSubmitForm({ ...submitForm, dolbyAtmos: e.target.checked })} /> Dolby Atmos mix available
                       </label>
                     </Field>
-                    <Field label="Performed by" full><Input value={submitForm.credits.performedBy} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, performedBy: e.target.value } })} placeholder="How you want your name(s) credited" /></Field>
-                    <Field label="Written by"><Input value={submitForm.credits.writtenBy} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, writtenBy: e.target.value } })} /></Field>
-                    <Field label="Produced by"><Input value={submitForm.credits.producedBy} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, producedBy: e.target.value } })} /></Field>
-                    <Field label="Recording engineer"><Input value={submitForm.credits.recordingEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, recordingEngineer: e.target.value } })} /></Field>
-                    <Field label="Mixing engineer"><Input value={submitForm.credits.mixingEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, mixingEngineer: e.target.value } })} /></Field>
-                    <Field label="Mastering engineer"><Input value={submitForm.credits.masteringEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, masteringEngineer: e.target.value } })} /></Field>
-                    <Field label="Dolby engineer"><Input value={submitForm.credits.dolbyEngineer} onChange={e => setSubmitForm({ ...submitForm, credits: { ...submitForm.credits, dolbyEngineer: e.target.value } })} /></Field>
+                    <Field label="Performed by" full><PeopleInput label="Performed by" value={submitForm.credits.performedBy} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, performedBy: v } }))} placeholder="Artist name, then Enter" /></Field>
+                    <Field label="Written by"><PeopleInput label="Written by" value={submitForm.credits.writtenBy} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, writtenBy: v } }))} placeholder="Type a name, then Enter" /></Field>
+                    <Field label="Produced by"><PeopleInput label="Produced by" value={submitForm.credits.producedBy} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, producedBy: v } }))} placeholder="Type a name, then Enter" /></Field>
+                    <Field label="Recording engineer"><PeopleInput label="Recording engineer" value={submitForm.credits.recordingEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, recordingEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
+                    <Field label="Mixing engineer"><PeopleInput label="Mixing engineer" value={submitForm.credits.mixingEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, mixingEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
+                    <Field label="Mastering engineer"><PeopleInput label="Mastering engineer" value={submitForm.credits.masteringEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, masteringEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
+                    <Field label="Dolby engineer"><PeopleInput label="Dolby engineer" value={submitForm.credits.dolbyEngineer} onChange={v => setSubmitForm(f => ({ ...f, credits: { ...f.credits, dolbyEngineer: v } }))} placeholder="Type a name, then Enter" /></Field>
                     <Field label="Lyrics" full><TextArea rows={3} value={submitForm.lyrics} onChange={e => setSubmitForm({ ...submitForm, lyrics: e.target.value })} placeholder="Paste lyrics, or note where they're stored" /></Field>
                   </div>
                 </div>

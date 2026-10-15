@@ -1,5 +1,6 @@
 // Shared UI primitives — buttons, fields, tables, cards, export bars.
-import { Download, FileSpreadsheet, Printer } from 'lucide-react';
+import { Download, FileSpreadsheet, Printer, X } from 'lucide-react';
+import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { artworkColor, artworkInitials } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
@@ -186,6 +187,40 @@ export function SectionHeader({ title, description, action }) {
         {description && <p className="text-sm mt-1" style={{ color: C.textDim, maxWidth: 520 }}>{description}</p>}
       </div>
       {action}
+    </div>
+  );
+}
+
+// Several people in one credit field. Stored as a comma-separated string so
+// exports and the distributor sheet stay unchanged; shown as removable chips.
+export function PeopleInput({ value, onChange, placeholder = 'Type a name, then Enter', label }) {
+  const people = String(value || '').split(',').map(x => x.trim()).filter(Boolean);
+  const [draft, setDraft] = useState('');
+  const save = list => onChange(list.join(', '));
+  function commit(text) {
+    const names = text.split(',').map(x => x.trim()).filter(Boolean).filter(n => !people.some(p => p.toLowerCase() === n.toLowerCase()));
+    if (names.length) save([...people, ...names]);
+    setDraft('');
+  }
+  return (
+    <div className="imss-people">
+      {people.map((p, i) => (
+        <span key={p + i} className="imss-people-chip">
+          {p}
+          <button type="button" onClick={e => { e.preventDefault(); save(people.filter((_, j) => j !== i)); }} aria-label={'Remove ' + p}><X size={12} /></button>
+        </span>
+      ))}
+      <input
+        aria-label={label}
+        value={draft}
+        onChange={e => { const v = e.target.value; if (v.includes(',')) commit(v); else setDraft(v); }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(draft); }
+          else if (e.key === 'Backspace' && !draft && people.length) save(people.slice(0, -1));
+        }}
+        onBlur={() => draft.trim() && commit(draft)}
+        placeholder={people.length ? 'Add another' : placeholder}
+      />
     </div>
   );
 }
