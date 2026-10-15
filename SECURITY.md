@@ -69,6 +69,44 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - Receiving uses Resend's `entuurboou.resend.app` address, so the main
   `imssrecords.com` MX records (your normal email) are untouched.
 
+## Page and transport standard (same as FloorTest)
+
+Every response from Vercel carries (`vercel.json`):
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only)
+- `Content-Security-Policy`: scripts only from this site; styles from this site
+  and Google Fonts; connections only to this site and the Supabase project;
+  no framing (`frame-ancestors 'none'`), no plugins, `base-uri`/`form-action`
+  locked to self, insecure requests upgraded
+- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy`: camera, microphone, geolocation, payment, USB off
+- `X-Robots-Tag: noindex, nofollow`, plus `robots.txt` (`Disallow: /`) and a
+  noindex meta tag: nothing in this private dashboard is indexed
+- Unknown paths serve the app instead of a bare 404; a favicon and page
+  metadata are set in `index.html`
+
+When adding a new external service (fonts, analytics, an API), add its origin
+to the CSP or it will be blocked.
+
+## Abuse limits
+
+- Artists: at most 10 release submissions, 10 invoices and 20 other items
+  (requests, profile changes) per hour, and 30 replies per hour
+  (`private.rate_limit`, enforced inside `artist_add()` /
+  `artist_reply_submission()`). This also caps the notification emails an
+  artist can trigger.
+- Attachments (split sheets, receipts, invoice files, artwork, profile photos)
+  must be PDFs or PNG/JPEG/WebP/GIF/HEIC images (`private.valid_attachment`);
+  anything else is refused by the database, not just the form.
+- Sign-in emails are limited by Supabase Auth (Authentication → Rate Limits).
+
+## Dependencies
+
+`npm audit --omit=dev` reports 0 vulnerabilities for what ships. Vite is on v8.
+The remaining dev-only findings are in Tailwind 3's file-watching chain
+(braces, postcss-selector-parser): build-time slowdowns only. They clear with a
+Tailwind 4 migration.
+
 ## Known limitations
 
 These are real and accepted for now. Don't treat them as protected.
