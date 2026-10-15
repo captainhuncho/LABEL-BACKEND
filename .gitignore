@@ -4,3 +4,4 @@ dist/
 *.local
 .env
 .env.*
+ops-upload.zip
