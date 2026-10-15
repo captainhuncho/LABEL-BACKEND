@@ -305,15 +305,21 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 ### Artist portal
 
 Built around what the artist is owed. Sidebar navigation (a swipeable strip on
-phones) in two groups — **Money:** Overview, Royalties, Earnings, Expenses,
+phones) in two groups — **Money:** Dashboard, Royalties, Earnings, Expenses,
 Invoices, Statements, Payouts, Budget (funded artists only); **Music & you:**
 Releases, Requests (with an open count), Profile — and Sign out.
 
-- **Overview** (home) — "You're owed" balance, with the arithmetic beside it:
-  gross − Inbound Banking Charge − label share = their earnings − recouped
-  expenses − paid = owed. Then notices, then every release ranked by what it
-  has earned them (tap one to open its months in Royalties), approved invoices
-  waiting to be paid, and streams by platform when there is stream data.
+- **Dashboard** (home, where artists land) — "You're owed" balance with the
+  arithmetic beside it (always all time: gross − Inbound Banking Charge − label
+  share = their earnings − recouped − paid = owed), approved invoices waiting to
+  be paid, and notices. Then a **date selection** (From / To month and Update,
+  plus Last 3 months, Last 6 months, This year, All time; default last 6
+  months of their data) that scopes everything below it: songs released (with
+  a breakdown by type), top earning retailer, best month, **top songs by
+  revenue** (top 5 with gross and their earnings, each with the artist, any
+  extra primary artists and "feat." names from the release's collaborators;
+  tap one to open it in Royalties), and **top earning retailers**. Streams by
+  platform appears when there is stream data.
 - **Royalties** — song by song: period + type + product filters, **Generate** → their
   rows with gross, Inbound Banking Charge, label share and their earnings per
   row and in total; groupable flat / by type / by product, with export.
@@ -378,6 +384,11 @@ for statements that hides the chrome.
 ---
 
 ## 6. CSV import
+
+Imported revenue rows also record how much each retailer paid (`stores`, e.g.
+`{ "Spotify": 12.30 }`); the artist Dashboard's retailer figures come from
+this. Revenue recorded before this was added has no retailer split.
+
 
 Two modes:
 

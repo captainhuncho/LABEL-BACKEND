@@ -4305,6 +4305,8 @@ function ImportSection({ roster, catalog, revenue, streams, updateRoster, update
             revenueByKey[key] = { id: key, artist: artist.name, artistSlug, title: release.title, month, earning: 0, type: release.type || 'Single', epAlbum: null, releaseDate: release.releaseDate || null, approvalStatus: 'Approved', approvedBy: 'Import', approvedAt: todayStr() };
           }
           revenueByKey[key].earning += amountVal;
+          // Per-retailer split of this row's earning, for "top earning retailer".
+          if (storeRaw) { const st = revenueByKey[key].stores || (revenueByKey[key].stores = {}); const p = guessPlatform(storeRaw); st[p] = (st[p] || 0) + amountVal; }
         }
         if (mapping.quantity) {
           const qty = parseQuantity(row[mapping.quantity]);
@@ -4361,12 +4363,14 @@ function ImportSection({ roster, catalog, revenue, streams, updateRoster, update
     const streamAdds = [];
     let skippedRows = 0;
     let earningTotal = 0;
+    const stores = {};
 
     summaryRows.forEach(row => {
       const storeRaw = (row[summaryForm.storeCol] || '').trim();
       const amountVal = parseAmount(row[summaryForm.amountCol]);
       if (amountVal === null) { skippedRows += 1; return; }
       earningTotal += amountVal;
+      if (storeRaw) { const p = guessPlatform(storeRaw); stores[p] = (stores[p] || 0) + amountVal; }
       if (summaryForm.quantityCol !== '' && summaryForm.quantityCol !== null && summaryForm.quantityCol !== undefined) {
         const qty = parseQuantity(row[summaryForm.quantityCol]);
         if (qty > 0) streamAdds.push({ id: uid(), date: dateVal, platform: guessPlatform(storeRaw), releaseId: release.id, count: qty });
@@ -4377,7 +4381,7 @@ function ImportSection({ roster, catalog, revenue, streams, updateRoster, update
     if (artist && earningTotal > 0) {
       const artistSlug = slug(artist.name);
       const key = artistSlug + '_' + slug(release.title) + '_' + month;
-      revenueAdds.push({ id: key, artist: artist.name, artistSlug, title: release.title, month, earning: earningTotal, type: release.type || 'Single', epAlbum: null, releaseDate: release.releaseDate || null, approvalStatus: 'Approved', approvedBy: 'Import', approvedAt: todayStr() });
+      revenueAdds.push({ id: key, artist: artist.name, artistSlug, title: release.title, month, earning: earningTotal, stores, type: release.type || 'Single', epAlbum: null, releaseDate: release.releaseDate || null, approvalStatus: 'Approved', approvedBy: 'Import', approvedAt: todayStr() });
     }
 
     updateRoster(nextRoster);
@@ -4806,23 +4810,57 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const sumSplits = (rows) => rows.map(splitOf).reduce((t, x) => ({ gross: t.gross + x.gross, charge: t.charge + x.charge, labelShare: t.labelShare + x.labelShare, artistShare: t.artistShare + x.artistShare }), { gross: 0, charge: 0, labelShare: 0, artistShare: 0 });
   const filteredRevTotals = useMemo(() => sumSplits(filteredMyRevenue), [filteredMyRevenue, revenue, masterGross, myPct]);
 
-  // Every release ranked by what it has earned the artist. Revenue rows join
-  // the catalog by title; titles with revenue but no catalog entry still list.
-  const releaseLedger = useMemo(() => {
-    const byTitle = {};
-    myRevenue.forEach(r => { (byTitle[r.title] = byTitle[r.title] || []).push(r); });
-    const entry = (title, release) => {
-      const rows = byTitle[title] || [];
-      const months = Array.from(new Set(rows.map(r => r.month))).sort();
-      const last = months[months.length - 1];
-      return { key: release ? release.id : 'rev-' + title, title, release, earned: sumSplits(rows).artistShare, lastMonth: last, lastEarned: last ? sumSplits(rows.filter(r => r.month === last)).artistShare : 0 };
-    };
-    const listed = artistCatalog.map(c => entry(c.title, c));
-    const known = new Set(artistCatalog.map(c => c.title));
-    Object.keys(byTitle).filter(t => !known.has(t)).forEach(t => listed.push(entry(t, null)));
-    return listed.sort((a, b) => b.earned - a.earned);
-  }, [artistCatalog, myRevenue, revenue, masterGross, myPct]);
-  const topEarned = releaseLedger.length ? Math.max(releaseLedger[0].earned, 0.01) : 1;
+  // Dashboard: a month range (YYYY-MM, inclusive) applied on Update; the
+  // balance above it stays all-time.
+  const dataMonths = useMemo(() => Array.from(new Set(myRevenue.map(r => r.month))).sort(), [myRevenue]);
+  const latestMonth = dataMonths[dataMonths.length - 1] || todayStr().slice(0, 7);
+  const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+  const DASH_PRESETS = [
+    { id: '3m', label: 'Last 3 months', range: () => ({ from: shiftMonth(latestMonth, -2), to: latestMonth }) },
+    { id: '6m', label: 'Last 6 months', range: () => ({ from: shiftMonth(latestMonth, -5), to: latestMonth }) },
+    { id: 'year', label: 'This year', range: () => ({ from: latestMonth.slice(0, 4) + '-01', to: latestMonth }) },
+    { id: 'all', label: 'All time', range: () => ({ from: '', to: '' }) },
+  ];
+  const [dashDraft, setDashDraft] = useState(() => DASH_PRESETS[1].range());
+  const [dashRange, setDashRange] = useState(dashDraft);
+  const [dashError, setDashError] = useState('');
+  function applyDashRange(r) {
+    if (r.from && r.to && r.from > r.to) { setDashError('The “from” month has to come before the “to” month.'); return; }
+    setDashError(''); setDashDraft(r); setDashRange(r);
+  }
+  const inDash = m => (!dashRange.from || m >= dashRange.from) && (!dashRange.to || m <= dashRange.to);
+  const activePreset = (DASH_PRESETS.find(p => { const r = p.range(); return r.from === dashRange.from && r.to === dashRange.to; }) || {}).id;
+  const dashLabel = !dashRange.from && !dashRange.to ? 'All time' : (dashRange.from ? monthLabel(dashRange.from) : '…') + ' – ' + (dashRange.to ? monthLabel(dashRange.to) : '…');
+  const dashRevenue = useMemo(() => myRevenue.filter(r => inDash(r.month)), [myRevenue, dashRange]);
+
+  const dashReleased = artistCatalog.filter(c => c.status === 'Released' && (!c.releaseDate || inDash(c.releaseDate.slice(0, 7))));
+  const releasedByType = Object.entries(dashReleased.reduce((m, c) => { const t = c.type || 'Other'; m[t] = (m[t] || 0) + 1; return m; }, {})).sort((x, y) => y[1] - x[1]);
+
+  // Who's on a song: the artist, any extra primary artists, then features.
+  function creditLine(title) {
+    const rel = artistCatalog.find(c => c.title === title) || {};
+    const primaries = [artist.name, ...(rel.primaryArtists || [])].join(' & ');
+    const feats = (rel.collaborators || []).filter(c => (c.role || '').toLowerCase() === 'feature').map(c => c.name).filter(Boolean);
+    return { primaries, feats };
+  }
+  const dashTopSongs = useMemo(() => {
+    const map = {};
+    dashRevenue.forEach(r => { (map[r.title] = map[r.title] || []).push(r); });
+    return Object.entries(map).map(([title, rows]) => ({ title, ...sumSplits(rows) })).sort((x, y) => y.gross - x.gross).slice(0, 5);
+  }, [dashRevenue, revenue, masterGross, myPct]);
+
+  const dashRetailers = useMemo(() => {
+    const map = {};
+    dashRevenue.forEach(r => Object.entries(r.stores || {}).forEach(([k, v]) => { map[k] = (map[k] || 0) + v; }));
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((x, y) => y.value - x.value);
+  }, [dashRevenue]);
+  const dashGross = dashRevenue.reduce((t, r) => t + r.earning, 0);
+
+  const dashBestMonth = useMemo(() => {
+    const map = {};
+    dashRevenue.forEach(r => { map[r.month] = (map[r.month] || 0) + splitOf(r).artistShare; });
+    return Object.entries(map).sort((x, y) => y[1] - x[1])[0] || null;
+  }, [dashRevenue, revenue, masterGross, myPct]);
 
   function openReleaseRevenue(title) {
     const f = { ...EMPTY_REV_FILTERS, product: title };
@@ -4898,7 +4936,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
 
   const TABS = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Money' },
+    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, group: 'Money' },
     { id: 'revenue', label: 'Royalties', icon: Disc3, group: 'Money' },
     { id: 'earnings', label: 'Earnings', icon: TrendingUp, group: 'Money' },
     { id: 'expenses', label: 'Expenses', icon: Coins, group: 'Money' },
@@ -5061,7 +5099,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'overview' && (
           <div>
-            <h1 className="imss-portal-title">Earnings</h1>
+            <h1 className="imss-portal-title">Dashboard</h1>
 
             <section aria-label="What you are owed" className="rounded border mb-6 imss-owed-card" style={{ background: C.panel, borderColor: C.border }}>
               <div className="imss-owed-head">
@@ -5108,56 +5146,99 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </section>
             )}
 
-            <section aria-labelledby="ledger-h" className="mb-8">
-              <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
-                <h2 id="ledger-h" style={{ fontWeight: 600, fontSize: 17 }}>What each release has earned you</h2>
-                <div className="text-xs" style={{ color: C.textDim }}>{releaseLedger.length} {releaseLedger.length === 1 ? 'release' : 'releases'} · tap one for its months</div>
+            <form className="imss-dash-range" aria-label="Date selection" onSubmit={e => { e.preventDefault(); applyDashRange(dashDraft); }}>
+              <label className="imss-dash-field">From<input type="month" value={dashDraft.from} max={dashDraft.to || undefined} onChange={e => setDashDraft(d => ({ ...d, from: e.target.value }))} /></label>
+              <span className="imss-dash-to" aria-hidden="true">to</span>
+              <label className="imss-dash-field">To<input type="month" value={dashDraft.to} min={dashDraft.from || undefined} onChange={e => setDashDraft(d => ({ ...d, to: e.target.value }))} /></label>
+              <Btn variant="primary" type="submit">Update</Btn>
+              <div className="imss-dash-presets" role="group" aria-label="Quick ranges">
+                {DASH_PRESETS.map(p => (
+                  <button key={p.id} type="button" onClick={() => applyDashRange(p.range())} aria-pressed={activePreset === p.id} className={'imss-dash-preset' + (activePreset === p.id ? ' is-on' : '')}>{p.label}</button>
+                ))}
               </div>
-              {releaseLedger.length === 0 ? (
-                <EmptyState icon={Disc3} title="No releases yet" description="Once the label adds your releases and their revenue, each one shows here with what it has earned you." />
-              ) : (
-                <ul className="rounded border imss-ledger" style={{ borderColor: C.border, background: C.panel }}>
-                  {releaseLedger.map(e => (
-                    <li key={e.key}>
-                      <button onClick={() => openReleaseRevenue(e.title)} className="imss-ledger-row" aria-label={e.title + ': ' + formatCents(e.earned) + ' earned. Open its revenue.'}>
-                        <ArtworkThumb release={e.release || { title: e.title }} size={44} />
-                        <span className="imss-ledger-name">
-                          <span style={{ fontWeight: 600, color: C.text }}>{e.title}</span>
-                          <span className="text-xs" style={{ color: C.textDim }}>
-                            {e.release ? [e.release.type, e.release.releaseDate ? formatDate(e.release.releaseDate) : null].filter(Boolean).join(' · ') : 'Not in catalog'}
-                          </span>
-                        </span>
-                        <span className="imss-ledger-bar" aria-hidden="true"><span style={{ width: Math.max(2, (e.earned / topEarned) * 100) + '%' }}></span></span>
-                        <span className="imss-ledger-amt">
-                          <span style={{ color: e.earned > 0 ? C.teal : C.textDim }}>{formatCents(e.earned)}</span>
-                          {e.lastMonth && <span className="text-xs" style={{ color: C.textDim, fontWeight: 400 }}>{monthLabel(e.lastMonth)} +{formatCents(e.lastEarned)}</span>}
-                        </span>
-                        <ChevronRight size={16} color={C.textFaint} aria-hidden="true" />
-                      </button>
+            </form>
+            {dashError && <div className="text-sm mb-3" role="alert" style={{ color: C.red }}>{dashError}</div>}
+            <p className="text-sm mb-4" style={{ color: C.textDim }}>Balance is all time. Everything below shows <span style={{ color: C.text, fontWeight: 600 }}>{dashLabel}</span>.</p>
+
+            <div className="imss-dash-stats mb-6">
+              <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-lab">Songs released</div>
+                <div className="imss-dash-fig">{dashReleased.length}</div>
+                <div className="imss-dash-sub">{releasedByType.length ? releasedByType.map(([t, n]) => n + ' ' + t.split(' ').map(w => w === 'EP' ? w : w.toLowerCase()).join(' ') + (n === 1 ? '' : 's')).join(' · ') : 'None in this period'}</div>
+              </div>
+              <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-lab">Top earning retailer</div>
+                <div className="imss-dash-fig imss-dash-fig-text">{dashRetailers[0] ? dashRetailers[0].name : '—'}</div>
+                <div className="imss-dash-sub">{dashRetailers[0] ? formatCents(dashRetailers[0].value) + ' gross' + (dashGross > 0 ? ' · ' + Math.round(dashRetailers[0].value / dashGross * 100) + '% of your revenue' : '') : 'No retailer breakdown yet'}</div>
+              </div>
+              <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-lab">Best month</div>
+                <div className="imss-dash-fig">{dashBestMonth ? formatCents(dashBestMonth[1]) : '—'}</div>
+                <div className="imss-dash-sub">{dashBestMonth ? monthLabel(dashBestMonth[0]) + ' · your earnings' : 'No earnings in this period'}</div>
+              </div>
+            </div>
+
+            <div className="imss-dash-two mb-6">
+              <section aria-labelledby="top-songs-h" className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-ph">
+                  <h2 id="top-songs-h">Top songs by revenue</h2>
+                  <button type="button" onClick={() => setTab('revenue')} className="imss-dash-link">All songs <ChevronRight size={14} aria-hidden="true" /></button>
+                </div>
+                {dashTopSongs.length === 0 ? (
+                  <div className="px-4 pb-5 text-sm" style={{ color: C.textDim }}>No revenue in this period. Try a wider range.</div>
+                ) : (
+                  <table className="w-full imss-dash-songs" style={{ tableLayout: 'fixed' }}>
+                    <colgroup><col className="imss-dash-rank" style={{ width: 44 }} /><col /><col style={{ width: '24%' }} /><col style={{ width: '26%' }} /></colgroup>
+                    <thead><tr><Th align="right">#</Th><Th>Song</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
+                    <tbody>
+                      {dashTopSongs.map((t, i) => { const c = creditLine(t.title); return (
+                        <tr key={t.title} className="imss-dash-song" onClick={() => openReleaseRevenue(t.title)}>
+                          <Td align="right" mono><span style={{ color: C.textDim }}>{i + 1}</span></Td>
+                          <Td>
+                            <button type="button" onClick={e => { e.stopPropagation(); openReleaseRevenue(t.title); }} className="imss-dash-songbtn">{t.title}</button>
+                            <div className="text-xs mt-0.5" style={{ color: C.textDim, overflowWrap: 'anywhere' }}>{c.primaries}{c.feats.length > 0 && <span style={{ color: C.text }}> feat. {c.feats.join(', ')}</span>}</div>
+                          </Td>
+                          <Td align="right" mono>{formatCents(t.gross)}</Td>
+                          <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(t.artistShare)}</span></Td>
+                        </tr>
+                      ); })}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+
+              <section aria-labelledby="top-retail-h" className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-ph"><h2 id="top-retail-h">Top earning retailers</h2></div>
+                {dashRetailers.length === 0 ? (
+                  <div className="px-4 pb-5 text-sm" style={{ color: C.textDim, maxWidth: '60ch' }}>Retailer breakdowns appear for revenue the label imports from distributor statements from now on. Earlier revenue was recorded per song only.</div>
+                ) : (
+                  <ul className="imss-dash-retail">
+                    {dashRetailers.slice(0, 6).map(r => (
+                      <li key={r.name}>
+                        <span className="imss-dash-retail-name">{r.name}</span>
+                        <span className="imss-ledger-bar" aria-hidden="true"><span style={{ width: Math.max(2, r.value / dashRetailers[0].value * 100) + '%' }}></span></span>
+                        <span className="imss-dash-retail-amt">{formatCents(r.value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            {platformTotals.length > 0 && (
+              <section aria-labelledby="streams-h" className="rounded border overflow-hidden mb-6" style={{ background: C.panel, borderColor: C.border }}>
+                <div className="imss-dash-ph"><h2 id="streams-h">Streams by platform</h2><span className="text-xs" style={{ color: C.textDim }}>{formatNumber(totalStreams)} all time</span></div>
+                <ul className="imss-dash-retail">
+                  {[...platformTotals].sort((x, y) => y.value - x.value).map(p => (
+                    <li key={p.name}>
+                      <span className="imss-dash-retail-name">{p.name}</span>
+                      <span className="imss-ledger-bar" aria-hidden="true"><span style={{ width: Math.max(2, p.value / Math.max(...platformTotals.map(q => q.value)) * 100) + '%' }}></span></span>
+                      <span className="imss-dash-retail-amt">{formatNumber(p.value)}</span>
                     </li>
                   ))}
                 </ul>
-              )}
-            </section>
-
-            <div className="mb-6">
-              {platformTotals.length > 0 && (
-                <section aria-labelledby="streams-h" className="rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
-                  <h2 id="streams-h" className="text-sm mb-3" style={{ fontWeight: 600 }}>Streams by platform · {formatNumber(totalStreams)}</h2>
-                  <div style={{ height: 220 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
-                          {platformTotals.map((p) => (<Cell key={p.name} fill={PLATFORM_COLORS[p.name] || C.textFaint} />))}
-                        </Pie>
-                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
-                        <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </section>
-              )}
-            </div>
+              </section>
+            )}
 
             {isFunded && (
               <div className="text-sm" style={{ color: C.textDim }}>

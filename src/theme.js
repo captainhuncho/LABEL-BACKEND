@@ -131,6 +131,49 @@ export const GLOBAL_STYLES = `
   .imss-sum li { padding: 9px 16px; }
   .imss-portal-title { font-size: 22px; margin-bottom: 16px; }
 }
+.imss-dash-range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin: 0 0 12px; }
+.imss-dash-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: ${C.textDim}; }
+.imss-dash-field input { background: rgba(20,23,26,0.85); border: 1px solid rgba(255,255,255,0.18); color: ${C.text}; border-radius: 10px; height: 38px; padding: 0 10px; font: 14px ${MONO_FONT}; width: 150px; color-scheme: dark; }
+.imss-dash-to { color: ${C.textDim}; font-size: 13px; height: 38px; display: inline-flex; align-items: center; }
+.imss-dash-range .imss-btn { height: 38px; }
+.imss-dash-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 4px; }
+.imss-dash-preset { height: 38px; padding: 0 12px; border-radius: 14px; border: 1px solid ${C.border}; color: ${C.textDim}; font-size: 13px; font-weight: 500; transition: background-color 160ms cubic-bezier(0.16,1,0.3,1), color 160ms; }
+.imss-dash-preset:hover { color: ${C.text}; background: rgba(255,255,255,0.05); }
+.imss-dash-preset.is-on { color: ${C.amber}; background: ${C.amberSoft}; border-color: transparent; font-weight: 600; }
+.imss-dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.imss-dash-stat { padding: 16px 18px; display: flex; flex-direction: column; min-width: 0; }
+.imss-dash-lab { font-size: 12px; color: ${C.textDim}; margin-bottom: 10px; }
+.imss-dash-fig { font-family: ${MONO_FONT}; font-size: 26px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.imss-dash-fig-text { font-family: ${HEADING_FONT}; font-size: 24px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imss-dash-sub { font-size: 12px; color: ${C.textDim}; margin-top: 6px; }
+.imss-dash-two { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.imss-dash-ph { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; }
+.imss-dash-ph h2 { font-size: 15px; font-weight: 600; }
+.imss-dash-link { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; color: ${C.amber}; }
+.imss-dash-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.imss-dash-song { cursor: pointer; transition: background-color 160ms cubic-bezier(0.16,1,0.3,1); }
+.imss-dash-song:hover { background: rgba(255,255,255,0.04); }
+.imss-dash-songbtn { font-weight: 600; color: ${C.text}; text-align: left; overflow-wrap: anywhere; }
+.imss-dash-retail { list-style: none; margin: 0; padding: 0 16px 8px; border-top: 1px solid ${C.border}; }
+.imss-dash-retail li { display: grid; grid-template-columns: minmax(96px, 120px) minmax(0, 1fr) 96px; align-items: center; gap: 12px; padding: 11px 0; font-size: 14px; }
+.imss-dash-retail li + li { border-top: 1px solid rgba(255,255,255,0.06); }
+.imss-dash-retail-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imss-dash-retail-amt { font-family: ${MONO_FONT}; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 1024px) { .imss-dash-two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .imss-dash-stats { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .imss-dash-range { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .imss-dash-field input { width: 100%; min-width: 0; }
+  .imss-dash-to { display: none; }
+  .imss-dash-range .imss-btn { grid-column: 1 / -1; justify-content: center; }
+  .imss-dash-presets { grid-column: 1 / -1; margin-left: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .imss-dash-preset { width: 100%; }
+  .imss-dash-songs .imss-dash-rank { width: 30px !important; }
+  .imss-dash-songs th, .imss-dash-songs td { padding-left: 8px !important; padding-right: 8px !important; }
+  .imss-dash-songs th { white-space: normal !important; vertical-align: bottom; }
+  .imss-dash-retail li { grid-template-columns: minmax(0, 1fr) 92px; }
+  .imss-dash-retail .imss-ledger-bar { display: none; }
+}
 /* Tables: a full grid. Rows already have bottom borders (Td/Th); add column
    lines, a header band, and drop the last row's line where the card border sits. */
 table th:not(:last-child), table td:not(:last-child) { border-right: 1px solid ${C.border}; }
