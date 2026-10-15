@@ -125,6 +125,17 @@ export function payoutStatementFor(artist, periodStart, periodEnd, revenue, mast
   return { months, gross, swift, net, artistPct: pct, artistShare: net * pct, labelShare: net * (1 - pct) };
 }
 
+// g2) One revenue row's breakdown: its slice of that month's inbound banking
+// charge (proportional to its earning), then the artist/label split. Rows of an
+// artist sum to the same totals as artistLifetime / payoutStatementFor.
+export function revenueRowSplit(row, revenue, masterGross, artistPct) {
+  const mg = masterGrossByMonth(masterGross)[row.month];
+  const monthTotal = revByMonth(revenue)[row.month] || 0;
+  const charge = mg && monthTotal > 0 ? mg.swiftFee * row.earning / monthTotal : 0;
+  const net = row.earning - charge;
+  return { gross: row.earning, charge, net, artistShare: net * artistPct, labelShare: net * (1 - artistPct) };
+}
+
 // h) Label P&L (all-time)
 export function labelPnL(roster, revenue, masterGross, ledger) {
   const totals = companyFinanceTotals(roster, revenue, masterGross);

@@ -154,6 +154,8 @@ export const PLATFORM_COLORS = {
 
 export function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 export function formatCurrency(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0); }
+// With cents, for breakdowns where whole dollars wouldn't visibly add up.
+export function formatCents(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0); }
 export function formatNumber(n) { return new Intl.NumberFormat('en-US').format(n || 0); }
 export function formatDate(s) { if (!s) return '—'; const d = new Date(s + 'T00:00:00'); if (isNaN(d)) return s; return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 export function monthKey(s) { return (s || '').slice(0, 7); }

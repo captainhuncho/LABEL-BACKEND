@@ -3,8 +3,8 @@ import Papa from 'papaparse';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
-import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, slug, swiftShareFor } from './finance.js';
+import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueRowSplit, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
@@ -4729,7 +4729,10 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     });
   }, [sortedMyRevenue, revGenerated]);
   const revFiltersActive = !!(revGenerated && (revGenerated.startDate || revGenerated.endDate || revGenerated.type !== 'all' || revGenerated.product !== 'all'));
-  const filteredRevTotal = filteredMyRevenue.reduce((s, r) => s + r.earning, 0);
+  const myPct = artist.artistPct != null ? artist.artistPct : 0;
+  const splitOf = (r) => revenueRowSplit(r, revenue, masterGross, myPct);
+  const sumSplits = (rows) => rows.map(splitOf).reduce((t, x) => ({ gross: t.gross + x.gross, charge: t.charge + x.charge, labelShare: t.labelShare + x.labelShare, artistShare: t.artistShare + x.artistShare }), { gross: 0, charge: 0, labelShare: 0, artistShare: 0 });
+  const filteredRevTotals = useMemo(() => sumSplits(filteredMyRevenue), [filteredMyRevenue, revenue, masterGross, myPct]);
   const revTypes = useMemo(() => Array.from(new Set(myRevenue.map(r => r.type).filter(Boolean))), [myRevenue]);
   function revPeriodLabel() {
     if (!revGenerated) return '';
@@ -5348,7 +5351,10 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             ) : (
             <>
             <div className="flex flex-wrap gap-3 mb-6">
-              <KPICard icon={DollarSign} label={revFiltersActive ? 'Revenue in this period' : 'Total revenue'} value={formatCurrency(filteredRevTotal)} tone="teal" />
+              <KPICard icon={DollarSign} label={revFiltersActive ? 'Gross in this period' : 'Total gross'} value={formatCents(filteredRevTotals.gross)} />
+              <KPICard icon={Wallet} label="Inbound Banking Charge" value={formatCents(filteredRevTotals.charge)} />
+              <KPICard icon={Wallet} label={'Label share (' + Math.round((1 - myPct) * 100) + '%)'} value={formatCents(filteredRevTotals.labelShare)} />
+              <KPICard icon={DollarSign} label={'Your earnings (' + Math.round(myPct * 100) + '%)'} value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
               <KPICard icon={ClipboardList} label="Entries" value={filteredMyRevenue.length} />
             </div>
 
@@ -5366,38 +5372,42 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               ))}
             </div>
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Type', 'Product', 'Amount']} rows={filteredMyRevenue.map(r => [r.month, r.type, r.title, r.earning])} />
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Type', 'Product', 'Gross', 'Inbound Banking Charge', 'Label share', 'Your earnings']} rows={filteredMyRevenue.map(r => { const x = splitOf(r); return [r.month, r.type, r.title, x.gross, x.charge, x.labelShare, x.artistShare]; })} />
 
             {filteredMyRevenue.length === 0 ? (
               <EmptyState icon={DollarSign} title="Nothing in that period" description="No revenue was logged for what you picked. Try a wider date range, or clear the type and product filters." />
             ) : revGroupBy === 'none' ? (
               <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
-                <table className="w-full" style={{ minWidth: 520 }}>
-                  <thead><tr><Th>Month</Th><Th>Type</Th><Th>Product</Th><Th align="right">Amount</Th></tr></thead>
+                <table className="w-full" style={{ minWidth: 820 }}>
+                  <thead><tr><Th>Month</Th><Th>Type</Th><Th>Product</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Label share</Th><Th align="right">Your earnings</Th></tr></thead>
                   <tbody>
-                    {filteredMyRevenue.map((r, i) => (
+                    {filteredMyRevenue.map((r, i) => { const x = splitOf(r); return (
                       <tr key={i}>
                         <Td mono>{monthLabel(r.month)}</Td>
                         <Td><Badge>{r.type}</Badge></Td>
                         <Td>{r.title}</Td>
-                        <Td align="right" mono>{formatCurrency(r.earning)}</Td>
+                        <Td align="right" mono>{formatCents(x.gross)}</Td>
+                        <Td align="right" mono>−{formatCents(x.charge)}</Td>
+                        <Td align="right" mono>−{formatCents(x.labelShare)}</Td>
+                        <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(x.artistShare)}</span></Td>
                       </tr>
-                    ))}
+                    ); })}
                   </tbody>
                 </table>
               </div>
             ) : revGroupBy === 'source' ? (
               <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                 <table className="w-full" style={{ minWidth: 320 }}>
-                  <thead><tr><Th>Type</Th><Th align="right">Entries</Th><Th align="right">Total</Th></tr></thead>
+                  <thead><tr><Th>Type</Th><Th align="right">Entries</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
                   <tbody>
-                    {revByType.map(s => (
+                    {revByType.map(s => { const rows = filteredMyRevenue.filter(r => r.type === s.type); return (
                       <tr key={s.type}>
                         <Td><Badge>{s.type}</Badge></Td>
-                        <Td align="right" mono>{filteredMyRevenue.filter(r => r.type === s.type).length}</Td>
-                        <Td align="right" mono>{formatCurrency(s.value)}</Td>
+                        <Td align="right" mono>{rows.length}</Td>
+                        <Td align="right" mono>{formatCents(s.value)}</Td>
+                        <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(sumSplits(rows).artistShare)}</span></Td>
                       </tr>
-                    ))}
+                    ); })}
                   </tbody>
                 </table>
               </div>
@@ -5407,7 +5417,10 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   <div key={p.title} className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
                     <div className="flex items-center justify-between px-4 pt-3 pb-2">
                       <div style={{ fontWeight: 500 }}>{p.title}</div>
-                      <div style={{ fontFamily: MONO_FONT, color: C.teal, fontWeight: 600 }}>{formatCurrency(p.total)}</div>
+                      <div className="text-right" style={{ fontFamily: MONO_FONT }}>
+                        <span style={{ color: C.textDim }}>{formatCents(p.total)} gross · </span>
+                        <span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(sumSplits(p.entries).artistShare)} yours</span>
+                      </div>
                     </div>
                     <table className="w-full">
                       <tbody>
@@ -5415,7 +5428,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                           <tr key={i}>
                             <Td mono>{monthLabel(r.month)}</Td>
                             <Td><Badge>{r.type}</Badge></Td>
-                            <Td align="right" mono>{formatCurrency(r.earning)}</Td>
+                            <Td align="right" mono>{formatCents(r.earning)}</Td>
+                            <Td align="right" mono><span style={{ color: C.teal }}>{formatCents(splitOf(r).artistShare)}</span></Td>
                           </tr>
                         ))}
                       </tbody>
