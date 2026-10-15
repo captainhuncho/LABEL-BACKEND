@@ -5,19 +5,30 @@ Build a single-page web app for running an independent record label: artist
 roster, release catalog, royalty accounting, payout statements, expense and
 recoupment tracking, and team access control.
 
-**Stack:** React 18 + Vite. No backend. All state persists to the browser
-through one async key/value adapter (`window.storage`), so it can be swapped
-for an API later without touching the app.
+**Stack:** React 18 + Vite, hosted on Vercel at https://ops.imssrecords.com.
+Data and sign-in live in Supabase. All state goes through one async key/value
+adapter (`window.storage`): the Supabase `app_data` table when configured,
+the browser's localStorage otherwise (local development only).
 
-**Dependencies:** `react`, `react-dom`, `recharts` (charts), `lucide-react`
-(icons), `papaparse` (CSV import), `xlsx` (Excel export), `tailwindcss`.
+**Dependencies:** `react`, `react-dom`, `@supabase/supabase-js` (data and
+sign-in), `recharts` (charts), `lucide-react` (icons), `papaparse` (CSV
+import), `xlsx` (Excel export, SheetJS CDN build), `tailwindcss`.
+
+**Sign-in email** is sent through Resend from `noreply@imssrecords.com`.
 
 ---
 
 ## 1. Who uses it
 
-Two front doors, chosen on a soft sign-in screen. This is a clean view split,
-not authentication — anyone with the link can pick either. Say so on the screen.
+Everyone signs in with an emailed link; there are no passwords. The email
+decides which door opens:
+
+- an email on the **Team** list opens the team side, with that staff record's
+  role and permissions;
+- an email on an artist's **Roster** entry opens that artist's portal;
+- any other email sees a "not set up yet" message and nothing else.
+
+An Admin can send anyone their sign-in link from the Team or Roster screen.
 
 **Team side** — label staff. What they see depends on their role and
 permissions.
@@ -233,8 +244,9 @@ produces numbers that disagree between screens.
 ## 4. Screens
 
 ### Sign-in gate
-Pick "Team member" (then choose a name from staff) or "Artist" (then choose an
-artist). Note on screen that it's a view split, not real auth.
+One field: email, then "Email me a sign-in link". The link returns to the app
+already signed in. Without Supabase configured (local development) the old
+name picker appears instead, labelled as a view split, not real auth.
 
 ### Team side
 
@@ -288,20 +300,31 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 
 ### Artist portal
 
-Header with the artist's name, split and PM/A&R contacts, a "Worth knowing"
-notice panel, then tabs:
+Built around what the artist is owed. Sidebar navigation (a swipeable strip on
+phones) in two groups — **Money:** Earnings, Revenue detail, Statements,
+Payouts, Budget & Expenses (funded artists only); **Music & you:** Releases,
+Requests (with an open count), Profile — and Sign out.
 
-- **Overview** — their totals, revenue-by-month, streams by platform, top songs.
+- **Earnings** (home) — "You're owed" balance, with the arithmetic beside it:
+  gross − Inbound Banking Charge − label share = their earnings − recouped
+  expenses − paid = owed. Then notices, then every release ranked by what it
+  has earned them (tap one to open its months in Revenue detail), then their
+  earnings by month, and streams by platform when there is stream data.
+- **Revenue detail** — period + type + product filters, **Generate** → their
+  rows with gross, Inbound Banking Charge, label share and their earnings per
+  row and in total; groupable flat / by type / by product, with export.
+- **Statements** — period chooser, **Generate** → the statement.
+- **Payouts** — earnings accrued, unrecouped balance, paid to date, balance
+  due, and payout history.
 - **Releases** — their catalog, plus a form to submit a new release (title,
   type, collaborators and splits, track metadata, credits, lyrics, a
   distribution-doc checklist) which goes to their PM for review.
-- **Profile** — request changes to photo, bio, email; goes to PM for approval.
 - **Requests** — raise a request by category; see responses.
-- **Revenue** — period + type + product filters, **Generate** → their rows,
-  groupable flat / by type / by product, with export.
-- **Payouts** — gross accrued, unrecouped balance, paid to date, balance due,
-  and payout history.
-- **Statements** — period chooser, **Generate** → the statement.
+- **Profile** — request changes to photo, bio, email; goes to PM for approval.
+
+Artists only ever receive their own data from the database, with each month's
+Inbound Banking Charge already cut to their share, so label-wide totals never
+reach an artist's browser.
 
 ---
 
@@ -361,29 +384,16 @@ existing catalog entry.
 
 ## 7. Look and layout
 
-Dark, warm, editorial. Not a generic admin template.
+Dark, warm, exact — not a generic admin template. The full visual system
+(colours, type, components, rules) lives in **DESIGN.md**; this section keeps
+only the product-level commitments:
 
-- **Palette:** near-black panels on a deep gradient canvas (warm brown →
-  charcoal → deep green → indigo), amber as the primary accent, teal for
-  positive money, red for negative/danger. Soft blurred radial colour blobs
-  behind the content, heavily blurred, low opacity.
-- **Type:** Space Grotesk for UI, IBM Plex Mono for every number. Tabular
-  figures so columns line up.
-- **Surfaces:** 14px radius on cards, 10px on controls, soft layered shadows.
-  Subtle lift on hover for interactive cards.
-- **App shell:** fills the viewport (`100dvh`) and scrolls in **exactly one
-  place** — the content pane. The sidebar is full height with its own scrolling
-  nav and a pinned footer (account + reset controls). Never nest a second
-  scroll container; never let the page itself scroll.
-- **Width:** cap the content column (~1440px) and centre it, so wide monitors
-  don't stretch a two-field filter across the screen.
-- **KPI cards:** cap their width (~340px) so a row of two doesn't balloon, and
-  make cards in a row equal height.
-- **Breakpoints** live in one global stylesheet, not in utility classes:
-  single column on mobile with the nav as a horizontal strip, two columns from
-  640px, sidebar layout from 768px, three-column forms from 1280px.
-  "Full width" form fields span the whole row whatever the column count.
-- **Empty states** everywhere, with a sentence saying what will fill them.
+- Every amount in a mono face with aligned digits; artists see cents.
+- The app shell fills the viewport and scrolls in exactly one place.
+- Whenever an artist sees a total, the arithmetic behind it is shown.
+- On screen, the distributor's swift fee is always called the
+  **Inbound Banking Charge** (the code and data keep `swiftFee`).
+- Empty states everywhere, with a sentence saying what will fill them.
 
 ---
 
