@@ -74,7 +74,7 @@ implements a written spec — five collections, computed on read, never stored:
 - **`artists`** — roster, each with `artistPct` (their share of net royalties)
 - **`revenue`** — one row per track per month, id `${slug(artist)}_${slug(title)}_${month}`
 - **`masterGross`** — one row per calendar month: `totalGross` received, `swiftFee` charged
-- **`ledger`** — non-royalty income/expense, with `recoupable` + `artist` for advances
+- **`ledger`** — non-royalty income/expense; every expense with an `artist` is recouped from that artist (the old `recoupable` flag is ignored). Their approved expense claims (invoices of kind `expense` at Pay Approved/Paid) are recouped too (`artistSpend` / `recoupmentForArtist`).
 - **`payouts`** — generated statements
 
 The one non-obvious rule: **the swift fee is split proportionally**, not evenly.

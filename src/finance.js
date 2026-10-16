@@ -121,8 +121,18 @@ export function ledgerTotals(ledger) {
 }
 
 // f) Recoupment by artist
-export function recoupmentForArtist(artist, ledger, revenue, masterGross) {
-  const spent = ledger.filter(l => l.type === 'expense' && l.recoupable && l.artist === artist.name).reduce((s, l) => s + l.amount, 0);
+// Everything spent on an artist is recouped from their earnings: every label
+// expense recorded against them, plus their own expense claims once approved
+// for payment (Pay Approved or Paid). Service/fee invoices are payment for work,
+// not spend, so they're not recouped.
+export const RECOUPED_CLAIM_STATUSES = ['Pay Approved', 'Paid'];
+export function artistSpend(artist, ledger, invoices = []) {
+  const byLabel = ledger.filter(l => l.type === 'expense' && l.artist === artist.name).reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const claims = invoices.filter(i => i.artistId === artist.id && i.kind === 'expense' && RECOUPED_CLAIM_STATUSES.includes(i.status)).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  return { byLabel, claims, total: byLabel + claims };
+}
+export function recoupmentForArtist(artist, ledger, revenue, masterGross, invoices = []) {
+  const spent = artistSpend(artist, ledger, invoices).total;
   const earned = artistLifetime(artist, revenue, masterGross).artistShare;
   const balance = spent - earned;
   return { spent, earned, recouped: Math.min(spent, earned), balance, unrecouped: balance > 0 ? balance : 0, dueOnTop: balance <= 0 ? -balance : 0 };

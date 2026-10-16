@@ -178,3 +178,25 @@ test('deal terms: each month uses the % in force that month', async () => {
   // An artist with no history behaves exactly as before.
   assert.equal(pctAt({ name: 'X', artistPct: 0.8 }, '2020-01'), 0.8);
 });
+
+test('recoupment: all label spend on the artist plus approved expense claims', async () => {
+  const { recoupmentForArtist, artistSpend } = await import('../src/finance.js');
+  const artist = { id: 'aizo', name: 'Aizo Clutch', artistPct: 0.7 };
+  const ledger = [
+    { type: 'expense', artist: 'Aizo Clutch', amount: 100, recoupable: false },
+    { type: 'expense', artist: 'Aizo Clutch', amount: 50, recoupable: true },
+    { type: 'expense', artist: null, amount: 999 },                 // label overhead, not the artist's
+    { type: 'income', artist: 'Aizo Clutch', amount: 40 },
+  ];
+  const invoices = [
+    { artistId: 'aizo', kind: 'expense', status: 'Paid', amount: 200 },
+    { artistId: 'aizo', kind: 'expense', status: 'Pay Approved', amount: 30 },
+    { artistId: 'aizo', kind: 'expense', status: 'Finance Queue', amount: 70 }, // not approved yet
+    { artistId: 'aizo', kind: 'service', status: 'Paid', amount: 500 },        // payment for work
+    { artistId: 'other', kind: 'expense', status: 'Paid', amount: 80 },
+  ];
+  assert.deepEqual(artistSpend(artist, ledger, invoices), { byLabel: 150, claims: 230, total: 380 });
+  const rev = [{ id: 'r', artistSlug: 'aizo-clutch', month: '2026-06', earning: 1000 }];
+  const r = recoupmentForArtist(artist, ledger, rev, [], invoices);   // earned 700, spent 380
+  assert.equal(r.recouped, 380); assert.equal(r.unrecouped, 0); assert.equal(r.dueOnTop, 320);
+});

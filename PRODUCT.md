@@ -546,6 +546,13 @@ requests, invoices and replies, publishing, deal changes, imports, invoice
 decisions, payouts and every team edit, plus scheduled jobs as "Scheduler".
 Filter by person, type and artist; export to CSV.
 
+## 6g. Recoupment
+
+Everything spent on an artist is recouped from their earnings before payouts:
+every label expense recorded against them, and their own expense claims once
+approved for payment (Pay Approved or Paid). Service/fee invoices are payment
+for work and are not recouped. Label costs with no artist are not recouped.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

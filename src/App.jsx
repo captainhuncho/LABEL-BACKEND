@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, dealTermsOf, expandRemittances, pctAt, termsAt, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, artistSpend, dealTermsOf, expandRemittances, pctAt, termsAt, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
@@ -395,7 +395,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
   );
 }
 
-function ArtistDetailPanel({ dealSection = null, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function ArtistDetailPanel({ invoices = [], dealSection = null, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
   const aSlug = useMemo(() => slug(artist.name), [artist.name]);
@@ -404,7 +404,7 @@ function ArtistDetailPanel({ dealSection = null, statementFiles = [], artist, ro
   const myStreams = useMemo(() => streams.filter(s => releaseIds.has(s.releaseId)), [streams, releaseIds]);
 
   const lifetime = useMemo(() => artistLifetime(artist, revenue, masterGross), [artist, revenue, masterGross]);
-  const recoupment = useMemo(() => recoupmentForArtist(artist, ledger, revenue, masterGross), [artist, ledger, revenue, masterGross]);
+  const recoupment = useMemo(() => recoupmentForArtist(artist, ledger, revenue, masterGross, invoices), [artist, ledger, revenue, masterGross, invoices]);
   const totalRevenue = myRevenue.reduce((s, r) => s + r.earning, 0);
   const totalStreams = myStreams.reduce((s, r) => s + r.count, 0);
 
@@ -788,7 +788,7 @@ function SendLinkButton({ email, labeled = false }) {
   );
 }
 
-function RosterSection({ dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function RosterSection({ invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
@@ -855,6 +855,7 @@ function RosterSection({ dealChanges = [], updateDealChanges, session = {}, publ
 
       {detailId && roster.find(a => a.id === detailId) ? (
         <ArtistDetailPanel
+          invoices={invoices}
           dealSection={(session.role === 'Admin' || session.role === 'Legal' || canViewRoyalties) && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} />}
           statementFiles={statementFiles}
           artist={roster.find(a => a.id === detailId)}
@@ -3052,7 +3053,7 @@ function DealSpanNote({ artist, rows = [], onPick, active = null }) {
   );
 }
 
-function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false, statementFiles = [], forTeam = false }) {
+function ArtistStatementView({ invoices = [], artist, revenue, masterGross, ledger, payouts, requireGenerate = false, statementFiles = [], forTeam = false }) {
   const fullExports = forTeam || ARTIST_DETAILED_EXPORTS;
   const [exportError, setExportError] = useState('');
   const [periodMode, setPeriodMode] = useState('all');
@@ -3093,7 +3094,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
   }), { gross: 0, swift: 0, net: 0, artistShare: 0 });
 
   const lifetime = artistLifetime(artist, revenue, masterGross);
-  const recoupment = recoupmentForArtist(artist, ledger, revenue, masterGross);
+  const recoupment = recoupmentForArtist(artist, ledger, revenue, masterGross, invoices);
   const artistPayouts = (payouts || []).filter(p => p.artistSlug === artistSlug).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
 
   function periodLabel() {
@@ -4316,7 +4317,7 @@ function ActivityLogSection({ activityLog }) {
   );
 }
 
-function StatementsSection({ roster, revenue, masterGross, ledger, payouts, statementFiles = [] }) {
+function StatementsSection({ roster, revenue, masterGross, ledger, payouts, statementFiles = [], invoices = [] }) {
   const activeArtists = roster.filter(a => a.status === 'Active');
   const defaultArtist = activeArtists[0] || roster[0] || null;
   const [selectedArtist, setSelectedArtist] = useState(defaultArtist ? defaultArtist.id : '');
@@ -4333,7 +4334,7 @@ function StatementsSection({ roster, revenue, masterGross, ledger, payouts, stat
         </Field>
       </div>
       {artist ? (
-        <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate forTeam />
+        <ArtistStatementView invoices={invoices} artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate forTeam />
       ) : (
         <EmptyState icon={DollarSign} title="No artists on roster" description="Add an artist to the roster to generate a statement." />
       )}
@@ -4341,7 +4342,7 @@ function StatementsSection({ roster, revenue, masterGross, ledger, payouts, stat
   );
 }
 
-function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue, masterGross, canEdit = true, isAdmin = false, sessionName = '', pmScope = null }) {
+function LedgerSection({ invoices = [], ledger: rawLedger, update, roster: fullRoster, revenue, masterGross, canEdit = true, isAdmin = false, sessionName = '', pmScope = null }) {
   // A Product Manager only sees the ledger for the artists they manage — never
   // company-wide overhead, and never another PM's roster.
   const roster = useMemo(() => pmScope ? fullRoster.filter(a => a.productManager === pmScope) : fullRoster, [fullRoster, pmScope]);
@@ -4375,7 +4376,7 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
   function rejectEntry(id) { update(ledger.map(x => x.id === id ? { ...x, approvalStatus: 'Rejected', approvedBy: sessionName, approvedAt: todayStr() } : x)); }
 
   const approvedLedger = useMemo(() => ledger.filter(x => (x.approvalStatus || 'Approved') === 'Approved'), [ledger]);
-  const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, approvedLedger, revenue, masterGross) })).filter(r => r.spent > 0), [roster, approvedLedger, revenue, masterGross]);
+  const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, approvedLedger, revenue, masterGross, invoices) })).filter(r => r.spent > 0), [invoices, roster, approvedLedger, revenue, masterGross]);
 
   const filtered = ledger.filter(x => {
     if (filterArtist !== 'all' && (filterArtist === '__general__' ? x.artist : x.artist !== filterArtist)) return false;
@@ -4384,7 +4385,7 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
   });
   const sorted = [...filtered].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const totals = ledgerTotals(filtered.filter(x => (x.approvalStatus || 'Approved') === 'Approved'));
-  const totalRecoupable = filtered.filter(x => x.type === 'expense' && x.recoupable).reduce((s, x) => s + x.amount, 0);
+  const totalRecoupable = filtered.filter(x => x.type === 'expense' && x.artist).reduce((s, x) => s + x.amount, 0);
   const pendingCount = ledger.filter(x => x.approvalStatus === 'Pending').length;
 
   return (
@@ -4446,12 +4447,7 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
           <Field label="Date"><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
           <Field label="Description" full><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Studio time for Afterglow" /></Field>
           {form.type === 'expense' && (
-            <Field label="Recoupable">
-              <label className="flex items-center gap-2 text-sm" style={{ color: C.text, paddingTop: 7 }}>
-                <input type="checkbox" checked={form.recoupable} onChange={e => setForm({ ...form, recoupable: e.target.checked })} />
-                Deduct from this artist's future earnings
-              </label>
-            </Field>
+            <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>{form.artist ? 'Recorded against ' + form.artist + ', so it’s recouped from their earnings.' : 'No artist chosen: a label cost, not recouped from anyone.'}</div>
           )}
           <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
           <div className="imss-span-2 flex gap-2 mt-1">
@@ -4461,15 +4457,15 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
         </form>
       )}
 
-      <ExportBar filename="imss-ledger" headers={['Date', 'Type', 'Artist', 'Category', 'Description', 'Recoupable', 'Amount']} rows={sorted.map(x => [x.date, x.type, x.artist || 'Label Ops', x.category, x.description || '', x.recoupable ? 'Yes' : 'No', x.amount])} />
+      <ExportBar filename="imss-ledger" headers={['Date', 'Type', 'Artist', 'Category', 'Description', 'Recoupable', 'Amount']} rows={sorted.map(x => [x.date, x.type, x.artist || 'Label Ops', x.category, x.description || '', x.type === 'expense' && x.artist ? 'Yes' : 'No', x.amount])} />
 
       <div className="text-xs mb-3" style={{ color: C.textFaint }}>Recoupment status by artist</div>
       {recoupmentByArtist.length === 0 ? (
-        <EmptyState icon={Wallet} title="No recoupable expenses yet" description="Mark an expense as recoupable and it'll show progress here as the artist earns it back." />
+        <EmptyState icon={Wallet} title="Nothing to recoup yet" description="Expenses recorded against an artist, and their approved expense claims, show here as the artist earns them back." />
       ) : (
         <div className="rounded border overflow-x-auto mb-6" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 620 }}>
-            <thead><tr><Th>Artist</Th><Th align="right">Spent (recoupable)</Th><Th align="right">Earned (artist share)</Th><Th align="right">Balance</Th></tr></thead>
+            <thead><tr><Th>Artist</Th><Th align="right">Spent on artist (label + approved claims)</Th><Th align="right">Earned (artist share)</Th><Th align="right">Balance</Th></tr></thead>
             <tbody>
               {recoupmentByArtist.map(r => (
                 <tr key={r.artist.id}>
@@ -4505,7 +4501,7 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
                     <Td>{x.artist || 'Label Ops'}</Td>
                     <Td><Badge>{x.category}</Badge></Td>
                     <Td>{x.description || '—'}</Td>
-                    <Td>{x.type === 'expense' && x.recoupable ? <Badge tone="amber">Yes</Badge> : <Badge>No</Badge>}</Td>
+                    <Td>{x.type === 'expense' && x.artist ? <Badge tone="amber">Yes</Badge> : <Badge>No</Badge>}</Td>
                     <Td align="right" mono>{formatCurrency(x.amount)}</Td>
                     <Td>
                       <Badge tone={approval === 'Approved' ? 'teal' : approval === 'Rejected' ? 'red' : 'amber'}>{approval}</Badge>
@@ -4648,7 +4644,7 @@ function BudgetSection({ labelBudgets, update, ledger, roster, canEdit = true })
   );
 }
 
-function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger, canEdit = true }) {
+function PayoutsSection({ invoices = [], payouts, update, roster, revenue, masterGross, ledger, canEdit = true }) {
   const empty = { artistId: roster[0] ? roster[0].id : '', periodStart: todayStr().slice(0, 7), periodEnd: todayStr().slice(0, 7), notes: '' };
   const [form, setForm] = useState(empty);
   const [confirmId, setConfirmId] = useState(null);
@@ -4702,7 +4698,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
   const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   function remove(id) { update(payouts.filter(p => p.id !== id)); setConfirmId(null); }
 
-  const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, ledger, revenue, masterGross) })), [roster, ledger, revenue, masterGross]);
+  const recoupmentByArtist = useMemo(() => roster.map(a => ({ artist: a, ...recoupmentForArtist(a, ledger, revenue, masterGross, invoices) })), [roster, ledger, revenue, masterGross, invoices]);
   const pnl = labelPnL(roster, revenue, masterGross, ledger);
   const sortedPayouts = [...payouts].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd) || b.createdAt - a.createdAt);
 
@@ -4773,7 +4769,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
       <div className="text-xs mb-3" style={{ color: C.textFaint }}>Recoupment status by artist</div>
       <div className="rounded border overflow-x-auto mb-6" style={{ borderColor: C.border, background: C.panel }}>
         <table className="w-full" style={{ minWidth: 620 }}>
-          <thead><tr><Th>Artist</Th><Th align="right">Spent (recoupable)</Th><Th align="right">Earned (artist share)</Th><Th align="right">Balance</Th></tr></thead>
+          <thead><tr><Th>Artist</Th><Th align="right">Spent on artist (label + approved claims)</Th><Th align="right">Earned (artist share)</Th><Th align="right">Balance</Th></tr></thead>
           <tbody>
             {recoupmentByArtist.map(r => (
               <tr key={r.artist.id}>
@@ -5471,7 +5467,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const totalStreams = myStreams.reduce((s, r) => s + r.count, 0);
 
   const lifetime = useMemo(() => artistLifetime(artist, revenue, masterGross), [artist, revenue, masterGross]);
-  const recoupment = useMemo(() => recoupmentForArtist(artist, ledger, revenue, masterGross), [artist, ledger, revenue, masterGross]);
+  const recoupment = useMemo(() => recoupmentForArtist(artist, ledger, revenue, masterGross, invoices), [artist, ledger, revenue, masterGross, invoices]);
   const myExpenses = useMemo(() => [...ledger.filter(x => x.artist === artist.name && x.type === 'expense')].sort((a, b) => (b.date || '').localeCompare(a.date || '')), [ledger, artist.name]);
   const recoupable = recoupment.spent;
   const remainingRecoupable = recoupment.unrecouped;
@@ -6732,7 +6728,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
             </div>
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-expenses'} headers={['Date', 'Category', 'Description', 'Recoupable', 'Amount']} rows={myExpenses.map(x => [x.date, x.category, x.description || '', x.recoupable ? 'Yes' : 'No', x.amount])} />
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-expenses'} headers={['Date', 'Category', 'Description', 'Recoupable', 'Amount']} rows={myExpenses.map(x => [x.date, x.category, x.description || '', 'Yes', x.amount])} />
 
             {myExpenses.length === 0 ? (
               <EmptyState icon={DollarSign} title="No expenses logged" description="Spend charged against your budget will show up here." />
@@ -6746,7 +6742,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td mono>{formatDate(x.date)}</Td>
                         <Td><Badge>{x.category}</Badge></Td>
                         <Td>{x.description || '—'}</Td>
-                        <Td>{x.recoupable ? <Badge tone="amber">Yes</Badge> : <Badge>No</Badge>}</Td>
+                        <Td><Badge tone="amber">Yes</Badge></Td>
                         <Td align="right" mono>{formatCents(x.amount)}</Td>
                       </tr>
                     ))}
@@ -6815,12 +6811,11 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'expenses' && (
           <div>
-            <p className="text-sm mb-5" style={{ color: C.textDim, maxWidth: '70ch' }}>Money spent on your career, by the label and by you. Label spend marked “recoupable” comes back out of your royalties before payouts.</p>
+            <p className="text-sm mb-5" style={{ color: C.textDim, maxWidth: '70ch' }}>Money spent on your career, by the label and by you. Everything spent on you, by the label and through your approved expense claims, is recouped from your royalties before payouts.</p>
             <div className="flex flex-wrap gap-3 mb-6">
               {(() => {
                 // Approved spend: what the label spent on the artist plus the artist's own claims once approved for payment.
-                const byLabel = myExpenses.reduce((t, x) => t + x.amount, 0);
-                const approvedClaims = myExpenseClaims.filter(i => ['Pay Approved', 'Paid'].includes(invoiceStatus(i))).reduce((t, i) => t + (Number(i.amount) || 0), 0);
+                const { byLabel, claims: approvedClaims } = artistSpend(artist, ledger, invoices);
                 return <KPICard icon={Wallet} label="Artist’s approved spend" value={formatCents(byLabel + approvedClaims)} sub={formatCents(byLabel) + ' by the label · ' + formatCents(approvedClaims) + ' your approved claims'} />;
               })()}
               <KPICard icon={Wallet} label="Still being recouped" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />
@@ -6840,7 +6835,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td mono>{formatDate(x.date)}</Td>
                         <Td>{x.category}</Td>
                         <Td>{x.description || '—'}</Td>
-                        <Td>{x.recoupable ? <Badge tone="amber">Recoupable</Badge> : <Badge>Label cost</Badge>}</Td>
+                        <Td><Badge tone="amber">Recouped</Badge></Td>
                         <Td align="right" mono>{formatCents(x.amount)}</Td>
                       </tr>
                     ))}
@@ -6962,7 +6957,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         })()}
         {tab === 'statements' && <div className="mb-6"><StatementFilesList sourceLabel="IMSS Records" rows={myRevenue} splitOf={splitOf} artistName={artist.name} title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
         {tab === 'statements' && (
-          <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate />
+          <ArtistStatementView invoices={invoices} artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate />
         )}
         <LegalFooter />
         </div>
@@ -7425,7 +7420,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
         {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
         {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'roster' && <RosterSection invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
@@ -7443,11 +7438,11 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
         {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} />}
         {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
-        {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
-        {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
+        {active === 'payouts' && <PayoutsSection invoices={invoices} payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
+        {active === 'ledger' && <LedgerSection invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
-        {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
+        {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalog} />}
         {active === 'activity' && <AuditSection roster={roster} />}
         <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
