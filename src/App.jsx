@@ -3500,8 +3500,8 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
       <div className="imss-dash-ph"><h2>{title}</h2><span style={{ color: C.textDim, fontSize: 13 }}>{files.length} {files.length === 1 ? 'file' : 'files'}</span></div>
       {sorted.length === 0 ? <div className="px-4 pb-4" style={{ color: C.textDim, fontSize: 15 }}>{empty}</div> : (
         <ul style={{ borderTop: '1px solid ' + C.border }}>
-          {sorted.map(f => (
-            <li key={f.id} className="flex items-center justify-between gap-4 flex-wrap" style={{ padding: '14px 18px', borderBottom: '1px solid ' + C.border }}>
+          {sorted.map((f, i) => (
+            <li key={f.id} className="flex items-center justify-between gap-4 flex-wrap" style={{ padding: '14px 18px', borderTop: i ? '1px solid ' + C.border : 'none' }}>
               <div style={{ minWidth: 0, flex: '1 1 320px' }}>
                 <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em' }}>{releaseOf(f)}</div>
                 <div style={{ color: C.textDim, fontSize: 13, marginTop: 2 }}>
