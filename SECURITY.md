@@ -24,6 +24,8 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - Links return only to URLs on Supabase's Redirect URL allow-list
   (`https://ops.imssrecords.com`, `https://label-backend.vercel.app`,
   `http://localhost:5173`). Add new hosts there, never a wildcard.
+- Sign-in links expire after 10 minutes (Supabase Auth → Email → Email OTP
+  Expiration = 600 s) and work once; requesting a new link voids the old one.
 - Anyone can request a link and get an account. An account on its own sees
   nothing: access comes only from the email being on the Team list or on an
   artist's Roster entry (`my_access()`).
