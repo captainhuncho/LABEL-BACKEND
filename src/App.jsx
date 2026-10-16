@@ -3123,17 +3123,17 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
       ) : (
         <>
           <div className="flex flex-wrap gap-3 mb-6">
-            <KPICard icon={DollarSign} label="Gross earnings" value={formatCurrency(periodTotals.gross)} />
-            <KPICard icon={Wallet} label="Inbound Banking Charge share" value={formatCurrency(periodTotals.swift)} />
-            <KPICard icon={TrendingUp} label="Your share" value={formatCurrency(periodTotals.artistShare)} tone="teal" sub={Math.round((artist.artistPct != null ? artist.artistPct : 0) * 100) + '% of net'} />
-            <KPICard icon={ClipboardList} label={recoupment.balance > 0 ? 'Unrecouped balance' : 'Fully recouped'} value={formatCurrency(recoupment.balance > 0 ? recoupment.unrecouped : recoupment.dueOnTop)} tone={recoupment.balance > 0 ? 'red' : 'teal'} />
+            <KPICard icon={DollarSign} label="Gross earnings" value={formatCents(periodTotals.gross)} />
+            <KPICard icon={Wallet} label="Inbound Banking Charge share" value={formatCents(periodTotals.swift)} />
+            <KPICard icon={TrendingUp} label="Your share" value={formatCents(periodTotals.artistShare)} tone="teal" sub={Math.round((artist.artistPct != null ? artist.artistPct : 0) * 100) + '% of net'} />
+            <KPICard icon={ClipboardList} label={recoupment.balance > 0 ? 'Unrecouped balance' : 'Fully recouped'} value={formatCents(recoupment.balance > 0 ? recoupment.unrecouped : recoupment.dueOnTop)} tone={recoupment.balance > 0 ? 'red' : 'teal'} />
           </div>
 
           <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
             <div style={{ fontWeight: 600 }}>{periodLabel()}</div>
             <div className="text-xs" style={{ color: C.textFaint }}>
               {monthRows.length} {monthRows.length === 1 ? 'month' : 'months'} with earnings
-              {shown.mode !== 'all' && <> · lifetime to date {formatCurrency(lifetime.artistShare)}</>}
+              {shown.mode !== 'all' && <> · lifetime to date {formatCents(lifetime.artistShare)}</>}
             </div>
           </div>
 
@@ -3146,9 +3146,9 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                   <div style={{ fontWeight: 600 }}>{monthLabel(month)}</div>
                   <div className="text-sm" style={{ color: C.textFaint }}>
-                    Gross <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(gross)}</span>
-                    {' · '}Inbound Banking Charge share <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCurrency(swift)}</span>
-                    {' · '}Your share <span style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT }}>{formatCurrency(artistShare)}</span>
+                    Gross <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCents(gross)}</span>
+                    {' · '}Inbound Banking Charge share <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCents(swift)}</span>
+                    {' · '}Your share <span style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT }}>{formatCents(artistShare)}</span>
                   </div>
                 </div>
                 <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.bg }}>
@@ -3158,7 +3158,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
                       {tracks.map(t => (
                         <tr key={t.id}>
                           <Td>{t.title}</Td>
-                          <Td align="right" mono>{formatCurrency(t.earning)}</Td>
+                          <Td align="right" mono>{formatCents(t.earning)}</Td>
                         </tr>
                       ))}
                     </tbody>
@@ -3178,7 +3178,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
                     {artistPayouts.map(p => (
                       <tr key={p.id}>
                         <Td mono>{p.periodStart} – {p.periodEnd}</Td>
-                        <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
+                        <Td align="right" mono>{formatCents(p.artistShare)}</Td>
                         <Td><Badge tone={p.status === 'paid' ? 'teal' : 'amber'}>{p.status}</Badge></Td>
                       </tr>
                     ))}
@@ -5570,7 +5570,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const myNotices = useMemo(() => [...notices.filter(n => n.audience === 'all' || n.audience === artist.id)].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [notices, artist.id]);
 
   const needsToKnow = [];
-  if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
+  if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCents(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
 
   const TABS = [
     { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, group: 'Money' },
@@ -5856,7 +5856,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
             </form>
             {dashError && <div className="text-sm mb-3" role="alert" style={{ color: C.red }}>{dashError}</div>}
-            <p className="text-sm mb-4" style={{ color: C.textDim }}>Balance is all time. Everything below shows <span style={{ color: C.text, fontWeight: 600 }}>{dashLabel}</span>.{dashRetailers[0] && dashCountries[0] ? <> Most of your money came from <span style={{ color: C.text }}>{dashRetailers[0].name}</span> in <span style={{ color: C.text }}>{breakdownLabel('countries', dashCountries[0].code)}</span>{dashUnits > 0 ? <>, across <span style={{ color: C.text }}>{Math.round(dashUnits).toLocaleString('en-US')}</span> streams and sales</> : null}.</> : null}</p>
+            <p className="text-sm mb-4" style={{ color: C.textDim }}>Balance is all time. Everything below shows <span style={{ color: C.text, fontWeight: 600 }}>{dashLabel}</span>.{dashRetailers[0] && dashCountries[0] ? <> Most of your money came from <span style={{ color: C.text }}>{dashRetailers[0].name}</span> in <span style={{ color: C.text }}>{breakdownLabel('countries', dashCountries[0].code)}</span>{dashUnits > 0 ? <>, across <span style={{ color: C.text }}>{dashUnits.toLocaleString('en-US')}</span> streams and sales</> : null}.</> : null}</p>
 
             <div className="imss-dash-stats mb-6">
               <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
@@ -5867,12 +5867,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="imss-dash-lab">Top earning retailer</div>
                 <div className="imss-dash-fig imss-dash-fig-text">{dashRetailers[0] ? dashRetailers[0].name : '—'}</div>
-                <div className="imss-dash-sub">{dashRetailers[0] ? formatCents(dashRetailers[0].value) + ' gross' + (dashGross > 0 ? ' · ' + Math.round(dashRetailers[0].value / dashGross * 100) + '% of your revenue' : '') : 'No retailer breakdown yet'}</div>
+                <div className="imss-dash-sub">{dashRetailers[0] ? formatCents(dashRetailers[0].value) + ' gross' + (dashGross > 0 ? ' · ' + (dashRetailers[0].value / dashGross * 100).toFixed(1) + '% of your revenue' : '') : 'No retailer breakdown yet'}</div>
               </div>
               <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="imss-dash-lab">Top country</div>
                 <div className="imss-dash-fig imss-dash-fig-text">{dashCountries[0] ? breakdownLabel('countries', dashCountries[0].code) : '—'}</div>
-                <div className="imss-dash-sub">{dashCountries[0] ? formatCents(dashCountries[0].value) + ' gross' + (dashGross > 0 ? ' · ' + Math.round(dashCountries[0].value / dashGross * 100) + '%' : '') + ' · ' + dashCountries.length + ' countries' : 'No country breakdown yet'}</div>
+                <div className="imss-dash-sub">{dashCountries[0] ? formatCents(dashCountries[0].value) + ' gross' + (dashGross > 0 ? ' · ' + (dashCountries[0].value / dashGross * 100).toFixed(1) + '%' : '') + ' · ' + dashCountries.length + ' countries' : 'No country breakdown yet'}</div>
               </div>
               <div className="rounded border imss-dash-stat" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="imss-dash-lab">Best month</div>
@@ -5901,7 +5901,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                             <button type="button" onClick={e => { e.stopPropagation(); openReleaseRevenue(t.title); }} className="imss-dash-songbtn">{t.title}</button>
                             <div className="text-xs mt-0.5" style={{ color: C.textDim, overflowWrap: 'anywhere' }}>{c.primaries}{c.feats.length > 0 && <span style={{ color: C.text }}> feat. {c.feats.join(', ')}</span>}</div>
                           </Td>
-                          <Td align="right" mono>{t.units > 0 ? Math.round(t.units).toLocaleString('en-US') : '—'}</Td>
+                          <Td align="right" mono>{t.units > 0 ? t.units.toLocaleString('en-US') : '—'}</Td>
                           <Td align="right" mono>{formatCents(t.gross)}</Td>
                           <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(t.artistShare)}</span></Td>
                         </tr>
@@ -5946,7 +5946,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
             {isFunded && (
               <div className="text-sm" style={{ color: C.textDim }}>
-                Budget: <span style={{ fontFamily: MONO_FONT, color: budgetRemaining < 0 ? C.red : C.text }}>{formatCurrency(budgetRemaining)}</span> left of {formatCurrency(artist.annualBudget || 0)}. <button onClick={() => setTab('budget')} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>See expenses</button>
+                Budget: <span style={{ fontFamily: MONO_FONT, color: budgetRemaining < 0 ? C.red : C.text }}>{formatCents(budgetRemaining)}</span> left of {formatCents(artist.annualBudget || 0)}. <button onClick={() => setTab('budget')} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>See expenses</button>
               </div>
             )}
           </div>
@@ -6493,15 +6493,15 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         {tab === 'payouts' && (
           <div>
             <div className="flex flex-wrap gap-3 mb-6">
-              <KPICard icon={DollarSign} label="Gross accrued" value={formatCurrency(lifetime.artistShare)} />
-              {recoupable > 0 && <KPICard icon={Wallet} label="Unrecouped balance" value={formatCurrency(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />}
-              <KPICard icon={DollarSign} label="Paid to date" value={formatCurrency(paid)} tone="teal" />
-              <KPICard icon={Wallet} label="Balance due" value={formatCurrency(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />
+              <KPICard icon={DollarSign} label="Gross accrued" value={formatCents(lifetime.artistShare)} />
+              {recoupable > 0 && <KPICard icon={Wallet} label="Unrecouped balance" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />}
+              <KPICard icon={DollarSign} label="Paid to date" value={formatCents(paid)} tone="teal" />
+              <KPICard icon={Wallet} label="Balance due" value={formatCents(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />
             </div>
 
             {recoupable > 0 && (
               <div className="rounded px-3 py-2 text-xs mb-6" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
-                {formatCurrency(recoupable)} in expenses is being recouped before this balance is fully payable.
+                {formatCents(recoupable)} in expenses is being recouped before this balance is fully payable.
                 {isFunded && ' See the Budget & Expenses tab for the full breakdown.'}
               </div>
             )}
@@ -6518,7 +6518,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       <tr key={p.id}>
                         <Td mono>{p.periodStart} – {p.periodEnd}</Td>
                         <Td><Badge tone={p.status === 'paid' ? 'teal' : undefined}>{p.status}</Badge></Td>
-                        <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
+                        <Td align="right" mono>{formatCents(p.artistShare)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -6531,9 +6531,9 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         {tab === 'budget' && isFunded && (
           <div>
             <div className="flex flex-wrap gap-3 mb-6">
-              <KPICard icon={DollarSign} label="Budget allocated" value={formatCurrency(artist.annualBudget || 0)} />
-              <KPICard icon={DollarSign} label="Spent" value={formatCurrency(totalSpent)} tone="amber" />
-              <KPICard icon={Wallet} label="Remaining" value={formatCurrency(budgetRemaining)} tone={budgetRemaining < 0 ? 'red' : 'teal'} />
+              <KPICard icon={DollarSign} label="Budget allocated" value={formatCents(artist.annualBudget || 0)} />
+              <KPICard icon={DollarSign} label="Spent" value={formatCents(totalSpent)} tone="amber" />
+              <KPICard icon={Wallet} label="Remaining" value={formatCents(budgetRemaining)} tone={budgetRemaining < 0 ? 'red' : 'teal'} />
               <KPICard icon={ClipboardList} label="Logged expenses" value={myExpenses.length} />
             </div>
 
@@ -6546,7 +6546,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <div style={{ height: 8, width: budgetPct + '%', background: budgetRemaining < 0 ? C.red : C.amber }} />
               </div>
               {budgetRemaining < 0 && (
-                <div className="text-xs mt-2" style={{ color: C.red }}>Spend has gone {formatCurrency(Math.abs(budgetRemaining))} over the allocated budget.</div>
+                <div className="text-xs mt-2" style={{ color: C.red }}>Spend has gone {formatCents(Math.abs(budgetRemaining))} over the allocated budget.</div>
               )}
             </div>
 
@@ -6561,7 +6561,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       {spendByCategory.map(c => (
                         <tr key={c.category}>
                           <Td><Badge>{c.category}</Badge></Td>
-                          <Td align="right" mono>{formatCurrency(c.value)}</Td>
+                          <Td align="right" mono>{formatCents(c.value)}</Td>
                         </tr>
                       ))}
                     </tbody>
@@ -6579,7 +6579,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                         <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
                         <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCents(v)} />
                         <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -6603,7 +6603,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td><Badge>{x.category}</Badge></Td>
                         <Td>{x.description || '—'}</Td>
                         <Td>{x.recoupable ? <Badge tone="amber">Yes</Badge> : <Badge>No</Badge>}</Td>
-                        <Td align="right" mono>{formatCurrency(x.amount)}</Td>
+                        <Td align="right" mono>{formatCents(x.amount)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -6805,7 +6805,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div className="rounded border p-4 mb-6 text-sm" style={{ borderColor: C.border, background: C.panel }}>
               <div style={{ fontWeight: 600 }}>Your reporting schedule</div>
               <p className="mt-1" style={{ color: C.textDim }}>{t.period.charAt(0).toUpperCase() + t.period.slice(1)} statements. Accounts close on {cut}, and each statement arrives within {t.deliveryDays} days. Your latest period closed {formatDate(next.cutoff)}; its statement is due by {formatDate(next.due)}.</p>
-              {t.threshold > 0 && <p className="mt-1" style={{ color: C.textDim }}>Payments are made once your balance reaches <b style={{ color: C.text }}>{formatCurrency(t.threshold)}</b>, counted on your share after the label’s percentage and the Inbound Banking Charge. Smaller balances still get a statement and carry forward to the next one.</p>}
+              {t.threshold > 0 && <p className="mt-1" style={{ color: C.textDim }}>Payments are made once your balance reaches <b style={{ color: C.text }}>{formatCents(t.threshold)}</b>, counted on your share after the label’s percentage and the Inbound Banking Charge. Smaller balances still get a statement and carry forward to the next one.</p>}
             </div>
           );
         })()}
