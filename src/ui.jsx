@@ -1,7 +1,6 @@
 // Shared UI primitives — buttons, fields, tables, cards, export bars.
 import { Download, FileSpreadsheet, Printer, X } from 'lucide-react';
 import { useState } from 'react';
-import * as XLSX from 'xlsx';
 import { artworkColor, artworkInitials } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
 import { logActivity } from './audit.js';
@@ -118,9 +117,11 @@ export function exportRowsToCsv(filename, headers, rows) {
   URL.revokeObjectURL(url);
 }
 
-export function exportRowsToExcel(filename, headers, rows) {
+// xlsx is loaded only when someone exports, to keep the first page load small.
+export async function exportRowsToExcel(filename, headers, rows) {
   logActivity('exported Excel', filename + ' (' + rows.length + ' rows)');
   try {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');

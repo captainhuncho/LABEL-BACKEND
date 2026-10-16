@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { installStorage } from './storage.js';
-import RecordLabelDashboard from './App.jsx';
+// The dashboard and portal load after sign-in, so the sign-in page opens fast.
+const RecordLabelDashboard = lazy(() => import('./App.jsx'));
 import AuthGate from './AuthGate.jsx';
-import ArtistApp from './ArtistApp.jsx';
+const ArtistApp = lazy(() => import('./ArtistApp.jsx'));
 import UpdateBanner from './UpdateBanner.jsx';
 import { LegalPage, LEGAL_PATHS } from './Legal.jsx';
 import './index.css';
@@ -16,6 +17,6 @@ createRoot(document.getElementById('root')).render(
     {/* Legal pages are public: no sign-in needed. */}
     {LEGAL_PATHS.includes(window.location.pathname.replace(/\/$/, ''))
       ? <LegalPage page={window.location.pathname.replace(/\/$/, '').slice(1)} />
-      : <AuthGate>{auth => auth.access === 'artist' ? <ArtistApp signOut={auth.signOut} /> : <RecordLabelDashboard {...auth} />}</AuthGate>}
+      : <AuthGate>{auth => <Suspense fallback={null}>{auth.access === 'artist' ? <ArtistApp signOut={auth.signOut} /> : <RecordLabelDashboard {...auth} />}</Suspense>}</AuthGate>}
   </React.StrictMode>
 );
