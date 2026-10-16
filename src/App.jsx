@@ -5731,7 +5731,6 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{artist.name}</div>
               <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
-              <div className="mt-1.5"><Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge></div>
             </div>
           </div>
           {(artist.productManager || artist.anr) && (
@@ -5786,7 +5785,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={36} />
             <div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{artist.name}</div>
-              <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate · {dealLabel(artist)}</div>
+              <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
           </div>
         </div>
@@ -5795,7 +5794,10 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'overview' && (
           <div>
-            <h1 className="imss-portal-title">Dashboard</h1>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h1 className="imss-portal-title">Dashboard</h1>
+              <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
+            </div>
 
             <section aria-label="What you are owed" className="rounded border mb-6 imss-owed-card" style={{ background: C.panel, borderColor: C.border }}>
               <div className="imss-owed-head">
