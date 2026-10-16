@@ -2894,21 +2894,21 @@ function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
 function MasterGrossSection({ masterGross, update, roster, revenue, labelSettings, updateLabelSettings, canEdit = true }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const empty = { month: todayStr().slice(0, 7), receivedIn: todayStr().slice(0, 7), totalGross: '', swiftFee: String(labelSettings.swiftFee) };
+  const empty = { month: todayStr().slice(0, 7), remittanceId: '', paidOn: '', receivedOn: '', totalGross: '', swiftFee: String(labelSettings.swiftFee) };
   const [form, setForm] = useState(empty);
   const [confirmId, setConfirmId] = useState(null);
   const [feeInput, setFeeInput] = useState(String(labelSettings.swiftFee));
 
   function openAdd() { setForm({ ...empty, swiftFee: String(labelSettings.swiftFee) }); setEditing(null); setShowForm(true); }
-  function openEdit(g) { setForm({ month: g.month, receivedIn: g.receivedIn || '', totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
+  function openEdit(g) { setForm({ month: g.month, remittanceId: g.remittanceId || '', paidOn: g.paidOn || '', receivedOn: g.receivedOn || '', totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditing(null); }
   function save(e) {
     e.preventDefault();
     const totalGross = Number(form.totalGross);
     const swiftFee = Number(form.swiftFee);
     if (!form.month || totalGross < 0 || swiftFee < 0) return;
-    // month = the statement month this money pays for (what everything matches on); receivedIn = when it reached the bank.
-    const payload = { id: form.month, month: form.month, receivedIn: form.receivedIn || '', totalGross, swiftFee };
+    // month = the statement month this money pays for (what everything matches on); the dates are records only.
+    const payload = { id: form.month, month: form.month, remittanceId: form.remittanceId.trim(), paidOn: form.paidOn || '', receivedOn: form.receivedOn || '', totalGross, swiftFee };
     if (editing) update(masterGross.map(g => g.id === editing ? payload : g));
     else update([...masterGross.filter(g => g.month !== form.month), payload]);
     closeForm();
@@ -2945,7 +2945,9 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
       {showForm && (
         <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
           <Field label="Statement month it pays for"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} disabled={!!editing} /></Field>
-          <Field label="Received in (month it reached the bank)"><Input type="month" value={form.receivedIn} onChange={e => setForm({ ...form, receivedIn: e.target.value })} /></Field>
+          <Field label="Remittance ID"><Input value={form.remittanceId} onChange={e => setForm({ ...form, remittanceId: e.target.value })} placeholder="e.g. JAN26-16344-21056" /></Field>
+          <Field label="Money sent (EMPIRE payment date)"><Input type="date" value={form.paidOn} onChange={e => setForm({ ...form, paidOn: e.target.value })} /></Field>
+          <Field label="Money received (bank credit date)"><Input type="date" value={form.receivedOn} onChange={e => setForm({ ...form, receivedOn: e.target.value })} /></Field>
           <Field label="Total gross received (USD)"><Input type="number" min="0" step="0.01" required value={form.totalGross} onChange={e => setForm({ ...form, totalGross: e.target.value })} /></Field>
           <Field label="Inbound Banking Charge (USD)"><Input type="number" min="0" step="0.01" required value={form.swiftFee} onChange={e => setForm({ ...form, swiftFee: e.target.value })} /></Field>
           <div className="imss-span-2 flex gap-2 mt-1">
@@ -2960,7 +2962,7 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 620 }}>
-            <thead><tr><Th>Statement month</Th><Th>Received in</Th><Th align="right">Total gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
+            <thead><tr><Th>Statement month</Th><Th>Remittance</Th><Th>Money sent</Th><Th>Money received</Th><Th align="right">Total gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(g => {
                 const trackedThisMonth = revByMonth(revenue)[g.month] || 0;
@@ -2968,7 +2970,9 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
                 return (
                   <tr key={g.id}>
                     <Td mono>{monthLabel(g.month)}</Td>
-                    <Td mono>{g.receivedIn ? monthLabel(g.receivedIn) : '—'}</Td>
+                    <Td><span className="text-xs" style={{ color: C.textDim }}>{g.remittanceId || '—'}</span></Td>
+                    <Td mono>{formatDate(g.paidOn)}</Td>
+                    <Td mono>{g.receivedOn ? formatDate(g.receivedOn) : <span style={{ color: C.amber }}>Not yet</span>}</Td>
                     <Td align="right" mono>{formatCurrency(g.totalGross)}</Td>
                     <Td align="right" mono>{formatCurrency(g.swiftFee)}</Td>
                     <Td align="right" mono>{formatCurrency(g.totalGross - g.swiftFee)}</Td>
