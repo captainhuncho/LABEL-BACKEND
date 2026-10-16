@@ -3010,7 +3010,8 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 // `requireGenerate` gates the statement behind an explicit Generate click —
 // used by the artist portal, where an artist picks the period they want a
 // statement for. The team-side view leaves it off and stays live.
-function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false, statementFiles = [] }) {
+function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false, statementFiles = [], forTeam = false }) {
+  const fullExports = forTeam || ARTIST_DETAILED_EXPORTS;
   const [exportError, setExportError] = useState('');
   const [periodMode, setPeriodMode] = useState('all');
   const [rangeStart, setRangeStart] = useState('');
@@ -3144,8 +3145,8 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
             </Btn>
           )}
           {shown && <Btn variant="ghost" onClick={exportSimple}><Download size={14} /> Simple CSV</Btn>}
-          {shown && <Btn variant="ghost" onClick={exportDetailed}><Download size={14} /> Detailed CSV</Btn>}
-          {shown && <Btn variant="ghost" onClick={exportPartnerCopy}><Download size={14} /> Label Partner Copy</Btn>}
+          {shown && fullExports && <Btn variant="ghost" onClick={exportDetailed}><Download size={14} /> Detailed CSV</Btn>}
+          {shown && fullExports && <Btn variant="ghost" onClick={exportPartnerCopy}><Download size={14} /> Label Partner Copy</Btn>}
           {exportError && <div className="w-full text-sm" role="alert" style={{ color: C.amber }}>{exportError}</div>}
           {shown && <Btn variant="ghost" onClick={() => window.print()}><Printer size={14} /> Print / save as PDF</Btn>}
         </div>
@@ -3372,6 +3373,9 @@ function RevenueBreakdownTable({ parts, label, format }) {
 }
 
 // Original royalty statement files kept on an artist's profile.
+// Artists' Detailed CSV and Label Partner Copy downloads. Off for now; the team always has them.
+const ARTIST_DETAILED_EXPORTS = false;
+
 // Statement exports in IMSS Records format, built from the uploaded statement
 // files' lines. Each line belongs to the artist's row for that track and month
 // and gets that row's charge and earnings pro rata (stored figures once published).
@@ -3446,9 +3450,9 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
                 <Td><span className="text-xs">{formatDate(String(f.uploadedAt || '').slice(0, 10))}{f.uploadedBy ? ' · ' + f.uploadedBy : ''}</span></Td>
                 <Td align="right">
                   <span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
-                    {splitOf && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> Detailed</button>}
+                    {splitOf && (!sourceLabel || ARTIST_DETAILED_EXPORTS) && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> Detailed</button>}
                     {splitOf && <button onClick={() => download(f, 'track')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> By track</button>}
-                    <button onClick={() => original(f)} className="inline-flex items-center gap-1" style={{ ...link, color: C.textDim }}><Download size={13} aria-hidden="true" /> Label Partner Copy</button>
+                    {(!sourceLabel || ARTIST_DETAILED_EXPORTS) && <button onClick={() => original(f)} className="inline-flex items-center gap-1" style={{ ...link, color: C.textDim }}><Download size={13} aria-hidden="true" /> Label Partner Copy</button>}
                   </span>
                 </Td>
               </tr>
@@ -4275,7 +4279,7 @@ function StatementsSection({ roster, revenue, masterGross, ledger, payouts, stat
         </Field>
       </div>
       {artist ? (
-        <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate />
+        <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate forTeam />
       ) : (
         <EmptyState icon={DollarSign} title="No artists on roster" description="Add an artist to the roster to generate a statement." />
       )}
