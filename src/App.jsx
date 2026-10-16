@@ -3335,7 +3335,8 @@ function RevenueBreakdownTable({ parts, label, format }) {
 }
 
 // Original royalty statement files kept on an artist's profile.
-function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.' }) {
+// sourceLabel replaces the distributor name for artists (they deal with IMSS Records, not EMPIRE).
+function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.', sourceLabel = '' }) {
   const [error, setError] = useState('');
   const sorted = [...files].sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
   async function open(f) {
@@ -3355,7 +3356,7 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
           <tbody>
             {sorted.map(f => (
               <tr key={f.id}>
-                <Td>{(f.months || []).map(monthLabel).join(', ') || '—'}<div className="text-xs" style={{ color: C.textDim }}>{f.source || 'Statement'}</div></Td>
+                <Td>{(f.months || []).map(monthLabel).join(', ') || '—'}<div className="text-xs" style={{ color: C.textDim }}>{sourceLabel || f.source || 'Statement'}</div></Td>
                 <Td>{(f.songs || []).join(', ') || '—'}</Td>
                 <Td align="right" mono>{formatCents(f.gross)}</Td>
                 <Td><span className="text-xs">{formatDate(String(f.uploadedAt || '').slice(0, 10))}{f.uploadedBy ? ' · ' + f.uploadedBy : ''}</span></Td>
@@ -6752,7 +6753,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             </div>
           );
         })()}
-        {tab === 'statements' && <div className="mb-6"><StatementFilesList title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
+        {tab === 'statements' && <div className="mb-6"><StatementFilesList sourceLabel="IMSS Records" title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
         {tab === 'statements' && (
           <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
         )}
