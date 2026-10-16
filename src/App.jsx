@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, Send, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
+import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, Send, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet, ExternalLink } from 'lucide-react';
 import Papa from 'papaparse';
 import { parseEmpireDetailed } from './empire.js';
 import { logActivity, logSignIn } from './audit.js';
@@ -7,7 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieCh
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, licenseOf, rightsLine, LICENSE_YEARS, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, artistSpend, dealTermsOf, expandRemittances, pctAt, termsAt, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
-import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
+import { DATA_VERSION, SOCIAL_LINKS, safeLink, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
 import { LegalFooter } from './Legal.jsx';
@@ -484,6 +484,13 @@ function ArtistDetailPanel({ invoices = [], dealSection = null, statementFiles =
               {artist.primaryMarket && <Badge tone="teal"><Globe size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{artist.primaryMarket}</Badge>}
               {artist.secondaryMarket && <Badge>+ {artist.secondaryMarket}</Badge>}
             </div>
+            {SOCIAL_LINKS.some(l => safeLink(artist[l.key])) && (
+              <div className="flex items-center gap-2 flex-wrap mt-3" aria-label="Socials and streaming">
+                {SOCIAL_LINKS.filter(l => safeLink(artist[l.key])).map(l => (
+                  <a key={l.key} href={safeLink(artist[l.key])} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '4px 12px', fontSize: 13 }}>{l.label} <ExternalLink size={11} /></a>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         {canEdit && <Btn variant="primary" onClick={() => onEdit(artist)}><Pencil size={14} /> Edit profile</Btn>}
@@ -951,6 +958,8 @@ function RosterSection({ invoices = [], dealChanges = [], updateDealChanges, ses
             </Select>
           </Field>
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
+          <div className="text-xs" style={{ gridColumn: '1 / -1', color: C.textFaint, marginTop: 6 }}>Socials and streaming (full links)</div>
+          {SOCIAL_LINKS.map(l => <Field key={l.key} label={l.label}><Input type="url" value={form[l.key] || ''} onChange={e => setForm(f => ({ ...f, [l.key]: e.target.value }))} placeholder="https://" /></Field>)}
           <Field label="License period (from each song's release date)">
             <Select value={String(form.licenseYears || 5)} onChange={e => setForm({ ...form, licenseYears: Number(e.target.value) })}>
               {LICENSE_YEARS.map(y => <option key={y} value={y}>{y} {y === 1 ? 'year' : 'years'}</option>)}
@@ -5815,7 +5824,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
   const myProfileRequests = useMemo(() => [...profileRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [profileRequests, artist.id]);
   const myPendingRequest = myProfileRequests.find(r => r.status === 'Pending');
-  const [profileForm, setProfileForm] = useState({ photoUrl: artist.photoUrl || '', bio: artist.bio || '', email: artist.email || '' });
+  const [profileForm, setProfileForm] = useState({ photoUrl: artist.photoUrl || '', bio: artist.bio || '', email: artist.email || '', ...Object.fromEntries(SOCIAL_LINKS.map(l => [l.key, artist[l.key] || ''])) });
   const profileInputRef = useRef(null);
 
   function handleProfilePhoto(e) {
@@ -5827,7 +5836,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     const changes = {};
     PROFILE_EDITABLE_FIELDS.forEach(f => {
       const current = artist[f.key] || '';
-      const proposed = profileForm[f.key] || '';
+      const proposed = f.link ? (safeLink(profileForm[f.key]) || (profileForm[f.key] ? artist[f.key] || '' : '')) : (profileForm[f.key] || '');
       if (proposed !== current) changes[f.key] = proposed;
     });
     if (Object.keys(changes).length === 0) return;
@@ -6465,6 +6474,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div className="imss-form-grid gap-3">
                 <Field label="Contact email" full><Input type="email" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></Field>
                 <Field label="Bio" full><TextArea rows={4} value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="A short bio the label can use for press and pitches." /></Field>
+                <div className="text-xs" style={{ gridColumn: '1 / -1', color: C.textFaint, marginTop: 6 }}>Your socials and streaming profiles. Paste the full link to each page.</div>
+                {SOCIAL_LINKS.map(l => <Field key={l.key} label={l.label}><Input type="url" value={profileForm[l.key] || ''} onChange={e => setProfileForm(f => ({ ...f, [l.key]: e.target.value }))} placeholder="https://" /></Field>)}
               </div>
               <Btn variant="primary" onClick={submitProfileRequest}>Submit for review</Btn>
             </div>

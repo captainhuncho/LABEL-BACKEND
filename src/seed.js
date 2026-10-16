@@ -781,10 +781,27 @@ export const SEED_ACTIVITY_LOG = [];
 export const SEED_PROFILE_REQUESTS = [];
 // Access changes proposed by Legal, waiting on an Admin to approve them.
 export const SEED_ACCESS_REQUESTS = [];
+// Socials and streaming profiles. Artists propose them from Profile; the team sees them on the artist page.
+export const SOCIAL_LINKS = [
+  { key: 'spotify', label: 'Spotify', link: true },
+  { key: 'appleMusic', label: 'Apple Music', link: true },
+  { key: 'audiomack', label: 'Audiomack', link: true },
+  { key: 'boomplay', label: 'Boomplay', link: true },
+  { key: 'youtube', label: 'YouTube', link: true },
+  { key: 'soundcloud', label: 'SoundCloud', link: true },
+  { key: 'instagram', label: 'Instagram', link: true },
+  { key: 'tiktok', label: 'TikTok', link: true },
+  { key: 'x', label: 'X (Twitter)', link: true },
+  { key: 'facebook', label: 'Facebook', link: true },
+  { key: 'website', label: 'Website', link: true },
+];
+export const safeLink = u => /^https:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
+
 export const PROFILE_EDITABLE_FIELDS = [
   { key: 'photoUrl', label: 'Profile photo' },
   { key: 'bio', label: 'Bio' },
   { key: 'email', label: 'Contact email' },
+  ...SOCIAL_LINKS,
 ];
 
 export const REQUEST_CATEGORIES = ['Payout', 'Marketing Support', 'Studio Time', 'Tour Support', 'Meeting Request', 'Contract Question', 'Other'];
