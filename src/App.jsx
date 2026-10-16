@@ -3,6 +3,7 @@ import { logActivity, logSignIn } from './audit.js';
 import { useEffect, useMemo, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
 import { streamsFromRevenue } from './streams.js';
+import { PasskeySettings } from './Passkeys.jsx';
 import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
 import { DATA_VERSION, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
@@ -12,7 +13,7 @@ import PublishToArtists from './sections/PublishToArtists.jsx';
 import DealChanges from './sections/DealChanges.jsx';
 import { AuditSection, NotificationBell } from './sections/Notifications.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
-import { Avatar, Badge, Btn, EmptyState, Field, Select } from './ui.jsx';
+import { Avatar, Badge, Btn, EmptyState, Field, SectionHeader, Select } from './ui.jsx';
 import { AccessRequestsSection } from './sections/AccessRequests.jsx';
 import { ArtistPortalShell } from './sections/ArtistPortal.jsx';
 import { ArtistRequestsSection } from './sections/ArtistRequests.jsx';
@@ -75,9 +76,10 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
         {sessionName && (
           <div className="flex items-center justify-between gap-2 mb-3 pb-3" style={{ borderBottom: '1px solid ' + C.border }}>
             <span className="flex items-center gap-1.5" style={{ color: C.textDim }}><ShieldCheck size={13} color={C.teal} /> {sessionName}</span>
-            <button onClick={onLogout} style={{ color: C.textFaint }}><LogOut size={13} /></button>
+            <button onClick={onLogout} aria-label="Sign out" style={{ color: C.textFaint }}><LogOut size={13} /></button>
           </div>
         )}
+        {sessionName && <button onClick={() => setActive('account')} className="block mb-3" style={{ color: active === 'account' ? C.amber : C.textDim }}>Sign-in & passkeys</button>}
         {confirmReset ? (
           <span className="inline-flex flex-col gap-1">
             Clear all data?
@@ -694,6 +696,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
         {active === 'activity' && <AuditSection roster={roster} />}
+        {active === 'account' && <div><SectionHeader title="Sign-in & passkeys" description="Add a passkey to sign in with Face ID, your fingerprint or this device’s screen lock." /><PasskeySettings /></div>}
         <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
           {confirmReset ? (
             <span className="inline-flex gap-2">

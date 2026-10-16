@@ -16,6 +16,7 @@ import { SUBMISSION_LABELS, SUBMISSION_TONES } from './Submissions.jsx';
 
 import { licenseFor, rightsLine } from '../licenses.js';
 import { streamsFromRevenue } from '../streams.js';
+import { PasskeySettings } from '../Passkeys.jsx';
 
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
@@ -966,6 +967,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'profile' && (
           <div>
+            <PasskeySettings />
             <section aria-label="Your deal" className="rounded p-5 mb-6" style={{ background: C.panel }}>
               <h2 style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>Your deal</h2>
               <p className="mt-1 mb-3" style={{ color: C.textDim, fontSize: 14 }}>Your share of net earnings and your deal over time. Each month is paid at the terms in force that month.</p>

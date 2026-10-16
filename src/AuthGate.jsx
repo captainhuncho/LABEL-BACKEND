@@ -1,7 +1,8 @@
 // Email-link sign-in in front of the dashboard. Without Supabase configured it
 // renders the dashboard straight away (local, single-browser mode).
 import { useEffect, useState } from 'react';
-import { Mail } from 'lucide-react';
+import { KeyRound, Mail } from 'lucide-react';
+import { passkeysSupported } from './Passkeys.jsx';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 
@@ -60,6 +61,12 @@ export default function AuthGate({ children }) {
     const { error: err } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } } });
     if (err) setError(/not enabled|provider/i.test(err.message) ? 'Google sign-in isn’t switched on yet. Use the email link for now.' : err.message);
   }
+  async function signInWithPasskey() {
+    setError(''); setDenied(false); setBusy(true);
+    const { error: err } = await supabase.auth.signInWithPasskey();
+    setBusy(false);
+    if (err && !/abort|cancel|not allowed/i.test(err.message || '')) setError('No passkey found for this device. Sign in with Google or email, then add one.');
+  }
   async function sendLink(e) {
     e.preventDefault();
     setError(''); setDenied(false);
@@ -102,6 +109,7 @@ export default function AuthGate({ children }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <button type="button" onClick={signInWithGoogle} disabled={busy} style={{ ...btn, background: C.text, color: C.bg }}><G /> Sign in with Google</button>
             <button type="button" onClick={() => setEmailMode(true)} style={{ ...btn, background: 'transparent', color: C.text, border: '1px solid var(--hairline-strong)' }}><Mail size={18} aria-hidden="true" /> Sign in with email</button>
+            {passkeysSupported() && <button type="button" onClick={signInWithPasskey} disabled={busy} style={{ ...btn, background: 'transparent', color: C.text, border: '1px solid var(--hairline-strong)' }}><KeyRound size={18} aria-hidden="true" /> Sign in with passkey</button>}
           </div>
         )}
         {denied && !sent && <div role="alert" style={{ color: C.red, fontSize: 14, lineHeight: 1.5, marginTop: 20 }}>This platform is invite only.</div>}
