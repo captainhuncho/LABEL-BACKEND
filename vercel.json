@@ -63,7 +63,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|robots.txt|favicon.svg|version.json).*)",
+      "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json).*)",
       "destination": "/index.html"
     }
   ]
