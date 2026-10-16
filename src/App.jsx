@@ -5853,7 +5853,6 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{artist.name}</div>
               <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
-            <NotificationBell openLeft routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
           </div>
           {(artist.productManager || artist.anr) && (
             <dl className="mt-4 pt-4 flex flex-col gap-2.5" style={{ borderTop: '1px solid ' + C.border }}>
@@ -5917,13 +5916,21 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           </div>
         </div>
 
-        {tab !== 'overview' && <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>}
+        {tab !== 'overview' && (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>
+            <span className="imss-desktop-only"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /></span>
+          </div>
+        )}
 
         {tab === 'overview' && (
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h1 className="imss-portal-title">Dashboard</h1>
-              <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
+                <span className="imss-desktop-only"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /></span>
+              </div>
             </div>
 
             {showDealBanner && (
