@@ -3490,33 +3490,39 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
       (kind === 'detailed' ? csvDetailed : csvByTrack)(fileName(f, kind === 'detailed' ? 'detailed' : 'by-track'), lines);
     } catch (err) { setError('Could not build that statement. Try again in a moment.'); }
   }
-  const link = { color: C.amber, fontWeight: 600, fontSize: 13 };
+  // The release a file is for: EMPIRE names files "<Release> royalties_detailed_<stamp>.csv".
+  const releaseOf = f => String(f.name || '').replace(/\.csv$/i, '').replace(/\s*royalties_detailed.*$/i, '').trim() || (f.songs || [])[0] || 'Statement';
+  const songsLine = f => { const list = f.songs || []; if (!list.length) return ''; const shown = list.slice(0, 3).join(', '); return list.length + (list.length === 1 ? ' song' : ' songs') + ': ' + shown + (list.length > 3 ? ' and ' + (list.length - 3) + ' more' : ''); };
+  const isArtist = !!sourceLabel;
+  const pill = { background: C.fill, color: C.text, borderRadius: 980, padding: '7px 14px', fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' };
   return (
-    <section aria-label={title} className="rounded border overflow-x-auto" style={{ background: C.panel, borderColor: C.border }}>
-      <div className="imss-dash-ph"><h2>{title}</h2><span className="text-xs" style={{ color: C.textDim }}>{files.length} file{files.length === 1 ? '' : 's'}</span></div>
-      {sorted.length === 0 ? <div className="px-4 pb-4 text-sm" style={{ color: C.textDim }}>{empty}</div> : (
-        <table className="w-full" style={{ minWidth: 640 }}>
-          <thead><tr><Th>Statement months</Th><Th>Gross</Th><Th>Songs</Th><Th>Uploaded</Th><Th align="right">Download</Th></tr></thead>
-          <tbody>
-            {sorted.map(f => (
-              <tr key={f.id}>
-                <Td>{(f.months || []).map(monthLabel).join(', ') || '—'}<div className="text-xs" style={{ color: C.textDim }}>{sourceLabel || f.source || 'Statement'}</div></Td>
-                <Td mono>{formatCents(f.gross)}</Td>
-                <Td>{(f.songs || []).join(', ') || '—'}</Td>
-                <Td><span className="text-xs">{formatDate(String(f.uploadedAt || '').slice(0, 10))}{f.uploadedBy ? ' · ' + f.uploadedBy : ''}</span></Td>
-                <Td align="right">
-                  <span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
-                    {splitOf && (!sourceLabel || ARTIST_DETAILED_EXPORTS) && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> Detailed</button>}
-                    {splitOf && <button onClick={() => download(f, 'track')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> By track</button>}
-                    {(!sourceLabel || ARTIST_DETAILED_EXPORTS) && <button onClick={() => original(f)} className="inline-flex items-center gap-1" style={{ ...link, color: C.textDim }}><Download size={13} aria-hidden="true" /> Label Partner Copy</button>}
-                  </span>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <section aria-label={title} className="rounded" style={{ background: C.panel }}>
+      <div className="imss-dash-ph"><h2>{title}</h2><span style={{ color: C.textDim, fontSize: 13 }}>{files.length} {files.length === 1 ? 'file' : 'files'}</span></div>
+      {sorted.length === 0 ? <div className="px-4 pb-4" style={{ color: C.textDim, fontSize: 15 }}>{empty}</div> : (
+        <ul style={{ borderTop: '1px solid ' + C.border }}>
+          {sorted.map(f => (
+            <li key={f.id} className="flex items-center justify-between gap-4 flex-wrap" style={{ padding: '14px 18px', borderBottom: '1px solid ' + C.border }}>
+              <div style={{ minWidth: 0, flex: '1 1 320px' }}>
+                <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em' }}>{releaseOf(f)}</div>
+                <div style={{ color: C.textDim, fontSize: 13, marginTop: 2 }}>
+                  {(f.months || []).map(monthLabel).join(' – ') || '—'}{songsLine(f) ? ' · ' + songsLine(f) : ''}
+                </div>
+                <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>{isArtist ? 'Added ' : 'Uploaded '}{formatDate(String(f.uploadedAt || '').slice(0, 10))}{!isArtist && f.uploadedBy ? ' by ' + f.uploadedBy : ''}{!isArtist && f.source ? ' · ' + f.source : ''}</div>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap justify-end">
+                <div style={{ textAlign: 'right', minWidth: 90 }}>
+                  <div style={{ fontWeight: 600, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{formatCents(f.gross)}</div>
+                  <div style={{ color: C.textDim, fontSize: 12 }}>gross</div>
+                </div>
+                {splitOf && <button onClick={() => download(f, 'track')} className="inline-flex items-center gap-1.5" style={pill}><Download size={14} aria-hidden="true" /> By track</button>}
+                {splitOf && (!isArtist || ARTIST_DETAILED_EXPORTS) && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1.5" style={pill}><Download size={14} aria-hidden="true" /> Detailed</button>}
+                {(!isArtist || ARTIST_DETAILED_EXPORTS) && <button onClick={() => original(f)} className="inline-flex items-center gap-1.5" style={pill}><Download size={14} aria-hidden="true" /> Partner copy</button>}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-      {error && <div className="px-4 pb-3 text-sm" role="alert" style={{ color: C.red }}>{error}</div>}
+      {error && <div className="px-4 py-3" role="alert" style={{ color: C.red, fontSize: 14 }}>{error}</div>}
     </section>
   );
 }
