@@ -48,8 +48,8 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
   function recordKind(change, done) {
     const a = roster.find(x => x.id === artistId);
     if (!a) return done('Choose the artist.');
-    // Admin and Legal have the final say on contracts and licenses: their entries apply at once.
-    const direct = canRecord;
+    // Legal proposes, an Admin approves; an Admin's own entry applies at once.
+    const direct = isAdmin;
     const stamp = new Date().toISOString();
     const entry = { id: uid(), artistId: a.id, artist: a.name, ...change, requestedBy: session.name, requestedAt: stamp, ...(direct ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }) };
     updateChanges([entry, ...changes]);

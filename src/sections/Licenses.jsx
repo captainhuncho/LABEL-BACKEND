@@ -1,7 +1,8 @@
-// Contract and song licenses on an artist's page. Admin and Legal have the final
-// say: every change they make applies at once and is kept as a Deal change in
-// the audit trail. They can override any song's end date and undo a rights
-// return, a recoupment confirmation or a termination. Rules: src/licenses.js.
+// Contract and song licenses on an artist's page. Admin and Legal can change
+// anything here: override any song's end date and undo a rights return, a
+// recoupment confirmation or a termination. Legal's entries wait for an Admin's
+// approval; an Admin's apply at once. All are kept as Deal changes in the audit
+// trail. Rules: src/licenses.js.
 import { useState } from 'react';
 import { CheckCircle2, Plus } from 'lucide-react';
 import { formatDate, todayStr } from '../constants.js';
@@ -202,7 +203,7 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
           </>}
           {error && <div className="imss-span-2" role="alert" style={{ color: C.red, fontSize: 14 }}>{error}</div>}
           <div className="imss-span-2 flex gap-2 flex-wrap">
-            <Btn variant="primary" type="submit"><CheckCircle2 size={15} /> Save</Btn>
+            <Btn variant="primary" type="submit"><CheckCircle2 size={15} /> {isAdmin ? 'Save' : 'Send to an Admin to approve'}</Btn>
             <Btn variant="ghost" onClick={() => { setForm(null); setError(''); }}>Cancel</Btn>
           </div>
         </form>

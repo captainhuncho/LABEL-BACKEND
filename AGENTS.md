@@ -124,10 +124,10 @@ is the panel on an artist's page. Every artist has a `contractType`:
   artist's `effectiveDate`; termination notices (`terminations`) start the
   Retention Period. The system shows the dates; Legal or Admin decides.
 
-Admin and Legal have the final say. Contract terms, song license details,
-termination notices, recoupment confirmations and rights returns are Deal
-changes with a `kind`; theirs apply at once and stay in the audit trail. They
-can override any song's end date (`licenseOverride`, with a reason; it beats
+Admin has the final say. Contract terms, song license details, termination
+notices, recoupment confirmations, rights returns, overrides and undos are Deal
+changes with a `kind`: Legal records them and an Admin approves (an Admin's own
+entry applies at once). Both can override any song's end date (`licenseOverride`, with a reason; it beats
 every rule) and undo a rights return, recoupment confirmation or termination
 (`kind: 'undo'`). `rightsReturned` emails the artist and gives the PM a
 takedown task. Nothing is guessed: missing data is flagged.
