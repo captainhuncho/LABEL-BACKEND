@@ -11,6 +11,7 @@ import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
 import { LegalFooter } from './Legal.jsx';
 import PublishToArtists from './sections/PublishToArtists.jsx';
+import DealChanges from './sections/DealChanges.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
 import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, DropZone, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
@@ -392,7 +393,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
   );
 }
 
-function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function ArtistDetailPanel({ dealSection = null, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
   const aSlug = useMemo(() => slug(artist.name), [artist.name]);
@@ -727,6 +728,7 @@ function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, reven
             )}
           </div>
           )}
+          {dealSection && <div className="rounded p-5 mb-4" style={{ background: C.panel }}>{dealSection}</div>}
           {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, pctAt(artist, r.month))} artistName={artist.name} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
           {canViewRoyalties && (
           <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
@@ -784,7 +786,7 @@ function SendLinkButton({ email, labeled = false }) {
   );
 }
 
-function RosterSection({ publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function RosterSection({ dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
@@ -799,35 +801,16 @@ function RosterSection({ publishedRevenue = [], statementFiles = [], roster, upd
   const photoInputRef = useRef(null);
 
   function openAdd() { setForm({ ...empty, productManager: pmScope || '' }); setEditing(null); setShowForm(true); }
-  function openEdit(a) { setForm({ ...empty, ...a }); setEditing(a.id); setShowForm(true); setTermsFrom(todayStr().slice(0, 7)); setFormError(''); }
-  // Deal terms are dated. A change to the %, funding, deal, reporting or threshold
-  // on an existing artist becomes a new entry from a chosen month; earlier months keep theirs.
-  const [termsFrom, setTermsFrom] = useState(todayStr().slice(0, 7));
+  function openEdit(a) { setForm({ ...empty, ...a }); setEditing(a.id); setShowForm(true); setFormError(''); }
   const [formError, setFormError] = useState('');
-  const termValues = f => ({ artistPct: Number(f.royaltyRate) / 100, fundingTier: f.fundingTier || 'Non-Funded', dealType: f.dealType || '', reportingPeriod: f.reportingPeriod || 'quarterly', deliveryDays: Number(f.deliveryDays) || '', payoutThreshold: Number(f.payoutThreshold) || 0 });
-  const original = editing ? roster.find(a => a.id === editing) : null;
-  const originalTerms = original ? termValues({ ...original, royaltyRate: Math.round((original.artistPct != null ? original.artistPct : original.royaltyRate / 100) * 10000) / 100 }) : null;
-  const termsChanged = !!original && JSON.stringify(termValues(form)) !== JSON.stringify(originalTerms);
-  const lastPublished = original ? publishedRevenue.filter(r => r.artistSlug === slug(original.name)).reduce((m, r) => r.month > m ? r.month : m, '') : '';
   function closeForm() { setShowForm(false); setEditing(null); if (photoInputRef.current) photoInputRef.current.value = ''; }
 
   function save(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
     let payload = { ...form, royaltyRate: Number(form.royaltyRate), artistPct: Number(form.royaltyRate) / 100, payoutThreshold: Number(form.payoutThreshold) || 0, deliveryDays: Number(form.deliveryDays) || '', annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
-    if (editing && termsChanged) {
-      const history = dealTermsOf(original);
-      const latest = history[history.length - 1];
-      if (!/^\d{4}-\d{2}$/.test(termsFrom)) { setFormError('Pick the month the new deal terms start.'); return; }
-      if (lastPublished && termsFrom <= lastPublished) { setFormError('Earnings up to ' + monthLabel(lastPublished) + ' are already published to ' + original.name + ' on the current terms. New terms must start after that.'); return; }
-      if (latest.from && termsFrom < latest.from) { setFormError('The latest terms start ' + monthLabel(latest.from) + '. New terms can’t start before them.'); return; }
-      const dealTerms = [...history.filter(t => t.from !== termsFrom), { from: termsFrom, ...termValues(form), setBy: sessionName, setAt: new Date().toISOString() }];
-      // The artist's current fields show the terms in force today (a future change waits for its month).
-      const now = termsAt({ ...original, dealTerms }, todayStr().slice(0, 7));
-      payload = { ...payload, dealTerms, artistPct: now.artistPct, royaltyRate: Math.round(now.artistPct * 10000) / 100, fundingTier: now.fundingTier, dealType: now.dealType, reportingPeriod: now.reportingPeriod, deliveryDays: now.deliveryDays, payoutThreshold: now.payoutThreshold };
-    } else if (editing) {
-      payload = { ...payload, artistPct: original.artistPct, royaltyRate: original.royaltyRate };
-    }
+    // The split and deal change only through Deal changes, dated and approved.
+    if (editing) { const o = roster.find(a => a.id === editing); payload = { ...payload, artistPct: o.artistPct, royaltyRate: o.royaltyRate, fundingTier: o.fundingTier, dealType: o.dealType, dealTerms: o.dealTerms }; }
     setFormError('');
     if (editing) update(roster.map(a => a.id === editing ? { ...payload, id: editing } : a));
     else update([...roster, { ...payload, id: uid() }]);
@@ -870,6 +853,7 @@ function RosterSection({ publishedRevenue = [], statementFiles = [], roster, upd
 
       {detailId && roster.find(a => a.id === detailId) ? (
         <ArtistDetailPanel
+          dealSection={(session.role === 'Admin' || session.role === 'Legal' || canViewRoyalties) && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} />}
           statementFiles={statementFiles}
           artist={roster.find(a => a.id === detailId)}
           roster={roster} catalog={catalog} revenue={revenue} streams={streams} masterGross={masterGross}
@@ -954,7 +938,7 @@ function RosterSection({ publishedRevenue = [], statementFiles = [], roster, upd
               {MARKETS.filter(m => m !== form.primaryMarket).map(m => <option key={m} value={m}>{m}</option>)}
             </Select>
           </Field>
-          <Field label="Royalty rate (% to artist)"><Input type="number" min="0" max="100" value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>
+          <Field label="Artist share (%)"><Input type="number" min="0" max="100" disabled={!!editing} value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>
           <Field label="Reporting period">
             <Select value={form.reportingPeriod || 'quarterly'} onChange={e => setForm({ ...form, reportingPeriod: e.target.value })}>
               <option value="monthly">Monthly (cutoff end of each month)</option>
@@ -965,36 +949,17 @@ function RosterSection({ publishedRevenue = [], statementFiles = [], roster, upd
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
           <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
           <Field label="Funding tier">
-            <Select value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value, dealType: (DEAL_TYPES[e.target.value] || [])[0] || '' })}>
+            <Select disabled={!!editing} value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value, dealType: (DEAL_TYPES[e.target.value] || [])[0] || '' })}>
               {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </Field>
           <Field label="Deal">
-            <Select value={form.dealType || ''} onChange={e => setForm({ ...form, dealType: e.target.value })}>
+            <Select disabled={!!editing} value={form.dealType || ''} onChange={e => setForm({ ...form, dealType: e.target.value })}>
               <option value="">Not set</option>
               {(DEAL_TYPES[form.fundingTier || 'Non-Funded'] || []).map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </Field>
-          {termsChanged && (
-            <div className="imss-span-2 rounded p-4" style={{ background: C.amberSoft }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>You’re changing {original.name}’s deal terms</div>
-              <div className="mt-1" style={{ color: C.textDim, fontSize: 14 }}>Earlier months keep the old terms; earnings from the month below use the new ones.{lastPublished ? ' Already published up to ' + monthLabel(lastPublished) + '.' : ''}</div>
-              <div className="mt-3" style={{ maxWidth: 240 }}><Field label="New terms start from"><Input type="month" value={termsFrom} onChange={e => { setTermsFrom(e.target.value); setFormError(''); }} /></Field></div>
-            </div>
-          )}
-          {original && dealTermsOf(original).length > 1 && (
-            <div className="imss-span-2">
-              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Deal history</div>
-              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
-                <table className="w-full" style={{ minWidth: 560 }}>
-                  <thead><tr><Th>From</Th><Th align="right">Artist %</Th><Th>Funding · deal</Th><Th>Reporting</Th><Th align="right">Threshold</Th><Th>Set by</Th></tr></thead>
-                  <tbody>{dealTermsOf(original).map((t, i) => (
-                    <tr key={i}><Td mono>{t.from ? monthLabel(t.from) : 'Start'}</Td><Td align="right" mono>{Math.round(t.artistPct * 10000) / 100}%</Td><Td>{(t.fundingTier || 'Non-Funded') + (t.dealType ? ' · ' + t.dealType : '')}</Td><Td>{t.reportingPeriod || 'quarterly'}</Td><Td align="right" mono>{t.payoutThreshold ? formatCents(t.payoutThreshold) : '—'}</Td><Td>{t.setBy || '—'}</Td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {editing && <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>Split, funding and deal change through <b style={{ color: C.text }}>Record a deal change</b> on the artist’s profile, from the month the new deal starts.</div>}
           {form.fundingTier === 'Funded' && (
             <Field label="Annual budget"><Input type="number" min="0" step="0.01" value={form.annualBudget} onChange={e => setForm({ ...form, annualBudget: e.target.value })} placeholder="Total allocated for this artist" /></Field>
           )}
@@ -6899,7 +6864,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 }
 
 // Everything waiting on this team member: shown on the Overview and in Alerts.
-function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], payouts = [], canRoyalties = false, isAdmin = false, sessionName = '' }) {
+function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], dealChanges = [], payouts = [], canRoyalties = false, isAdmin = false, sessionName = '' }) {
   const items = [];
   const today = todayStr();
   roster.forEach(a => {
@@ -6976,6 +6941,8 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
     if (overdue) items.push({ id: 'statements-overdue', tone: 'red', text: overdue + ' artist ' + (overdue === 1 ? 'statement is' : 'statements are') + ' overdue', tab: 'payouts' });
     if (soon) items.push({ id: 'statements-soon', tone: 'amber', text: soon + ' artist ' + (soon === 1 ? 'statement is' : 'statements are') + ' due in the next 14 days', tab: 'payouts' });
   }
+  const dealWaiting = dealChanges.filter(c => c.status === 'Pending').length;
+  if (isAdmin && dealWaiting) items.push({ id: 'deal-approvals', tone: 'amber', text: dealWaiting + ' deal ' + (dealWaiting === 1 ? 'change' : 'changes') + ' waiting on your approval', tab: 'deals' });
   const publishWaiting = revenuePublish.filter(e => e.status === 'Awaiting approval').length;
   if (isAdmin && publishWaiting > 0) {
     items.push({ id: 'publish-approvals', tone: 'amber', text: publishWaiting + ' publish ' + (publishWaiting === 1 ? 'request' : 'requests') + ' to artists waiting on your approval', tab: 'publish' });
@@ -7070,6 +7037,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [statementFiles, setStatementFiles] = useState([]);
   const [publishedRevenue, setPublishedRevenue] = useState([]);
   const [revenuePublish, setRevenuePublish] = useState([]);
+  const [dealChanges, setDealChanges] = useState([]);
   const [acceptingSubmission, setAcceptingSubmission] = useState(null);
   const [releaseSubmissions, setReleaseSubmissions] = useState(SEED_RELEASE_SUBMISSIONS);
   const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
@@ -7113,6 +7081,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         // Without a saved snapshot (local mode), artists start out seeing all approved seed revenue.
         ['publishedRevenue', setPublishedRevenue, publishSnapshot(SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_MASTER_GROSS, SEED_ROSTER)],
         ['revenuePublish', setRevenuePublish, []],
+        ['dealChanges', setDealChanges, []],
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
       ];
@@ -7149,7 +7118,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   // open, so re-read them when the tab regains focus and once a minute.
   useEffect(() => {
     if (!supabase || loading) return;
-    const live = [['revenuePublish', setRevenuePublish], ['invoices', setInvoices], ['artistRequests', setArtistRequests], ['releaseSubmissions', setReleaseSubmissions], ['profileRequests', setProfileRequests]];
+    const live = [['dealChanges', setDealChanges], ['revenuePublish', setRevenuePublish], ['invoices', setInvoices], ['artistRequests', setArtistRequests], ['releaseSubmissions', setReleaseSubmissions], ['profileRequests', setProfileRequests]];
     async function refresh() {
       if (document.visibilityState === 'hidden') return;
       for (const [key, setter] of live) {
@@ -7201,6 +7170,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
   function updateArtistRequests(next) { logChange('Artist requests', artistRequests, next); setArtistRequests(next); persist('artistRequests', next); }
   function updatePublishedRevenue(next) { setPublishedRevenue(next); persist('publishedRevenue', next); }
+  function updateDealChanges(next) { logChange('Deal changes', dealChanges, next); setDealChanges(next); persist('dealChanges', next); }
   function updateRevenuePublish(next) { logChange('Publish to artists', revenuePublish, next); setRevenuePublish(next); persist('revenuePublish', next); }
   function updateStatementFiles(next) { logChange('Statement files', statementFiles, next); setStatementFiles(next); persist('statementFiles', next); }
   function updateInvoices(next) { logChange('Invoices', invoices, next); setInvoices(next); persist('invoices', next); }
@@ -7238,8 +7208,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
   const attention = useMemo(() => (session && session.mode === 'team'
-    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name })
-    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, payouts, perms.royalties, isAdmin]);
+    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name })
+    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, perms.royalties, isAdmin]);
 
   // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
   const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
@@ -7259,6 +7229,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.edits && perms.royalties && { id: 'import', label: 'Import statements', icon: Upload, group: 'Royalties' },
     perms.royalties && { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'Royalties' },
     perms.royalties && { id: 'publish', label: 'Publish to artists', icon: Send, group: 'Royalties' },
+    isPrivileged && { id: 'deals', label: 'Deal changes', icon: ClipboardList, group: 'Royalties' },
     perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Royalties' },
     perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Royalties' },
 
@@ -7341,7 +7312,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
         {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
         {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'roster' && <RosterSection dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
@@ -7357,6 +7328,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
+        {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} />}
         {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}

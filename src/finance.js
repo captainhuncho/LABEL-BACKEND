@@ -58,7 +58,8 @@ export function swiftShareFor(artistSlug, month, revenue, masterGross) {
 // b2) Deal terms are dated: each entry applies from its month until the next.
 // Artists with no history have one open-ended entry built from their current
 // fields, so nothing changes until a new term is added.
-const TERM_FIELDS = ['artistPct', 'fundingTier', 'dealType', 'reportingPeriod', 'deliveryDays', 'payoutThreshold'];
+// A deal change is the split plus the deal it comes with; reporting and threshold are plain profile settings.
+const TERM_FIELDS = ['artistPct', 'fundingTier', 'dealType'];
 export function dealTermsOf(artist) {
   const list = Array.isArray(artist.dealTerms) && artist.dealTerms.length ? artist.dealTerms : [Object.fromEntries([['from', ''], ...TERM_FIELDS.map(k => [k, artist[k]])])];
   return [...list].sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
