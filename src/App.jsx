@@ -3010,7 +3010,8 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 // `requireGenerate` gates the statement behind an explicit Generate click —
 // used by the artist portal, where an artist picks the period they want a
 // statement for. The team-side view leaves it off and stays live.
-function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false }) {
+function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false, statementFiles = [] }) {
+  const [exportError, setExportError] = useState('');
   const [periodMode, setPeriodMode] = useState('all');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
@@ -3070,9 +3071,26 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
     setRangeError('');
     setGenerated({ mode: periodMode, start: rangeStart, end: rangeEnd });
   }
-  function exportCsv() {
-    exportRowsToCsv((artist.name.replace(/\s+/g, '-').toLowerCase() || 'artist') + '-statement', ['Month', 'Track', 'Gross earning'],
-      monthRows.flatMap(m => m.tracks.map(t => [m.month, t.title, t.earning])));
+  const exportName = kind => ['imss-records', artist.name, periodLabel(), kind].join(' ').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+  const splitOfRow = r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0);
+  // Simple: one row per track per month, from the figures on screen.
+  function exportSimple() {
+    const list = monthRows.flatMap(m => m.tracks.map(t => ({ t, x: splitOfRow(t) }))).sort((a, b) => a.t.month.localeCompare(b.t.month) || a.t.title.localeCompare(b.t.title));
+    const tot = list.reduce((a, { x }) => ({ g: a.g + x.gross, c: a.c + x.charge, e: a.e + x.artistShare }), { g: 0, c: 0, e: 0 });
+    exportRowsToCsv(exportName('simple'), ['Statement month', 'Track', 'ISRC', 'Streams / sales', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
+      [...list.map(({ t, x }) => [t.month, t.title, t.isrc || '', t.quantity || '', x.gross.toFixed(2), x.charge.toFixed(2), x.artistShare.toFixed(2)]), ['Total', '', '', '', tot.g.toFixed(2), tot.c.toFixed(2), tot.e.toFixed(2)]]);
+  }
+  // Detailed: every line from the uploaded statements for these months.
+  async function exportDetailed() {
+    setExportError('');
+    const months = monthRows.map(m => m.month);
+    const files = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).some(m => months.includes(m)));
+    if (!files.length) { setExportError('There are no uploaded statement lines for this period, so only the simple version is available.'); return; }
+    try {
+      const lines = await statementLines(files, artistRevenue, splitOfRow, months);
+      if (!lines.length) { setExportError('No statement lines match this period.'); return; }
+      csvDetailed(exportName('detailed'), lines);
+    } catch (e) { setExportError('Could not build the detailed statement. Try again in a moment.'); }
   }
 
   return (
@@ -3112,7 +3130,9 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
               <FileText size={14} /> {generated ? 'Regenerate statement' : 'Generate statement'}
             </Btn>
           )}
-          {shown && <Btn variant="ghost" onClick={exportCsv}><Download size={14} /> Export to CSV</Btn>}
+          {shown && <Btn variant="ghost" onClick={exportSimple}><Download size={14} /> Simple CSV</Btn>}
+          {shown && <Btn variant="ghost" onClick={exportDetailed}><Download size={14} /> Detailed CSV</Btn>}
+          {exportError && <div className="w-full text-sm" role="alert" style={{ color: C.amber }}>{exportError}</div>}
           {shown && <Btn variant="ghost" onClick={() => window.print()}><Printer size={14} /> Print / save as PDF</Btn>}
         </div>
       </div>
@@ -3338,6 +3358,40 @@ function RevenueBreakdownTable({ parts, label, format }) {
 }
 
 // Original royalty statement files kept on an artist's profile.
+// Statement exports in IMSS Records format, built from the uploaded statement
+// files' lines. Each line belongs to the artist's row for that track and month
+// and gets that row's charge and earnings pro rata (stored figures once published).
+const codeOf = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+async function statementLines(files, rows, splitOf, months) {
+  const out = [];
+  for (const f of files) {
+    const text = await (await fetch(await statementFileUrl(f))).text();
+    const { lines } = parseEmpireDetailed(Papa.parse(text, { skipEmptyLines: false }).data);
+    lines.forEach(l => {
+      if (!months.includes(l.statementMonth)) return;
+      const r = rows.find(r => r.month === l.statementMonth && ((l.isrc && codeOf(r.isrc) === codeOf(l.isrc)) || slug(r.title) === slug(l.trackTitle || l.productTitle)));
+      if (!r || !r.earning) return;
+      const x = splitOf(r), k = l.gross / r.earning;
+      out.push({ ...l, track: r.title, charge: x.charge * k, earnings: x.artistShare * k });
+    });
+  }
+  return out;
+}
+const sumOf = (list, key) => list.reduce((t, l) => t + l[key], 0);
+function csvDetailed(name, lines) {
+  exportRowsToCsv(name, ['Statement month', 'Sales month', 'Platform', 'Service', 'Country', 'Type', 'Commercial model', 'Usage', 'Track', 'ISRC', 'Quantity', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
+    [...lines.map(l => [l.statementMonth, l.salesMonth, l.serviceGroup, l.service, l.country, l.type, l.model, l.usage, l.track, l.isrc, l.quantity, l.gross.toFixed(4), l.charge.toFixed(4), l.earnings.toFixed(4)]),
+     ['Total', '', '', '', '', '', '', '', '', '', '', sumOf(lines, 'gross').toFixed(2), sumOf(lines, 'charge').toFixed(2), sumOf(lines, 'earnings').toFixed(2)]]);
+}
+function csvByTrack(name, lines) {
+  const groups = {};
+  lines.forEach(l => { const k = l.statementMonth + '|' + l.track; const g = groups[k] || (groups[k] = { month: l.statementMonth, track: l.track, isrc: l.isrc, quantity: 0, gross: 0, charge: 0, earnings: 0 }); g.quantity += l.quantity; g.gross += l.gross; g.charge += l.charge; g.earnings += l.earnings; });
+  const list = Object.values(groups).sort((a, b) => a.month.localeCompare(b.month) || a.track.localeCompare(b.track));
+  exportRowsToCsv(name, ['Statement month', 'Track', 'ISRC', 'Streams / sales', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
+    [...list.map(g => [g.month, g.track, g.isrc, g.quantity, g.gross.toFixed(2), g.charge.toFixed(2), g.earnings.toFixed(2)]),
+     ['Total', '', '', '', sumOf(lines, 'gross').toFixed(2), sumOf(lines, 'charge').toFixed(2), sumOf(lines, 'earnings').toFixed(2)]]);
+}
+
 // Statement files on an artist. Two IMSS-branded downloads built from the
 // artist's own rows: Detailed (every line, like the uploaded report) and By
 // track (one row per track per month). Team side also keeps the original file.
@@ -3346,7 +3400,6 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
   const [error, setError] = useState('');
   const sorted = [...files].sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
   const fileName = (f, kind) => ((artistName || 'artist') + ' ' + (f.months || []).join(' ') + ' ' + kind).trim().replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
-  const code = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   async function original(f) {
     setError('');
     try {
@@ -3355,36 +3408,12 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
       document.body.appendChild(a); a.click(); a.remove();
     } catch (err) { setError('Could not download that file. Try again in a moment.'); }
   }
-  // This file's lines that belong to the artist, each with its pro-rata charge and earnings.
-  async function fileLines(f) {
-    const text = await (await fetch(await statementFileUrl(f))).text();
-    const { lines } = parseEmpireDetailed(Papa.parse(text, { skipEmptyLines: false }).data);
-    const mine = rows.filter(r => (f.months || []).includes(r.month));
-    const rowOf = l => mine.find(r => r.month === l.statementMonth && ((l.isrc && code(r.isrc) === code(l.isrc)) || slug(r.title) === slug(l.trackTitle || l.productTitle)));
-    return lines.map(l => {
-      const r = rowOf(l); if (!r || !r.earning) return null;
-      const x = splitOf(r), k = l.gross / r.earning;
-      return { ...l, track: r.title, charge: x.charge * k, earnings: x.artistShare * k };
-    }).filter(Boolean);
-  }
-  const sum = (list, key) => list.reduce((t, l) => t + l[key], 0);
   async function download(f, kind) {
     setError('');
     try {
-      const lines = await fileLines(f);
+      const lines = await statementLines([f], rows, splitOf, f.months || []);
       if (!lines.length) { setError('No lines in that file match this artist’s earnings.'); return; }
-      const total = ['Total', sum(lines, 'gross').toFixed(2), sum(lines, 'charge').toFixed(2), sum(lines, 'earnings').toFixed(2)];
-      if (kind === 'detailed') {
-        exportRowsToCsv(fileName(f, 'detailed'), ['Statement month', 'Sales month', 'Platform', 'Service', 'Country', 'Type', 'Commercial model', 'Usage', 'Track', 'ISRC', 'Quantity', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
-          [...lines.map(l => [l.statementMonth, l.salesMonth, l.serviceGroup, l.service, l.country, l.type, l.model, l.usage, l.track, l.isrc, Math.round(l.quantity), l.gross.toFixed(4), l.charge.toFixed(4), l.earnings.toFixed(4)]),
-           [total[0], '', '', '', '', '', '', '', '', '', '', ...total.slice(1)]]);
-      } else {
-        const groups = {};
-        lines.forEach(l => { const k = l.statementMonth + '|' + l.track; const g = groups[k] || (groups[k] = { month: l.statementMonth, track: l.track, isrc: l.isrc, quantity: 0, gross: 0, charge: 0, earnings: 0 }); g.quantity += l.quantity; g.gross += l.gross; g.charge += l.charge; g.earnings += l.earnings; });
-        const list = Object.values(groups).sort((a, b) => a.month.localeCompare(b.month) || a.track.localeCompare(b.track));
-        exportRowsToCsv(fileName(f, 'by-track'), ['Statement month', 'Track', 'ISRC', 'Streams / sales', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
-          [...list.map(g => [g.month, g.track, g.isrc, Math.round(g.quantity), g.gross.toFixed(2), g.charge.toFixed(2), g.earnings.toFixed(2)]), [total[0], '', '', '', ...total.slice(1)]]);
-      }
+      (kind === 'detailed' ? csvDetailed : csvByTrack)(fileName(f, kind === 'detailed' ? 'detailed' : 'by-track'), lines);
     } catch (err) { setError('Could not build that statement. Try again in a moment.'); }
   }
   const link = { color: C.amber, fontWeight: 600, fontSize: 13 };
@@ -4215,7 +4244,7 @@ function ActivityLogSection({ activityLog }) {
   );
 }
 
-function StatementsSection({ roster, revenue, masterGross, ledger, payouts }) {
+function StatementsSection({ roster, revenue, masterGross, ledger, payouts, statementFiles = [] }) {
   const activeArtists = roster.filter(a => a.status === 'Active');
   const defaultArtist = activeArtists[0] || roster[0] || null;
   const [selectedArtist, setSelectedArtist] = useState(defaultArtist ? defaultArtist.id : '');
@@ -4232,7 +4261,7 @@ function StatementsSection({ roster, revenue, masterGross, ledger, payouts }) {
         </Field>
       </div>
       {artist ? (
-        <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
+        <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate />
       ) : (
         <EmptyState icon={DollarSign} title="No artists on roster" description="Add an artist to the roster to generate a statement." />
       )}
@@ -6806,7 +6835,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         })()}
         {tab === 'statements' && <div className="mb-6"><StatementFilesList sourceLabel="IMSS Records" rows={myRevenue} splitOf={splitOf} artistName={artist.name} title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
         {tab === 'statements' && (
-          <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
+          <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} statementFiles={statementFiles} requireGenerate />
         )}
         </div>
       </main>
@@ -7278,7 +7307,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
-        {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} />}
+        {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalog} />}
         {active === 'activity' && <ActivityLogSection activityLog={activityLog} />}
         <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
