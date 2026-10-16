@@ -3012,6 +3012,46 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 // `requireGenerate` gates the statement behind an explicit Generate click —
 // used by the artist portal, where an artist picks the period they want a
 // statement for. The team-side view leaves it off and stays live.
+// When earnings cross a deal change, say so: each month is paid at the deal in
+// force that month. Optional "View by deal" buttons narrow the view to one deal.
+const prevMonth = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 2, 1)); return d.toISOString().slice(0, 7); };
+export function dealPeriodsOf(artist) {
+  const list = dealTermsOf(artist);
+  return list.map((t, i) => ({ from: t.from || '', to: list[i + 1] ? prevMonth(list[i + 1].from) : '', pct: Number(t.artistPct), deal: dealLabel(t) }));
+}
+const pctTxt = p => Math.round(Number(p) * 10000) / 100 + '%';
+const periodTxt = p => p.from && p.to ? monthLabel(p.from) + ' – ' + monthLabel(p.to) : p.from ? 'From ' + monthLabel(p.from) : p.to ? 'Up to ' + monthLabel(p.to) : 'All months';
+function DealSpanNote({ artist, rows = [], onPick, active = null }) {
+  const periods = dealPeriodsOf(artist);
+  if (periods.length < 2) return null;
+  const rateOf = r => Math.round((r.final ? r.artistPct : pctAt(artist, r.month)) * 10000);
+  const months = rows.map(r => r.month).sort();
+  const lo = months[0], hi = months[months.length - 1];
+  const touched = months.length ? periods.filter(p => (!p.to || p.to >= lo) && (!p.from || p.from <= hi)) : [];
+  const mixed = new Set(rows.map(rateOf)).size > 1;
+  return (
+    <section aria-label="Deals in this period" className="rounded mb-5" style={{ background: mixed ? C.amberSoft : C.panel, padding: '16px 18px' }}>
+      {mixed && (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.02em' }}>These earnings cover more than one deal</div>
+          <p className="mt-1" style={{ fontSize: 14, lineHeight: 1.5 }}>Your share isn’t the same every month: each month is paid at the deal in force that month.</p>
+          <ul className="mt-2 mb-1" style={{ fontSize: 14, lineHeight: 1.6 }}>
+            {touched.map((p, i) => <li key={i}><b>{periodTxt(p)}</b>: {pctTxt(p.pct)} to you · {p.deal}</li>)}
+          </ul>
+        </>
+      )}
+      {onPick && (
+        <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: mixed ? 10 : 0 }}>
+          <span style={{ color: C.textDim, fontSize: 13 }}>View by deal:</span>
+          {periods.map((p, i) => (
+            <button key={i} onClick={() => onPick(p)} className={'imss-dash-preset' + (active && active.from === p.from && active.to === p.to ? ' is-on' : '')}>{periodTxt(p)} · {pctTxt(p.pct)}</button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, requireGenerate = false, statementFiles = [], forTeam = false }) {
   const fullExports = forTeam || ARTIST_DETAILED_EXPORTS;
   const [exportError, setExportError] = useState('');
@@ -3175,6 +3215,9 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
             </div>
           </div>
 
+          <DealSpanNote artist={artist} rows={monthRows.flatMap(m => m.tracks)} active={shown.mode === 'range' ? { from: shown.dealFrom, to: shown.dealTo } : null}
+            onPick={p => { const start = p.from || earliestMonth, end = p.to || latestMonth; setPeriodMode('range'); setRangeStart(start); setRangeEnd(end); setRangeError(''); setGenerated({ mode: 'range', start, end, dealFrom: p.from, dealTo: p.to }); }} />
+
           {monthRows.length === 0 ? (
             <EmptyState icon={DollarSign} title="No earnings in that period"
               description="Nothing was logged for the months you picked. Try a wider range, or choose all periods." />
@@ -3183,6 +3226,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
               <div key={month} className="rounded border p-4 mb-5" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                   <div style={{ fontWeight: 600 }}>{monthLabel(month)}</div>
+                  {dealPeriodsOf(artist).length > 1 && <span style={{ color: C.textDim, fontSize: 13 }}>Your share: {pctTxt(tracks[0] && tracks[0].final ? tracks[0].artistPct : pctAt(artist, month))} of net</span>}
                 </div>
                 <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.bg }}>
                   <table className="w-full" style={{ minWidth: 320 }}>
@@ -5564,7 +5608,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const earningsByMonth = useMemo(() => {
     const map = {};
     myRevenue.forEach(r => {
-      const x = splitOf(r), m = map[r.month] || (map[r.month] = { month: r.month, gross: 0, charge: 0, labelShare: 0, artistShare: 0 });
+      const x = splitOf(r), m = map[r.month] || (map[r.month] = { month: r.month, gross: 0, charge: 0, labelShare: 0, artistShare: 0, rate: r.final ? r.artistPct : pctAt(artist, r.month) });
       m.gross += x.gross; m.charge += x.charge; m.labelShare += x.labelShare; m.artistShare += x.artistShare;
     });
     let running = 0;
@@ -6487,6 +6531,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             ) : (
             <>
             <div className="flex flex-wrap gap-3 mb-6">
+              <div className="w-full"><DealSpanNote artist={artist} rows={filteredMyRevenue} active={revGenerated && revGenerated.deal ? revGenerated.deal : null}
+                onPick={p => { const f = { ...EMPTY_REV_FILTERS, startDate: p.from ? p.from + '-01' : '', endDate: p.to ? p.to + '-28' : '', deal: p }; setRevFilters(f); setRevGenerated(f); setRevError(''); }} /></div>
               <KPICard icon={DollarSign} label={revFiltersActive ? 'Gross in this period' : 'Total gross'} value={formatCents(filteredRevTotals.gross)} />
               <KPICard icon={Wallet} label="Inbound Banking Charge" value={formatCents(filteredRevTotals.charge)} />
               <KPICard icon={DollarSign} label={'Your earnings (' + rateLabel(filteredMyRevenue) + ')'} value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
@@ -6733,13 +6779,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-earnings-by-month'} headers={['Month', 'Gross', 'Inbound Banking Charge', 'Your earnings', 'Running total']} rows={earningsByMonth.map(m => [m.month, m.gross, m.charge, m.artistShare, m.running])} />
                 <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                   <table className="w-full" style={{ minWidth: 720 }}>
-                    <thead><tr><Th>Month</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Your earnings</Th><Th align="right">Running total</Th></tr></thead>
+                    <thead><tr><Th>Month</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Your share</Th><Th align="right">Your earnings</Th><Th align="right">Running total</Th></tr></thead>
                     <tbody>
                       {earningsByMonth.map(m => (
                         <tr key={m.month}>
                           <Td mono>{monthLabel(m.month)}</Td>
                           <Td align="right" mono>{formatCents(m.gross)}</Td>
                           <Td align="right" mono>−{formatCents(m.charge)}</Td>
+                          <Td align="right" mono>{pctTxt(m.rate)}</Td>
                           <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(m.artistShare)}</span></Td>
                           <Td align="right" mono>{formatCents(m.running)}</Td>
                         </tr>
@@ -6748,6 +6795,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td><span style={{ fontWeight: 600 }}>Total</span></Td>
                         <Td align="right" mono><span style={{ fontWeight: 600 }}>{formatCents(lifetime.gross)}</span></Td>
                         <Td align="right" mono><span style={{ fontWeight: 600 }}>−{formatCents(lifetime.swift)}</span></Td>
+                        <Td>{''}</Td>
                         <Td align="right" mono><span style={{ color: C.teal, fontWeight: 700 }}>{formatCents(lifetime.artistShare)}</span></Td>
                         <Td>{''}</Td>
                       </tr>
