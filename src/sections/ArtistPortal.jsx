@@ -393,7 +393,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
       <aside className="imss-sidebar imss-print-hide shrink-0" style={{ borderColor: C.border, background: C.panel }} aria-label="Artist navigation">
         <div className="imss-desktop-only px-5 pt-6 pb-5" style={{ borderBottom: '1px solid ' + C.border }}>
-          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 24, width: 'auto' }} />
+          <button type="button" onClick={() => setTab('overview')} aria-label="IMSS Records, go to Dashboard" style={{ display: 'block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 24, width: 'auto' }} /></button>
           <div className="flex items-center gap-3 mt-5">
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={40} />
             <div style={{ minWidth: 0, flex: 1 }}>

@@ -80,7 +80,7 @@ export default function AuthGate({ children }) {
     <div className="imss-gate" style={{ background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 16px', overflowY: 'auto' }}>
       <style>{GLOBAL_STYLES}</style>
       <main style={{ width: '100%', maxWidth: 360, margin: 'auto 0', textAlign: 'center' }}>
-        <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 76, width: 'auto', display: 'block', margin: '0 auto', filter: 'var(--logo-filter)' }} />
+        <a href="/" aria-label="IMSS Records" style={{ display: 'inline-block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 76, width: 'auto', display: 'block', filter: 'var(--logo-filter)' }} /></a>
         <div style={{ height: 1, background: C.border, margin: '36px 0 44px' }} />
         {sent ? (
           <div role="status">
@@ -102,10 +102,6 @@ export default function AuthGate({ children }) {
         )}
         {error && <div role="alert" style={{ color: C.red, fontSize: 14, marginTop: 16 }}>{error}</div>}
       </main>
-      {/* Kept: Google sign-in needs the privacy policy linked from the page. */}
-      <nav aria-label="Legal" style={{ display: 'flex', gap: 18, fontSize: 12, color: C.textFaint }}>
-        <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a><a href="/terms" style={{ color: 'inherit' }}>Terms</a><span>© {new Date().getFullYear()} IMSS Records</span>
-      </nav>
     </div>
   );
 }

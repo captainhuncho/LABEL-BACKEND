@@ -40,7 +40,7 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
     <div className="imss-sidebar shrink-0" style={{ borderColor: C.border, background: C.panel }}>
       <div className="imss-desktop-only px-5 pt-6 pb-4">
         <div className="flex items-center gap-2">
-          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 26, width: 'auto' }} />
+          <button type="button" onClick={() => setActive('overview')} aria-label="IMSS Records, go to Overview" style={{ display: 'block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 26, width: 'auto' }} /></button>
         </div>
         <div className="text-xs mt-1" style={{ color: C.textFaint }}>Label operations</div>
       </div>
