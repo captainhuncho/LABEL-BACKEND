@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Mail } from 'lucide-react';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
-import { Btn } from './ui.jsx';
 
 export default function AuthGate({ children }) {
   const [authEmail, setAuthEmail] = useState(null);
@@ -16,6 +15,7 @@ export default function AuthGate({ children }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
+  const [denied, setDenied] = useState('');
 
   useEffect(() => {
     if (!supabase) return;
@@ -35,31 +35,31 @@ export default function AuthGate({ children }) {
     supabase.rpc('my_access').then(({ data, error: err }) => setAccess(err ? null : data));
   }, [authEmail]);
 
+  // Signed in, but not on the Team list or an artist's Roster entry: sign them
+  // straight back out and say why on the sign-in page.
+  useEffect(() => {
+    if (!supabase || !authEmail || access !== null) return;
+    setDenied(authEmail);
+    supabase.auth.signOut();
+  }, [authEmail, access]);
+
   if (!supabase) return children({ authEmail: null, access: 'team', signOut: null });
   if (checking) return null;
   const signOut = () => supabase.auth.signOut();
   if (authEmail && access === undefined) return null;
   if (authEmail && access) return children({ authEmail, access, signOut });
-  if (authEmail) {
-    return (
-      <div className="p-8 text-sm" style={{ color: C.text, fontFamily: HEADING_FONT }} role="alert">
-        <style>{GLOBAL_STYLES}</style>
-        <p className="mb-3">{authEmail} isn't set up for IMSS Records yet. Ask the label to add this email to your artist profile or the team list.</p>
-        <Btn variant="ghost" onClick={signOut}>Sign out</Btn>
-      </div>
-    );
-  }
+  if (authEmail) return null; // not invited: the effect above signs them out
 
   // Google sign-in: the Google account's email must be on the Team list or an
   // artist's Roster entry, exactly as with an email link (my_access decides).
   async function signInWithGoogle() {
-    setError('');
+    setError(''); setDenied('');
     const { error: err } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } } });
     if (err) setError(/not enabled|provider/i.test(err.message) ? 'Google sign-in isn’t switched on yet. Use the email link for now.' : err.message);
   }
   async function sendLink(e) {
     e.preventDefault();
-    setError('');
+    setError(''); setDenied('');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Enter your email address.'); return; }
     setBusy(true);
     const { error: err } = await supabase.auth.signInWithOtp({
@@ -100,6 +100,7 @@ export default function AuthGate({ children }) {
             <button type="button" onClick={() => setEmailMode(true)} style={{ ...btn, background: 'transparent', color: C.text, border: '1px solid var(--hairline-strong)' }}><Mail size={18} aria-hidden="true" /> Sign in with email</button>
           </div>
         )}
+        {denied && !sent && <div role="alert" style={{ color: C.red, fontSize: 14, lineHeight: 1.5, marginTop: 20 }}>This platform is invite only.</div>}
         {error && <div role="alert" style={{ color: C.red, fontSize: 14, marginTop: 16 }}>{error}</div>}
       </main>
     </div>
