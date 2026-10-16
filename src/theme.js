@@ -22,6 +22,12 @@ export const LOGO_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwA
 export const MONO_FONT = "'IBM Plex Mono', monospace";
 
 export const GLOBAL_STYLES = `
+  .imss-legal-body { font-size: 15px; line-height: 1.65; color: ${C.text}; }
+  .imss-legal-body h2 { font-size: 17px; font-weight: 600; margin: 28px 0 8px; }
+  .imss-legal-body p { margin: 0 0 12px; color: ${C.textDim}; max-width: 70ch; }
+  .imss-legal-body ul { margin: 0 0 12px; padding-left: 20px; list-style: disc; color: ${C.textDim}; max-width: 70ch; }
+  .imss-legal-body li { margin-bottom: 6px; }
+  .imss-legal-body b { color: ${C.text}; font-weight: 600; }
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 /* App shell: fills the window, and scrolls in exactly one place (the content
    pane) rather than nesting a fixed-height scroller inside a scrolling page. */

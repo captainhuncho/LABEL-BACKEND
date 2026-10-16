@@ -1,5 +1,6 @@
 // Email-link sign-in in front of the dashboard. Without Supabase configured it
 // renders the dashboard straight away (local, single-browser mode).
+import { LegalFooter } from './Legal.jsx';
 import { useEffect, useState } from 'react';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
@@ -78,6 +79,7 @@ export default function AuthGate({ children }) {
             <div className="mt-3"><Btn variant="primary" type="submit">Email me a sign-in link</Btn></div>
           </form>
         )}
+        <LegalFooter />
       </div>
     </div>
   );
