@@ -6817,7 +6817,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           <div>
             <p className="text-sm mb-5" style={{ color: C.textDim, maxWidth: '70ch' }}>Money spent on your career, by the label and by you. Label spend marked “recoupable” comes back out of your royalties before payouts.</p>
             <div className="flex flex-wrap gap-3 mb-6">
-              <KPICard icon={Wallet} label="Spent by the label" value={formatCents(myExpenses.reduce((t, x) => t + x.amount, 0))} />
+              {(() => {
+                // Approved spend: what the label spent on the artist plus the artist's own claims once approved for payment.
+                const byLabel = myExpenses.reduce((t, x) => t + x.amount, 0);
+                const approvedClaims = myExpenseClaims.filter(i => ['Pay Approved', 'Paid'].includes(invoiceStatus(i))).reduce((t, i) => t + (Number(i.amount) || 0), 0);
+                return <KPICard icon={Wallet} label="Artist’s approved spend" value={formatCents(byLabel + approvedClaims)} sub={formatCents(byLabel) + ' by the label · ' + formatCents(approvedClaims) + ' your approved claims'} />;
+              })()}
               <KPICard icon={Wallet} label="Still being recouped" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />
               <KPICard icon={FileText} label="Claimed by you" value={formatCents(myExpenseClaims.reduce((t, i) => t + (Number(i.amount) || 0), 0))} sub={formatCents(myExpenseClaims.filter(i => i.status === 'Paid').reduce((t, i) => t + (Number(i.amount) || 0), 0)) + ' paid back'} />
             </div>
