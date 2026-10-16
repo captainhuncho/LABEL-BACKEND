@@ -2894,20 +2894,21 @@ function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
 function MasterGrossSection({ masterGross, update, roster, revenue, labelSettings, updateLabelSettings, canEdit = true }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const empty = { month: todayStr().slice(0, 7), totalGross: '', swiftFee: String(labelSettings.swiftFee) };
+  const empty = { month: todayStr().slice(0, 7), receivedIn: todayStr().slice(0, 7), totalGross: '', swiftFee: String(labelSettings.swiftFee) };
   const [form, setForm] = useState(empty);
   const [confirmId, setConfirmId] = useState(null);
   const [feeInput, setFeeInput] = useState(String(labelSettings.swiftFee));
 
   function openAdd() { setForm({ ...empty, swiftFee: String(labelSettings.swiftFee) }); setEditing(null); setShowForm(true); }
-  function openEdit(g) { setForm({ month: g.month, totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
+  function openEdit(g) { setForm({ month: g.month, receivedIn: g.receivedIn || '', totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditing(null); }
   function save(e) {
     e.preventDefault();
     const totalGross = Number(form.totalGross);
     const swiftFee = Number(form.swiftFee);
     if (!form.month || totalGross < 0 || swiftFee < 0) return;
-    const payload = { id: form.month, month: form.month, totalGross, swiftFee };
+    // month = the statement month this money pays for (what everything matches on); receivedIn = when it reached the bank.
+    const payload = { id: form.month, month: form.month, receivedIn: form.receivedIn || '', totalGross, swiftFee };
     if (editing) update(masterGross.map(g => g.id === editing ? payload : g));
     else update([...masterGross.filter(g => g.month !== form.month), payload]);
     closeForm();
@@ -2925,7 +2926,7 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 
   return (
     <div>
-      <SectionHeader title="Money received" artistNote="never the label’s totals. Only their share of each month’s Inbound Banking Charge, fixed when their earnings are published." description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
+      <SectionHeader title="Money received" artistNote="never the label’s totals. Only their share of each month’s Inbound Banking Charge, fixed when their earnings are published." description="One row per statement month, company-wide: the real money the distributor paid for that statement (usually arriving the month after), and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Total gross (all months)" value={formatCurrency(totals.totalGross)} tone="teal" />
@@ -2943,7 +2944,8 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 
       {showForm && (
         <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
-          <Field label="Month"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} disabled={!!editing} /></Field>
+          <Field label="Statement month it pays for"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} disabled={!!editing} /></Field>
+          <Field label="Received in (month it reached the bank)"><Input type="month" value={form.receivedIn} onChange={e => setForm({ ...form, receivedIn: e.target.value })} /></Field>
           <Field label="Total gross received (USD)"><Input type="number" min="0" step="0.01" required value={form.totalGross} onChange={e => setForm({ ...form, totalGross: e.target.value })} /></Field>
           <Field label="Inbound Banking Charge (USD)"><Input type="number" min="0" step="0.01" required value={form.swiftFee} onChange={e => setForm({ ...form, swiftFee: e.target.value })} /></Field>
           <div className="imss-span-2 flex gap-2 mt-1">
@@ -2958,14 +2960,15 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 620 }}>
-            <thead><tr><Th>Month</Th><Th align="right">Total gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
+            <thead><tr><Th>Statement month</Th><Th>Received in</Th><Th align="right">Total gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(g => {
                 const trackedThisMonth = revByMonth(revenue)[g.month] || 0;
                 const gap = g.totalGross - trackedThisMonth;
                 return (
                   <tr key={g.id}>
-                    <Td mono>{g.month}</Td>
+                    <Td mono>{monthLabel(g.month)}</Td>
+                    <Td mono>{g.receivedIn ? monthLabel(g.receivedIn) : '—'}</Td>
                     <Td align="right" mono>{formatCurrency(g.totalGross)}</Td>
                     <Td align="right" mono>{formatCurrency(g.swiftFee)}</Td>
                     <Td align="right" mono>{formatCurrency(g.totalGross - g.swiftFee)}</Td>

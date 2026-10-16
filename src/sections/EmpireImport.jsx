@@ -170,7 +170,7 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
                 const statement = preview.groups.filter(g => g.month === m).reduce((t, g) => t + g.gross, 0);
                 return (
                   <li key={m} className={mg ? 'is-ok' : 'is-miss'}>{mg ? <CheckCircle2 size={15} aria-hidden="true" /> : <span className="imss-check-miss" aria-hidden="true" />}
-                    <span>{monthLabel(m)}: statement gross {formatCents(statement)} · money received {mg ? formatCents(mg.totalGross) + ' (all songs, Inbound Banking Charge ' + formatCents(mg.swiftFee) + ')' : 'not entered yet, add it under Money received'}</span></li>
+                    <span>{monthLabel(m)}: statement gross {formatCents(statement)} · money received {mg ? formatCents(mg.totalGross) + (mg.receivedIn ? ' in ' + monthLabel(mg.receivedIn) : '') + ' (all songs, Inbound Banking Charge ' + formatCents(mg.swiftFee) + ')' : 'not logged against this statement month yet. Add it under Money received before publishing'}</span></li>
                 );
               })}
               {unmatched.length > 0 && <li className="is-miss"><span className="imss-check-miss" aria-hidden="true" /><span>{[...new Set(unmatched.map(g => g.artist))].join(', ')} {[...new Set(unmatched.map(g => g.artist))].length === 1 ? 'isn’t' : 'aren’t'} on the Roster: {formatCents(unmatched.reduce((t, g) => t + g.gross, 0))} will be skipped. Add the artist first, then import again.</span></li>}
