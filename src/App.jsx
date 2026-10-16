@@ -5466,6 +5466,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
 }
 
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
+  const [pickedReleases, setPickedReleases] = useState([]);
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -6303,7 +6304,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </section>
             )}
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Title', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'Has Video', 'Collaborators']} rows={artistCatalog.map(r => [
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Title', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'Has Video', 'Collaborators']} rows={artistCatalog.filter(r => !pickedReleases.length || pickedReleases.includes(r.id)).map(r => [
               r.title,
               r.type,
               r.releaseDate || '',
@@ -6315,6 +6316,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               r.hasVideo ? 'Yes' : 'No',
               (r.collaborators || []).map(c => c.name + ' (' + c.role + ', ' + c.splitPercent + '%)').join('; '),
             ])} />
+            {artistCatalog.length > 0 && (
+              <div className="text-sm mb-3 flex items-center gap-3 flex-wrap" style={{ color: C.textDim }}>
+                <span>{pickedReleases.length ? 'Exporting ' + pickedReleases.length + ' of ' + artistCatalog.length + ' selected' : 'Exporting all ' + artistCatalog.length + '. Tick releases to export only those.'}</span>
+                {pickedReleases.length > 0 && <button onClick={() => setPickedReleases([])} style={{ color: C.amber }}>Clear selection</button>}
+              </div>
+            )}
 
             {artistCatalog.length === 0 ? (
               <EmptyState icon={Disc3} title="No releases yet" description="Releases the label adds for you will show up here." />
@@ -6326,6 +6333,9 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                     <div key={r.id} className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
                       <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
                         <ArtworkThumb release={r} size="100%" radius={0} />
+                        <label style={{ position: 'absolute', top: 8, right: 8, background: C.panel, borderRadius: 8, padding: '4px 6px', display: 'flex', boxShadow: 'var(--shadow)' }}>
+                          <input type="checkbox" aria-label={'Select ' + r.title + ' for export'} checked={pickedReleases.includes(r.id)} onChange={e => setPickedReleases(l => e.target.checked ? [...l, r.id] : l.filter(x => x !== r.id))} />
+                        </label>
                         {r.status !== 'Released' && prog.total > 0 && (
                           <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'var(--fill)' }}>
                             <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
