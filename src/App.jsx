@@ -3202,9 +3202,15 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
         <>
           <div className="flex flex-wrap gap-3 mb-6">
             <KPICard icon={DollarSign} label="Gross earnings" value={formatCents(periodTotals.gross)} />
-            <KPICard icon={Wallet} label="Inbound Banking Charge share" value={formatCents(periodTotals.swift)} />
-            <KPICard icon={TrendingUp} label="Your share" value={formatCents(periodTotals.artistShare)} tone="teal" sub={Math.round((artist.artistPct != null ? artist.artistPct : 0) * 100) + '% of net'} />
-            <KPICard icon={ClipboardList} label={recoupment.balance > 0 ? 'Unrecouped balance' : 'Fully recouped'} value={formatCents(recoupment.balance > 0 ? recoupment.unrecouped : recoupment.dueOnTop)} tone={recoupment.balance > 0 ? 'red' : 'teal'} />
+            <KPICard icon={Wallet} label="Inbound Banking Charge" value={formatCents(periodTotals.swift)} />
+            {(() => {
+              // The rate(s) actually used for the months on screen, not today's deal.
+              const rates = [...new Set(monthRows.flatMap(m => m.tracks).map(r => Math.round((r.final ? r.artistPct : pctAt(artist, r.month)) * 10000)))];
+              return <KPICard icon={TrendingUp} label="Your share" value={formatCents(periodTotals.artistShare)} tone="teal" sub={rates.length === 1 ? rates[0] / 100 + '% of net' : rates.length > 1 ? 'at your deal rates' : ''} />;
+            })()}
+            {recoupment.spent > 0 && (
+              <KPICard icon={ClipboardList} label={recoupment.balance > 0 ? 'Still to recoup' : 'Advances recouped'} value={formatCents(recoupment.balance > 0 ? recoupment.unrecouped : recoupment.spent)} tone={recoupment.balance > 0 ? 'red' : 'teal'} sub={recoupment.balance > 0 ? 'All time: advances not yet covered by your earnings' : 'All time: fully repaid from your earnings'} />
+            )}
           </div>
 
           <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
