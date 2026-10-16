@@ -1,4 +1,4 @@
-import { ChevronDown, Send, MessageSquare } from 'lucide-react';
+import { ChevronDown, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { formatDate } from '../constants.js';
 import { REQUEST_STATUSES } from '../seed.js';

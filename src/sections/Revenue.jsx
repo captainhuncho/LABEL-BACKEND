@@ -1,4 +1,4 @@
-import { CheckCircle2, ClipboardList, DollarSign, Download, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, ClipboardList, DollarSign, Download, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { RELEASE_TYPES, formatCurrency, todayStr } from '../constants.js';
 import { slug } from '../finance.js';

@@ -1,4 +1,4 @@
-import { Download, FileDown, FileSpreadsheet } from 'lucide-react';
+import { FileDown, FileSpreadsheet } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { todayStr } from '../constants.js';
 import { C } from '../theme.js';

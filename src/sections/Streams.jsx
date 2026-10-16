@@ -1,4 +1,4 @@
-import { Download, FileText, Pencil, Plus, Radio, Search, Trash2 } from 'lucide-react';
+import { Download, FileText, Pencil, Plus, Radio, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PLATFORMS, computePlatformLeaderboard, formatDate, formatNumber, monthKey, monthLabel, todayStr, trackOptionLabel, uid } from '../constants.js';

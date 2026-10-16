@@ -1,4 +1,4 @@
-import { DollarSign, Send } from 'lucide-react';
+import { DollarSign } from 'lucide-react';
 import { useState } from 'react';
 import { C } from '../theme.js';
 import { EmptyState, Field, SectionHeader, Select } from '../ui.jsx';

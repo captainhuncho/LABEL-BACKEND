@@ -1,4 +1,4 @@
-import { ChevronRight, Disc3, Download, FileSpreadsheet, Globe, Send, Pencil, Plus, Search, Trash2, Video } from 'lucide-react';
+import { ChevronRight, Disc3, FileSpreadsheet, Globe, Pencil, Plus, Trash2, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, licenseOf, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';

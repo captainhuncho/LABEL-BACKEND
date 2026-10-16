@@ -1,4 +1,4 @@
-import { CheckCircle2, Disc3, Download, Mail, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Disc3, Mail, MessageSquare } from 'lucide-react';
 import React, { useState } from 'react';
 import { SPLIT_REQUIRED_ROLES, formatDate, missingRequiredDocs } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';

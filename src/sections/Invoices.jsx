@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, Send, History, MessageSquare, UserCog, Wallet } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, UserCog, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
 import React, { useState } from 'react';
 import { formatCents, formatCurrency, formatDate } from '../constants.js';

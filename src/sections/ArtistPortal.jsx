@@ -1,6 +1,6 @@
-import { Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, Send, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
 import React, { useMemo, useRef, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, dealLabel, RELEASE_TYPES, checklistProgress, emptyCredits, rightsLine, formatCents, formatDate, formatNumber, makeDistributionDocs, missingRequiredDocs, monthKey, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { artistLifetime, recoupmentForArtist, revenueBreakdown, revenueRowSplit, artistSpend, dealTermsOf, pctAt, lastClosedPeriod, reportingTerms, slug } from '../finance.js';
 import { SOCIAL_LINKS, safeLink, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES } from '../seed.js';

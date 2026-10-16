@@ -1,4 +1,4 @@
-import { Pencil, Plus, Search, Trash2, UserCog, Users } from 'lucide-react';
+import { Pencil, Plus, Trash2, UserCog, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';

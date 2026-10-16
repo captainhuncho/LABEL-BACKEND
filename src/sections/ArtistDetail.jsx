@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Disc3, DollarSign, Globe, Send, Mail, Pencil, Radio, Trash2, Wallet, ExternalLink } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Disc3, DollarSign, Globe, Mail, Pencil, Radio, Trash2, Wallet, ExternalLink } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PLATFORM_COLORS, artistStatusTone, expirationStatus, formatCurrency, formatDate, formatNumber, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';

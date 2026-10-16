@@ -1,5 +1,4 @@
 // Domain constants, role/permission model and shared formatters.
-import { Radio, Video } from 'lucide-react';
 
 export const LEDGER_CATEGORIES = ['Advance', 'Recording', 'Video Production', 'Marketing', 'Tour Support', 'Overhead', 'Software & Tools', 'Legal', 'Distro', 'Studio', 'Cash repayment', 'Other'];
 // Income from an artist in this category is cash they paid back on request: it settles

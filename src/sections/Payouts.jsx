@@ -1,4 +1,4 @@
-import { CheckCircle2, ClipboardList, DollarSign, Send, Mail, Trash2, TrendingUp, Wallet } from 'lucide-react';
+import { CheckCircle2, ClipboardList, DollarSign, Mail, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
 import { useMemo, useState } from 'react';
 import { formatCurrency, formatDate, monthLabel, todayStr, uid } from '../constants.js';
