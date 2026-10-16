@@ -127,7 +127,8 @@ is the panel on an artist's page. Every artist has a `contractType`:
 Admin has the final say. Contract terms, song license details, termination
 notices, recoupment confirmations, rights returns, overrides and undos are Deal
 changes with a `kind`: Legal records them and an Admin approves (an Admin's own
-entry applies at once). Both can override any song's end date (`licenseOverride`, with a reason; it beats
+entry applies at once). Every approved change is emailed to everyone with the
+Legal role (and shows in their bell) so Legal keeps the record. Both can override any song's end date (`licenseOverride`, with a reason; it beats
 every rule) and undo a rights return, recoupment confirmation or termination
 (`kind: 'undo'`). `rightsReturned` emails the artist and gives the PM a
 takedown task. Nothing is guessed: missing data is flagged.

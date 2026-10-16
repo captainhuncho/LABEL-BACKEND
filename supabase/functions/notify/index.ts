@@ -117,6 +117,34 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
 const KEY_CODE: Record<string, string> = { releaseSubmissions: 's', artistRequests: 'q', invoices: 'i' };
 const CODE_KEY: Record<string, string> = { s: 'releaseSubmissions', q: 'artistRequests', i: 'invoices' };
 
+// Legal keeps the record: every approved deal or license change (including an
+// Admin's own, which need no approval) is sent to everyone with the Legal role.
+function describeChange(c: Item, catalog: Item[]) {
+  const title = (id: string) => (catalog.find(s => s.id === id) || {}).title || 'a song';
+  const p = c.patch || {};
+  const pct = (x: unknown) => Math.round(Number(x) * 10000) / 100 + '%';
+  switch (c.kind) {
+    case 'contract': return `Contract terms: ${p.contractType === '2026' ? '2026 Distribution Agreement' : p.contractType === 'earlier' ? 'Earlier agreement' : 'not set'}, ${p.licenseYears} yr license${p.effectiveDate ? ', effective ' + p.effectiveDate : ''}, ${p.reportingPeriod} reporting, $${p.payoutThreshold} threshold${p.noExtension ? ', no unrecouped extension' : ''}`;
+    case 'songLicense': return 'License details: ' + (c.songs || []).map((x: Item) => `${title(x.releaseId)} (${x.licenseYears} yr from ${x.availableFrom})`).join(', ');
+    case 'termination': return `Termination notice ${c.noticeDate}: ${c.releaseId ? title(c.releaseId) : 'whole agreement'}`;
+    case 'recouped': return `Account recouped in the quarter ending ${c.quarterEnd}`;
+    case 'rightsReturned': return `Rights returned on ${c.date}: ` + (c.releaseIds || []).map(title).join(', ');
+    case 'licenseOverride': return `${c.endDate ? 'License end overridden to ' + c.endDate : 'License end override removed'} for ${title(c.releaseId)}. Reason: ${c.note}`;
+    case 'undo': return `Undid: ${c.what}. Reason: ${c.note}`;
+    default: return `Deal from ${c.from}: artist share ${pct(c.artistPct)}${c.was && c.was.artistPct != null ? ' (was ' + pct(c.was.artistPct) + ')' : ''}, ${c.fundingTier || 'Non-Funded'}${c.dealType ? ' · ' + c.dealType : ''}. ${c.reason || ''}`;
+  }
+}
+async function recordForLegal(item: Item, artist: Item | undefined) {
+  const staff = await section('staff');
+  const to = staff.filter(m => m.role === 'Legal' && (m.status || 'Active') !== 'Inactive').map(m => String(m.email || '').trim());
+  if (!to.length) return { skipped: 'no Legal staff' };
+  const what = describeChange(item, await section('catalog'));
+  const who = item.requestedBy === item.approvedBy ? `Recorded and applied by ${esc(item.approvedBy || 'an Admin')}` : `Recorded by ${esc(item.requestedBy || 'Legal')}, approved by ${esc(item.approvedBy || 'an Admin')}`;
+  return send(to, `For your records: ${artist?.name || 'an artist'}'s deal or license updated`,
+    page(`${artist?.name || 'An artist'}: deal or license updated`, [esc(what), `${who} on ${esc(String(item.approvedAt || '').slice(0, 10))}.`, 'It’s in Deal changes and the Activity log.'],
+      { label: 'Open Deal changes', url: `${APP_URL}/` }));
+}
+
 // ---------- outgoing ----------
 async function handleEvent(ev: Event) {
   const items = await section(ev.key);
@@ -145,8 +173,9 @@ async function handleEvent(ev: Event) {
   // A deal change approved: tell the artist what changes and from when.
   if (ev.type === 'deal') {
     const a = roster.find(r => r.id === item.artistId);
+    const legal = await recordForLegal(item, a);
     const email = String(a?.email || '').trim();
-    if (!email) return { skipped: 'no email for ' + item.artistId };
+    if (!email) return { legal, skipped: 'no email for ' + item.artistId };
     // Rights returned to the artist (Legal or Admin decided). Other license entries are internal.
     if (item.kind === 'rightsReturned') {
       const catalog = await section('catalog');
