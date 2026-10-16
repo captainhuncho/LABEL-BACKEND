@@ -4,7 +4,7 @@ import { parseEmpireDetailed } from './empire.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
-import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
+import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, expandRemittances, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
@@ -946,8 +946,14 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
           <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
           <Field label="Funding tier">
-            <Select value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value })}>
+            <Select value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value, dealType: (DEAL_TYPES[e.target.value] || [])[0] || '' })}>
               {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </Field>
+          <Field label="Deal">
+            <Select value={form.dealType || ''} onChange={e => setForm({ ...form, dealType: e.target.value })}>
+              <option value="">Not set</option>
+              {(DEAL_TYPES[form.fundingTier || 'Non-Funded'] || []).map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </Field>
           {form.fundingTier === 'Funded' && (
@@ -989,7 +995,7 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
         a.subGenre || '',
         a.status,
         a.royaltyRate,
-        a.fundingTier || 'Non-Funded',
+        dealLabel(a),
         a.primaryMarket || '',
         a.secondaryMarket || '',
         a.productManager || '',
@@ -1021,7 +1027,7 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
                 <div className="flex items-center gap-1.5 flex-wrap mb-2">
                   <Badge tone={artistStatusTone(a.status)}>{a.status}</Badge>
                   <Badge>{a.royaltyRate}% royalty</Badge>
-                  {a.fundingTier === 'Funded' && <Badge tone="teal">Funded</Badge>}
+                  <Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge>
                   {a.contractExpiration && expirationStatus(a.contractExpiration).label !== 'Active' && (
                     <Badge tone={expirationStatus(a.contractExpiration).tone}>{expirationStatus(a.contractExpiration).label}</Badge>
                   )}
@@ -1081,7 +1087,7 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
                     </Td>
                     <Td align="right">{releaseCount}</Td>
                     <Td><Badge tone={artistStatusTone(a.status)}>{a.status}</Badge></Td>
-                    <Td>{a.fundingTier === 'Funded' ? <Badge tone="teal">Funded</Badge> : <span style={{ color: C.textFaint }}>—</span>}</Td>
+                    <Td><Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge></Td>
                     <Td align="right">
                       {confirmId === a.id ? (
                         <ConfirmInline onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
@@ -5725,6 +5731,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{artist.name}</div>
               <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
+              <div className="mt-1.5"><Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge></div>
             </div>
           </div>
           {(artist.productManager || artist.anr) && (
@@ -5779,7 +5786,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={36} />
             <div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{artist.name}</div>
-              <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
+              <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate · {dealLabel(artist)}</div>
             </div>
           </div>
         </div>
