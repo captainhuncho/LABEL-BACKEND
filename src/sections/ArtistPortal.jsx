@@ -18,6 +18,9 @@ import { licenseFor, rightsLine } from '../licenses.js';
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
   const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
+  // A rights return shows to the artist only once Admin or Legal has sent it to their dashboard.
+  const sentChangeIds = new Set(dealChanges.filter(c => c.sentToArtistAt).map(c => c.id));
+  const rightsArtist = { ...artist, rightsReturned: (artist.rightsReturned || []).filter(r => sentChangeIds.has(r.changeId)) };
   const [pickedReleases, setPickedReleases] = useState([]);
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
@@ -96,7 +99,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   // Latest approved deal change, shown on the dashboard for 60 days unless dismissed.
   const pctLabel = x => Math.round(Number(x) * 10000) / 100 + '%';
   const monthLong = m => new Date(m + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const latestDeal = [...dealChanges.filter(c => !c.kind)].sort((a, b) => String(b.approvedAt).localeCompare(String(a.approvedAt)))[0] || null;
+  const latestDeal = [...dealChanges.filter(c => !c.kind && c.sentToArtistAt)].sort((a, b) => String(b.approvedAt).localeCompare(String(a.approvedAt)))[0] || null;
   const dealKey = latestDeal ? 'imss:deal-seen:' + latestDeal.id : '';
   const [dealSeen, setDealSeen] = useState(() => { try { return !!dealKey && localStorage.getItem(dealKey) === '1'; } catch (e) { return false; } });
   const showDealBanner = latestDeal && !dealSeen && Date.now() - Date.parse(latestDeal.approvedAt || 0) < 60 * 86400000;
@@ -894,7 +897,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 r.status,
                 r.primaryMarket || '',
                 r.secondaryMarket || '',
-                rightsLine(licenseFor(r, artist, licenseCtx)),
+                rightsLine(licenseFor(r, rightsArtist, licenseCtx)),
               ];
             })} />
             {artistCatalog.length > 0 && (
@@ -946,7 +949,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         {r.status !== 'Released' && prog.total > 0 && (
                           <div className="text-xs mt-1.5" style={{ color: C.textFaint }}>{prog.done}/{prog.total} production tasks</div>
                         )}
-                        {r.status === 'Released' && <div className="text-xs mt-1.5" style={{ color: C.textDim, lineHeight: 1.4 }}>{rightsLine(licenseFor(r, artist, licenseCtx))}</div>}
+                        {r.status === 'Released' && <div className="text-xs mt-1.5" style={{ color: C.textDim, lineHeight: 1.4 }}>{rightsLine(licenseFor(r, rightsArtist, licenseCtx))}</div>}
                         {(r.isrc || r.upc) && (
                           <div className="text-xs mt-2" style={{ color: C.textFaint, lineHeight: 1.5 }}>
                             {r.isrc && <div>ISRC {r.isrc}</div>}

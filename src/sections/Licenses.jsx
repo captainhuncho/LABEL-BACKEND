@@ -25,6 +25,7 @@ export function describeLicenseChange(c, catalog = []) {
   if (c.kind === 'rightsReturned') return 'Rights returned on ' + c.date + ': ' + (c.releaseIds || []).map(title).join(', ');
   if (c.kind === 'licenseOverride') return (c.endDate ? 'End date overridden to ' + c.endDate : 'End date override removed') + ' for ' + title(c.releaseId) + ': ' + c.note;
   if (c.kind === 'undo') return 'Undid: ' + c.what + '. ' + c.note;
+  if (c.kind === 'licenseNotice') return 'License notice sent to the artist: ' + title(c.releaseId) + ' until ' + c.end;
   return '';
 }
 
@@ -229,6 +230,7 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
                 </Td>
                 {canRecord && <Td align="right">{l.status.label !== 'Rights returned' && <span className="inline-flex gap-3">
                   {artist.contractType === '2026' && <button onClick={() => editSong({ s })} style={{ color: C.amber, fontSize: 13 }}>Change</button>}
+                  {l.status.label === 'Expiring soon' && <button onClick={() => onRecord({ kind: 'licenseNotice', releaseId: s.id, end: l.end }, err => setError(err || ''))} style={{ color: C.amber, fontSize: 13 }}>Send notice</button>}
                   <button onClick={() => { setError(''); setForm({ kind: 'licenseOverride', releaseId: s.id, endDate: (s.licenseOverride && s.licenseOverride.endDate) || l.endsOn || l.end || '', note: '' }); }} style={{ color: C.amber, fontSize: 13 }}>Override</button>
                 </span>}</Td>}
               </tr>

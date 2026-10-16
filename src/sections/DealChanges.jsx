@@ -49,9 +49,10 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     const a = roster.find(x => x.id === artistId);
     if (!a) return done('Choose the artist.');
     // Legal proposes, an Admin approves; an Admin's own entry applies at once.
-    const direct = isAdmin;
+    // A license notice is only a message to the artist, so Admin or Legal sends it straight away.
+    const direct = isAdmin || change.kind === 'licenseNotice';
     const stamp = new Date().toISOString();
-    const entry = { id: uid(), artistId: a.id, artist: a.name, ...change, requestedBy: session.name, requestedAt: stamp, ...(direct ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }) };
+    const entry = { id: uid(), artistId: a.id, artist: a.name, ...change, requestedBy: session.name, requestedAt: stamp, ...(direct ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }), ...(change.kind === 'licenseNotice' ? { sentToArtistAt: stamp, sentToArtistBy: session.name } : {}) };
     updateChanges([entry, ...changes]);
     logActivity(direct ? 'recorded and applied a license change' : 'recorded a license change', a.name + ': ' + describeLicenseChange(entry, catalog), a.id);
     if (direct) applyKind(entry);
@@ -110,6 +111,12 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     logActivity('approved a deal change', entry.artist + ': ' + pctText(entry.artistPct) + ' from ' + entry.from, entry.artistId);
     updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }));
     setError('');
+  }
+  // Nothing reaches the artist automatically: Admin or Legal sends it to their dashboard.
+  const artistFacing = c => c.status === 'Approved' && (!c.kind || c.kind === 'rightsReturned');
+  function sendToArtist(entry) {
+    updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, sentToArtistAt: new Date().toISOString(), sentToArtistBy: session.name }));
+    logActivity('sent a deal update to the artist’s dashboard', entry.artist + ': ' + (entry.kind ? describeLicenseChange(entry, catalog) : 'deal from ' + entry.from), entry.artistId);
   }
   function decline(entry) {
     const note = (declineNote[entry.id] || '').trim();
@@ -201,6 +208,8 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
                   <Td>
                     <Badge tone={c.status === 'Approved' ? 'teal' : c.status === 'Declined' ? 'red' : 'amber'}>{c.status === 'Pending' ? 'Waiting for Admin' : c.status}</Badge>
                     {c.status === 'Approved' && <div style={{ color: C.textDim, fontSize: 12, marginTop: 4 }}>by {c.approvedBy}</div>}
+                    {c.sentToArtistAt && <div style={{ color: C.teal, fontSize: 12, marginTop: 4 }}>Sent to artist {formatDate(String(c.sentToArtistAt).slice(0, 10))}</div>}
+                    {artistFacing(c) && !c.sentToArtistAt && canRecord && <div className="mt-2"><Btn variant="ghost" onClick={() => sendToArtist(c)}>Send to artist’s dashboard</Btn></div>}
                     {c.status === 'Declined' && <div style={{ color: C.red, fontSize: 12, marginTop: 4 }}>{c.declineNote}</div>}
                     {c.status === 'Pending' && isAdmin && canEdit && (
                       <div className="flex flex-col gap-2 mt-2" style={{ minWidth: 200 }}>

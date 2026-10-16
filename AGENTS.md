@@ -133,6 +133,12 @@ every rule) and undo a rights return, recoupment confirmation or termination
 (`kind: 'undo'`). `rightsReturned` emails the artist and gives the PM a
 takedown task. Nothing is guessed: missing data is flagged.
 
+Nothing about deals or licenses reaches an artist automatically. Admin or Legal
+presses "Send to artist's dashboard" on an approved deal change or rights return
+(`sentToArtistAt`), or "Send notice" on an expiring song (`kind: 'licenseNotice'`);
+the trigger then sends a portal notification, never an email. Artists are only
+emailed about royalties, invoices, statements and payouts.
+
 ## Access control
 
 Two axes: **role** and **per-person permissions** (`src/constants.js`).

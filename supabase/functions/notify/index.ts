@@ -18,7 +18,7 @@ const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -138,6 +138,7 @@ function describeChange(c: Item, catalog: Item[]) {
     case 'rightsReturned': return `Rights returned on ${c.date}: ` + (c.releaseIds || []).map(title).join(', ');
     case 'licenseOverride': return `${c.endDate ? 'License end overridden to ' + c.endDate : 'License end override removed'} for ${title(c.releaseId)}. Reason: ${c.note}`;
     case 'undo': return `Undid: ${c.what}. Reason: ${c.note}`;
+    case 'licenseNotice': return `License notice sent to the artist: ${title(c.releaseId)} until ${c.end}`;
     default: return `Deal from ${c.from}: artist share ${pct(c.artistPct)}${c.was && c.was.artistPct != null ? ' (was ' + pct(c.was.artistPct) + ')' : ''}, ${c.fundingTier || 'Non-Funded'}${c.dealType ? ' · ' + c.dealType : ''}. ${c.reason || ''}`;
   }
 }
@@ -177,22 +178,21 @@ async function handleEvent(ev: Event) {
     return results;
   }
 
-  // A deal change approved: tell the artist what changes and from when.
-  if (ev.type === 'deal') {
+  // A deal or license change approved: Legal gets the record. Nothing goes to the artist.
+  if (ev.type === 'deal') return recordForLegal(item, roster.find(r => r.id === item.artistId));
+
+  // Admin or Legal pressed "Send to artist's dashboard": a portal notification, never an email.
+  if (ev.type === 'dealSent') {
     const a = roster.find(r => r.id === item.artistId);
-    const legal = await recordForLegal(item, a);
     const email = String(a?.email || '').trim();
-    if (!email) return { legal, skipped: 'no email for ' + item.artistId };
-    // Rights returned to the artist (Legal or Admin decided). Other license entries are internal.
-    if (item.kind === 'rightsReturned') {
-      const catalog = await section('catalog');
-      const titles = (item.releaseIds || []).map((id: string) => (catalog.find(s => s.id === id) || {}).title).filter(Boolean);
-      const list = titles.length > 1 ? titles.slice(0, -1).join(', ') + ' and ' + titles[titles.length - 1] : titles[0] || 'your songs';
-      return { legal, artist: await inAppOnly([email], `Your rights to ${list} have returned to you from ${item.date}`) };
-    }
-    if (item.kind) return { legal, skipped: 'internal license change' };
+    if (!email) return { skipped: 'no email for ' + item.artistId };
+    const catalog = await section('catalog');
+    const titles = (ids: string[]) => ids.map(id => (catalog.find(s => s.id === id) || {}).title).filter(Boolean).join(', ') || 'your songs';
+    if (item.kind === 'rightsReturned') return inAppOnly([email], `Your rights to ${titles(item.releaseIds || [])} have returned to you from ${item.date}`);
+    if (item.kind === 'licenseNotice') return inAppOnly([email], `License notice: ${titles([item.releaseId])} is licensed to IMSS Records until ${item.end}`);
+    if (item.kind) return { skipped: 'not artist-facing' };
     const month = new Date(item.from + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    return { legal, artist: await inAppOnly([email], `Your IMSS Records deal has been updated from ${month}`) };
+    return inAppOnly([email], `Your IMSS Records deal has been updated from ${month}`);
   }
 
   const artist = ev.key === 'payouts'
@@ -298,41 +298,7 @@ async function sendDueStatements() {
     await saveSection('revenuePublish', log.map(e => ids.has(e.id) ? { ...e, status: 'Published', approvedAt: e.approvedAt || at, publishedAt: at, rows: undefined } : e));
     for (const e of due) await audit('published to artists (scheduled)', (e.items || []).map((i: Item) => i.artist + ' ' + i.month).join(', '));
   }
-  const warned = await warnExpiringLicenses();
-  return { sent: changed, published: due.length, warned };
-}
-
-// Licenses ending within 6 months: tell the artist in the portal once per end date (mirrors src/licenses.js).
-async function warnExpiringLicenses() {
-  const roster = await section('roster');
-  const catalog = await section('catalog');
-  const today = new Date().toISOString().slice(0, 10);
-  const plusYears = (d: string, y: number) => (Number(d.slice(0, 4)) + y) + d.slice(4, 10);
-  const byArtist: Record<string, { title: string; end: string; fixed: boolean }[]> = {};
-  const next = catalog.map(s => {
-    const a = roster.find(r => r.id === s.artistId);
-    if (!a || !a.email) return s;
-    if ((a.rightsReturned || []).some((r: Item) => r.releaseId === s.id || !r.releaseId)) return s;
-    const start = a.contractType === '2026' ? s.availableFrom : a.contractType === 'earlier' ? a.effectiveDate : '';
-    const years = Number(a.contractType === '2026' ? s.licenseYears : a.licenseYears);
-    const ov = s.licenseOverride && /^\d{4}-\d{2}-\d{2}$/.test(String(s.licenseOverride.endDate || '')) ? s.licenseOverride.endDate : '';
-    if (!ov && (!/^\d{4}-\d{2}-\d{2}$/.test(String(start || '')) || !(years > 0))) return s;
-    const end = ov || plusYears(start, years);
-    const days = (Date.parse(end) - Date.parse(today)) / 86400000;
-    if (days < 0 || days > 182 || s.licenseWarnedFor === end) return s;
-    (byArtist[a.id] = byArtist[a.id] || []).push({ title: s.title, end, fixed: !!ov });
-    return { ...s, licenseWarnedFor: end };
-  });
-  let sent = 0;
-  for (const [id, songs] of Object.entries(byArtist)) {
-    const a = roster.find(r => r.id === id)!;
-    const held = a.contractType === '2026' && !a.noExtension && !songs.some(x => x.fixed) ? ' If your account isn’t recouped by then, the license continues until the end of the quarter in which it recoups.' : '';
-    await inAppOnly([a.email], `License notice: ${songs.map(x => x.title + ' until ' + x.end).join(', ')}.${held}`);
-    await audit('sent license expiry notice', a.name + ': ' + songs.map(x => x.title + ' (' + x.end + ')').join(', '), id);
-    sent++;
-  }
-  if (sent) await saveSection('catalog', next);
-  return sent;
+  return { sent: changed, published: due.length };
 }
 
 // ---------- incoming ----------
