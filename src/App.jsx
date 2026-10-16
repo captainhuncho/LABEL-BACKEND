@@ -5616,17 +5616,17 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   if (remainingRecoupable > 0) needsToKnow.push({ tone: 'amber', text: formatCents(remainingRecoupable) + ' in expenses still being recouped before payouts resume' });
 
   const TABS = [
-    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, group: 'Money' },
-    { id: 'revenue', label: 'Royalties', icon: Disc3, group: 'Money' },
-    { id: 'earnings', label: 'Earnings', icon: TrendingUp, group: 'Money' },
-    { id: 'expenses', label: 'Expenses', icon: Coins, group: 'Money' },
-    { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Money' },
-    { id: 'statements', label: 'Statements', icon: Eye, group: 'Money' },
-    { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Money' },
-    isFunded && { id: 'budget', label: 'Budget', icon: ClipboardList, group: 'Money' },
-    { id: 'releases', label: 'Releases', icon: Disc3, group: 'Music & you' },
-    { id: 'requests', label: 'Requests', icon: MessageSquare, group: 'Music & you' },
-    { id: 'profile', label: 'Profile', icon: UserCog, group: 'Music & you' },
+    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'revenue', label: 'Royalties', icon: Disc3 },
+    { id: 'earnings', label: 'Earnings', icon: TrendingUp },
+    { id: 'expenses', label: 'Expenses', icon: Coins },
+    { id: 'invoices', label: 'Invoices', icon: FileText },
+    { id: 'statements', label: 'Statements', icon: Eye },
+    { id: 'payouts', label: 'Payouts', icon: Wallet },
+    isFunded && { id: 'budget', label: 'Budget', icon: ClipboardList },
+    { id: 'releases', label: 'Releases', icon: Disc3 },
+    { id: 'requests', label: 'Requests', icon: MessageSquare },
+    { id: 'profile', label: 'Profile', icon: UserCog },
   ].filter(Boolean);
 
   const myArtistRequests = useMemo(() => [...artistRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [artistRequests, artist.id]);
