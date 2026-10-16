@@ -185,7 +185,9 @@ export function artistPublishedView(published, artistSlug) {
 
 // Per artist-month: is the live book different from what artists can see?
 const rowSig = rows => rows.map(r => r.id + ':' + Math.round((Number(r.earning) || 0) * 100)).sort().join('|');
-export function publishDiff(approvedRevenue, published) {
+// With masterGross, a published month whose charge no longer matches today's
+// calculation also counts as Changed, so a corrected charge can be republished.
+export function publishDiff(approvedRevenue, published, masterGross = null) {
   const group = list => {
     const m = {};
     list.forEach(r => { const k = r.artistSlug + '|' + r.month; (m[k] = m[k] || []).push(r); });
@@ -195,8 +197,13 @@ export function publishDiff(approvedRevenue, published) {
   return [...new Set([...Object.keys(live), ...Object.keys(pub)])].map(k => {
     const l = live[k] || [], p = pub[k] || [];
     const [artistSlug, month] = k.split('|');
-    const state = !p.length ? 'New' : !l.length ? 'Removed' : rowSig(l) === rowSig(p) ? 'Published' : 'Changed';
-    return { key: k, artistSlug, month, artist: (l[0] || p[0]).artist, liveRows: l, liveGross: l.reduce((t, r) => t + r.earning, 0), publishedGross: p.reduce((t, r) => t + r.earning, 0), state };
+    let state = !p.length ? 'New' : !l.length ? 'Removed' : rowSig(l) === rowSig(p) ? 'Published' : 'Changed';
+    let chargeChanged = false;
+    if (state === 'Published' && masterGross) {
+      chargeChanged = l.some(r => { const q = p.find(x => x.id === r.id); return !q || Math.abs((Number(q.swiftShare) || 0) - revenueRowSplit(r, approvedRevenue, masterGross, 0).charge) >= 0.005; });
+      if (chargeChanged) state = 'Changed';
+    }
+    return { key: k, artistSlug, month, chargeChanged, artist: (l[0] || p[0]).artist, liveRows: l, liveGross: l.reduce((t, r) => t + r.earning, 0), publishedGross: p.reduce((t, r) => t + r.earning, 0), state };
   }).sort((a, b) => b.month.localeCompare(a.month) || a.artist.localeCompare(b.artist));
 }
 

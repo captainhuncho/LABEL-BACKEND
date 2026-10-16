@@ -133,3 +133,13 @@ test('pre-publish checks: Aizo May/Jun 2026 by hand, and the failures they catch
   assert.equal(over.errors.length, 1);
   assert.match(over.errors[0], /more than the 30.00 charge/);
 });
+
+test('a published month whose charge is now different shows as changed', async () => {
+  const { publishDiff, applyPublish } = await import('../src/finance.js');
+  const rev = [{ id: 'm', artistSlug: 'aizo-clutch', artist: 'Aizo Clutch', month: '2026-05', earning: 61.67 }];
+  const mg = [{ month: '2026-05', totalGross: 423.64, swiftFee: 30 }];
+  const stale = applyPublish([], ['aizo-clutch|2026-05'], rev, mg).map(r => ({ ...r, swiftShare: 30 }));
+  assert.equal(publishDiff(rev, stale, mg)[0].state, 'Changed');
+  assert.equal(publishDiff(rev, stale, mg)[0].chargeChanged, true);
+  assert.equal(publishDiff(rev, applyPublish([], ['aizo-clutch|2026-05'], rev, mg), mg)[0].state, 'Published');
+});
