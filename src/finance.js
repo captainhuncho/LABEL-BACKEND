@@ -257,3 +257,39 @@ export function expandRemittances(masterGross, revenue) {
     });
   });
 }
+
+// l) Checks before publishing to artists. Recomputes each artist-month from the
+// raw figures (not through revenueRowSplit) so a bug in one path is caught by
+// the other. `errors` block publishing; `warnings` need a look.
+export function publishChecks(keys, approvedRevenue, masterGross, roster, published = []) {
+  const errors = [], warnings = [];
+  const fee = {}, base = {};
+  masterGross.forEach(g => { fee[g.month] = (fee[g.month] || 0) + (Number(g.swiftFee) || 0); base[g.month] = (base[g.month] || 0) + (Number(g.totalGross) || 0); });
+  const tracked = {};
+  approvedRevenue.forEach(r => { tracked[r.month] = (tracked[r.month] || 0) + (Number(r.earning) || 0); });
+  const rows = applyPublish(published, keys, approvedRevenue, masterGross);
+  const nameOf = s => (roster.find(a => slug(a.name) === s) || {}).name || s;
+  keys.forEach(k => {
+    const [aSlug, month] = k.split('|');
+    const mine = rows.filter(r => r.artistSlug === aSlug && r.month === month);
+    if (!mine.length) return;
+    const artist = roster.find(a => slug(a.name) === aSlug);
+    const label = nameOf(aSlug) + ' ' + month;
+    if (!artist) errors.push(label + ': artist isn’t on the Roster');
+    else if (artist.artistPct == null || artist.artistPct < 0 || artist.artistPct > 1) errors.push(label + ': artist % isn’t set correctly on the Roster');
+    if (fee[month] === undefined) warnings.push(label + ': no Money received for this month, so no Inbound Banking Charge is taken');
+    const gross = mine.reduce((t, r) => t + r.earning, 0);
+    const charged = mine.reduce((t, r) => t + (Number(r.swiftShare) || 0), 0);
+    const denom = Math.max(base[month] || 0, tracked[month] || 0);
+    const expected = fee[month] && denom > 0 ? fee[month] * gross / denom : 0;
+    if (Math.abs(charged - expected) >= 0.01) errors.push(label + ': charge ' + charged.toFixed(2) + ' should be ' + expected.toFixed(2));
+    if (charged > gross + 0.005) errors.push(label + ': charge is more than the gross');
+    if ((tracked[month] || 0) > (base[month] || 0) + 0.01 && base[month] !== undefined) warnings.push(label + ': imported revenue for ' + month + ' (' + (tracked[month]).toFixed(2) + ') is more than the money received (' + base[month].toFixed(2) + ')');
+  });
+  // Across everyone who'd be published for a month, charges can't exceed that month's fee.
+  [...new Set(keys.map(k => k.split('|')[1]))].forEach(month => {
+    const total = rows.filter(r => r.month === month).reduce((t, r) => t + (Number(r.swiftShare) || 0), 0);
+    if (total > (fee[month] || 0) + 0.01) errors.push(month + ': artists would be charged ' + total.toFixed(2) + ' in total, more than the ' + (fee[month] || 0).toFixed(2) + ' charge');
+  });
+  return { errors: [...new Set(errors)], warnings: [...new Set(warnings)] };
+}

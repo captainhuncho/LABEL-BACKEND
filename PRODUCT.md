@@ -482,6 +482,12 @@ and the 10-minute job in the notify function swaps them in at that time and
 emails the artists. Scheduled publishes can be published early or cancelled.
 Finance can request a time; the Admin's approval keeps it.
 
+Before any publish, request approval or Admin approval, `publishChecks`
+recomputes every artist-month's charge from the raw figures. It **blocks** on
+a charge that doesn't match, a charge above the gross, a month's charges
+exceeding its fee, or a missing/invalid artist %; it **warns** when a month
+has no Money received or imported revenue exceeds money received.
+
 Artists see only published or sent accounting: revenue and statement files
 from the published snapshot, payout statements once sent (paid or not), and
 approved expenses dated up to their latest published month.

@@ -3,7 +3,7 @@
 // Admin, unless an Admin has let Finance publish directly.
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
-import { applyPublish, publishDiff, revenueRowSplit, slug } from '../finance.js';
+import { applyPublish, publishChecks, publishDiff, revenueRowSplit, slug } from '../finance.js';
 import { formatCents, formatDate, monthLabel, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
@@ -83,10 +83,13 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
     setDone(what + ': ' + items.length + ' artist-month' + (items.length === 1 ? '' : 's') + ' across ' + artists + ' artist' + (artists === 1 ? '' : 's') + '.');
     setSelected(new Set()); setNote(''); setPublishAt(''); setError('');
   }
-  function go(keys, scope) { (direct ? publishNow : requestApproval)(keys, scope); }
+  // Every publish, request and approval is re-checked; any error stops it.
+  const blocked = keys => { const c = publishChecks(keys, approvedRevenue, masterGross, roster, published); if (c.errors.length) { setError('Not published. Fix these first: ' + c.errors.join('; ') + '.'); return true; } return false; };
+  function go(keys, scope) { if (blocked(keys)) return; (direct ? publishNow : requestApproval)(keys, scope); }
 
   function approve(entry) {
     const keys = (entry.items || []).map(i => i.key);
+    if (blocked(keys)) return;
     const next = release(keys, entry.items, { ...entry, approvedBy: session.name, approvedAt: stamp() });
     updateLog(log.map(e => e.id !== entry.id ? e : next));
   }
@@ -98,6 +101,8 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
 
   const liveGrossOf = key => (diff.find(d => d.key === key) || {}).liveGross;
   const selectedKeys = [...selected].filter(k => diff.some(d => d.key === k));
+  const checkKeys = selectedKeys.length ? selectedKeys : diff.filter(d => !requestedKeys.has(d.key)).map(d => d.key);
+  const checks = useMemo(() => publishChecks(checkKeys, approvedRevenue, masterGross, roster, published), [checkKeys.join(','), approvedRevenue, masterGross, roster, published]);
 
   return (
     <div>
@@ -210,6 +215,12 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                 <Field label="Publish at (optional, leave empty for now)">
                   <Input type="datetime-local" value={publishAt} onChange={e => { setPublishAt(e.target.value); setError(''); }} style={{ colorScheme: 'dark' }} />
                 </Field>
+              </div>
+              <div className="mt-4 rounded border p-3 text-sm" role="status" style={{ borderColor: checks.errors.length ? C.red : checks.warnings.length ? C.amber : C.border }}>
+                <div style={{ fontWeight: 600 }}>Checks on {selectedKeys.length ? 'the selected rows' : 'everything listed'}</div>
+                {checks.errors.length === 0 && checks.warnings.length === 0 && <div className="mt-1 flex items-center gap-2" style={{ color: C.teal }}><CheckCircle2 size={14} /> Every charge recomputed and matches; artists’ shares are set.</div>}
+                {checks.errors.map((e, i) => <div key={'e' + i} className="mt-1" style={{ color: C.red }}>Blocks publishing: {e}</div>)}
+                {checks.warnings.map((w, i) => <div key={'w' + i} className="mt-1" style={{ color: C.amber }}>Check: {w}</div>)}
               </div>
               {error && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{error}</div>}
               <div className="flex gap-2 flex-wrap mt-3">

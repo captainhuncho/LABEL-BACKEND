@@ -110,3 +110,26 @@ test('a payment covering several months spreads by earnings', async () => {
   const none = expandRemittances([{ id: 'r', month: '2026-03', periodStart: '2026-01', totalGross: 10, swiftFee: 3 }], []);
   assert.deepEqual(none.map(g => g.swiftFee), [0, 0, 3]);
 });
+
+test('pre-publish checks: Aizo May/Jun 2026 by hand, and the failures they catch', async () => {
+  const { publishChecks, applyPublish, revenueRowSplit } = await import('../src/finance.js');
+  const roster = [{ name: 'Aizo Clutch', artistPct: 0.7 }];
+  const rev = [
+    { id: 'j', artistSlug: 'aizo-clutch', artist: 'Aizo Clutch', month: '2026-06', earning: 292.75 },
+    { id: 'm', artistSlug: 'aizo-clutch', artist: 'Aizo Clutch', month: '2026-05', earning: 61.67 },
+  ];
+  const mg = [{ month: '2026-06', totalGross: 762.34, swiftFee: 30 }, { month: '2026-05', totalGross: 423.64, swiftFee: 30 }];
+  // Hand figures: Jun 0.7 × (292.75 − 30 × 292.75/762.34) = 196.86; May = 40.11.
+  const share = r => revenueRowSplit(r, rev, mg, 0.7).artistShare;
+  assert.equal(share(rev[0]).toFixed(2), '196.86');
+  assert.equal(share(rev[1]).toFixed(2), '40.11');
+  assert.deepEqual(publishChecks(['aizo-clutch|2026-06', 'aizo-clutch|2026-05'], rev, mg, roster), { errors: [], warnings: [] });
+  // No Money received → warning; missing artist % → error; a tampered snapshot → error.
+  assert.equal(publishChecks(['aizo-clutch|2026-06'], rev, [], roster).warnings.length, 1);
+  assert.equal(publishChecks(['aizo-clutch|2026-06'], rev, mg, [{ name: 'Aizo Clutch' }]).errors.length, 1);
+  // Another artist already published for June carrying the full 30: June's total would exceed the fee.
+  const other = [{ id: 'o', artistSlug: 'someone', artist: 'Someone', month: '2026-06', earning: 100, swiftShare: 30 }];
+  const over = publishChecks(['aizo-clutch|2026-06'], rev, mg, roster, other);
+  assert.equal(over.errors.length, 1);
+  assert.match(over.errors[0], /more than the 30.00 charge/);
+});
