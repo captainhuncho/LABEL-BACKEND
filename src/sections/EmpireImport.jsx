@@ -6,8 +6,9 @@ import Papa from 'papaparse';
 import { CheckCircle2, FileText, Upload } from 'lucide-react';
 import { aggregateEmpire, cleanTitle, isEmpireDetailed, parseEmpireDetailed } from '../empire.js';
 import { slug } from '../finance.js';
-import { formatCents, monthLabel, todayStr, uid } from '../constants.js';
-import { saveStatementFile } from '../storage.js';
+import { formatCents, formatNumber, monthLabel, normalizeIsrc, todayStr, uid } from '../constants.js';
+import { isStreamType } from '../streams.js';
+import { saveStatementFile, statementFileUrl } from '../storage.js';
 import { logActivity } from '../audit.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Btn, DropZone, Td, Th } from '../ui.jsx';
@@ -15,11 +16,45 @@ import { Btn, DropZone, Td, Th } from '../ui.jsx';
 const lower = s => String(s || '').trim().toLowerCase();
 const months = obj => Object.keys(obj || {}).sort().map(monthLabel).join(', ');
 
-export default function EmpireImport({ roster, catalog, revenue, masterGross = [], updateRevenue, statementFiles = [], updateStatementFiles, sessionName = '', onDone }) {
+export default function EmpireImport({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, masterGross = [], updateRevenue, statementFiles = [], updateStatementFiles, sessionName = '', onDone }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
+  const [reread, setReread] = useState(null);
+
+  // Rows imported before per-platform stream counts existed: re-read their saved
+  // statement files and add `storeStreams`. Money fields are never touched, and a
+  // row is only updated when the re-read stream total equals what it already holds.
+  const needsStreams = revenue.filter(r => r.source === 'EMPIRE' && r.statementFileId && !r.storeStreams);
+  async function rereadStreams() {
+    setBusy(true); setError(''); setReread(null);
+    const found = {}, problems = [];
+    const streamTotal = q => Object.entries(q || {}).filter(([t]) => isStreamType(t)).reduce((t, [, n]) => t + n, 0);
+    for (const f of statementFiles.filter(f => needsStreams.some(r => r.statementFileId === f.id))) {
+      try {
+        const text = await (await fetch(await statementFileUrl(f))).text();
+        const data = await new Promise(resolve => Papa.parse(text, { skipEmptyLines: false, complete: ({ data }) => resolve(data) }));
+        if (!isEmpireDetailed(data)) { problems.push(f.name + ': not an EMPIRE detailed report'); continue; }
+        const groups = aggregateEmpire(parseEmpireDetailed(data).lines);
+        needsStreams.filter(r => r.statementFileId === f.id).forEach(r => {
+          const g = groups.find(g => g.month === r.month && ((r.isrc && g.isrc && normalizeIsrc(g.isrc) === normalizeIsrc(r.isrc)) || lower(g.title) === lower(r.title)));
+          if (!g) { problems.push(r.title + ' ' + r.month + ': not found in ' + f.name); return; }
+          const sum = Object.values(g.storeStreams).reduce((t, n) => t + n, 0);
+          if (sum !== streamTotal(r.typeQty)) { problems.push(r.title + ' ' + r.month + ': stream total differs (' + sum + ' vs ' + streamTotal(r.typeQty) + ')'); return; }
+          found[r.id] = g.storeStreams;
+        });
+      } catch (err) { problems.push(f.name + ': ' + (err.message || err)); }
+    }
+    const n = Object.keys(found).length;
+    if (n) {
+      updateRevenue(revenue.map(r => found[r.id] ? { ...r, storeStreams: found[r.id] } : r));
+      if (updatePublishedRevenue) updatePublishedRevenue(publishedRevenue.map(r => found[r.id] ? { ...r, storeStreams: found[r.id] } : r));
+      logActivity('re-read stream counts from statement files', n + ' song-months updated');
+    }
+    setReread({ n, problems });
+    setBusy(false);
+  }
   const inputRef = useRef(null);
 
   // Read every dropped/chosen file; a file that's empty, not EMPIRE, or a
@@ -97,7 +132,7 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
       const rows = matched.map(g => ({
         id: g.id, artist: g.artistRec.name, artistSlug: slug(g.artistRec.name), title: g.bookedTitle, month: g.month,
         earning: g.gross, quantity: g.quantity, isrc: g.isrc, upc: g.upc,
-        stores: g.stores, countries: g.countries, types: g.types, typeQty: g.typeQty, models: g.models, salesMonths: g.salesMonths,
+        stores: g.stores, countries: g.countries, types: g.types, typeQty: g.typeQty, storeStreams: g.storeStreams, models: g.models, salesMonths: g.salesMonths,
         type: (g.release && g.release.type) || (g.existing && g.existing.type) || 'Single',
         epAlbum: (g.existing && g.existing.epAlbum) || null,
         releaseDate: (g.release && g.release.releaseDate) || (g.existing && g.existing.releaseDate) || null,
@@ -143,6 +178,15 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
 
   return (
     <div>
+      {(needsStreams.length > 0 || reread) && !preview && (
+        <div className="rounded p-4 mb-4 flex items-center justify-between gap-3 flex-wrap" style={{ background: C.panel, fontSize: 14 }}>
+          <div>
+            {needsStreams.length > 0 && <div>{needsStreams.length} imported song-month{needsStreams.length === 1 ? '' : 's'} don’t have streams per platform yet. Re-reading their saved statement files adds them; money isn’t changed.</div>}
+            {reread && <div style={{ color: reread.problems.length ? C.amber : C.teal, marginTop: 4 }}>Updated {formatNumber(reread.n)} song-month{reread.n === 1 ? '' : 's'}.{reread.problems.length ? ' Not updated: ' + reread.problems.join('; ') : ''}</div>}
+          </div>
+          {needsStreams.length > 0 && <Btn variant="ghost" onClick={rereadStreams} disabled={busy}>{busy ? 'Reading…' : 'Re-read statement files'}</Btn>}
+        </div>
+      )}
       <div className="rounded border p-5 mb-5" style={{ background: C.panel, borderColor: C.border }}>
         <h3 style={{ fontWeight: 600, fontSize: 15 }}>EMPIRE detailed royalty report</h3>
         <p className="text-sm mt-1 mb-3" style={{ color: C.textDim, maxWidth: '70ch' }}>

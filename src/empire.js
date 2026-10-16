@@ -83,7 +83,7 @@ export function aggregateEmpire(lines) {
     const key = [l.trackArtist.toLowerCase(), title.toLowerCase(), l.statementMonth].join('|');
     const g = groups[key] || (groups[key] = {
       artist: l.trackArtist, title, isrc: l.isrc, upc: l.upc, month: l.statementMonth,
-      gross: 0, quantity: 0, lines: 0, stores: {}, countries: {}, types: {}, models: {}, salesMonths: {}, typeQty: {},
+      gross: 0, quantity: 0, lines: 0, stores: {}, countries: {}, types: {}, models: {}, salesMonths: {}, typeQty: {}, storeStreams: {},
     });
     if (!g.isrc && l.isrc) g.isrc = l.isrc;
     g.gross += l.gross; g.quantity += l.quantity; g.lines += 1;
@@ -93,6 +93,7 @@ export function aggregateEmpire(lines) {
     add(g.models, l.model, l.gross);
     add(g.salesMonths, l.salesMonth || l.statementMonth, l.gross);
     add(g.typeQty, l.type, l.quantity);
+    if (/stream/i.test(l.type)) add(g.storeStreams, l.serviceGroup, l.quantity);
   });
   return Object.values(groups).sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title) || a.month.localeCompare(b.month));
 }

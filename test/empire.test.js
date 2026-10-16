@@ -38,3 +38,8 @@ test('cleans titles and months', () => {
   assert.equal(empireMonth('Jun 2026'), '2026-06');
   assert.equal(empireMonth('2026-03-01'), '2026-03');
 });
+
+test('counts streams per platform, leaving downloads out', () => {
+  const june = aggregateEmpire(parseEmpireDetailed(rows).lines).find(g => g.month === '2026-06');
+  assert.deepEqual(june.storeStreams, { Spotify: 1000, YouTube: 300 });
+});

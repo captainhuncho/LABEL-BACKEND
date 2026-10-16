@@ -286,7 +286,7 @@ export function StreamsSection({ streams, update, catalog, releaseMap, artistMap
                       <Td>{rel && artistMap[rel.artistId] ? artistMap[rel.artistId].name : '—'}</Td>
                       <Td align="right" mono>{formatNumber(s.count)}</Td>
                       <Td align="right">
-                        {confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
+                        {s.imported ? <span className="text-xs" style={{ color: C.textDim }}>From EMPIRE</span> : confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                           <span className="inline-flex gap-3 justify-end">
                             <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                             <button onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>

@@ -14,6 +14,7 @@ import { BREAKDOWN_FIELDS, breakdownLabel, RevenueBreakdownTable, StatementFiles
 import { SUBMISSION_LABELS, SUBMISSION_TONES } from './Submissions.jsx';
 
 import { licenseFor, rightsLine } from '../licenses.js';
+import { streamsFromRevenue } from '../streams.js';
 
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
@@ -28,7 +29,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const aSlug = useMemo(() => slug(artist.name), [artist.name]);
 
   const myRevenue = useMemo(() => revenue.filter(r => r.artistSlug === aSlug), [revenue, aSlug]);
-  const myStreams = useMemo(() => streams.filter(s => releaseIds.has(s.releaseId)), [streams, releaseIds]);
+  // Streams from published EMPIRE statements, plus any entered by hand.
+  const myStreams = useMemo(() => [...streams, ...streamsFromRevenue(revenue, catalog, roster && roster.length ? roster : [artist])].filter(s => releaseIds.has(s.releaseId)), [streams, revenue, catalog, roster, artist, releaseIds]);
 
   const totalStreams = myStreams.reduce((s, r) => s + r.count, 0);
 

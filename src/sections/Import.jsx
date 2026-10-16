@@ -7,7 +7,7 @@ import EmpireImport from './EmpireImport.jsx';
 import { C, MONO_FONT } from '../theme.js';
 import { Btn, Field, Input, DropZone, SectionHeader, Select, Td, Th } from '../ui.jsx';
 
-export function ImportSection({ roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams, masterGross = [], statementFiles = [], updateStatementFiles, sessionName = '' }) {
+export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams, masterGross = [], statementFiles = [], updateStatementFiles, sessionName = '' }) {
   const [mode, setMode] = useState(null);
   const [step, setStep] = useState('choose');
   const [fileName, setFileName] = useState('');
@@ -284,7 +284,7 @@ export function ImportSection({ roster, catalog, revenue, streams, updateRoster,
       <SectionHeader title="Import" artistNote="nothing yet. Imported revenue and statement files stay internal until you publish them." description="Upload a royalty statement CSV from a distributor or DSP. IMSS Records matches it to your roster and catalog, and logs the earnings automatically — including the store-by-store breakdown artists see." />
 
       {mode === 'empire' && (
-        <EmpireImport roster={roster} catalog={catalog} revenue={revenue} masterGross={masterGross} updateRevenue={updateRevenue} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} onDone={reset} />
+        <EmpireImport publishedRevenue={publishedRevenue} updatePublishedRevenue={updatePublishedRevenue} roster={roster} catalog={catalog} revenue={revenue} masterGross={masterGross} updateRevenue={updateRevenue} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} onDone={reset} />
       )}
 
       {step === 'choose' && (
