@@ -81,6 +81,8 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
           </div>
         )}
         {sessionName && <button onClick={() => setActive('account')} className="block mb-3" style={{ color: active === 'account' ? C.amber : C.textDim }}>Sign-in & passkeys</button>}
+        {/* Wiping or reseeding only makes sense on the local test copy, never on shared live data. */}
+        {!supabase && <>
         {confirmReset ? (
           <span className="inline-flex flex-col gap-1">
             Clear all data?
@@ -103,6 +105,7 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
         ) : (
           <button onClick={() => setConfirmReseed(true)} className="block mt-2" style={{ color: C.textFaint }}>Reset to sample data</button>
         )}
+        </>}
       </div>
     </div>
   );
@@ -701,7 +704,17 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
         {active === 'activity' && <AuditSection roster={roster} />}
         {active === 'account' && <div><SectionHeader title="Sign-in & passkeys" description="Add a passkey to sign in with Face ID, your fingerprint or this device’s screen lock." /><PasskeySettings /></div>}
-        <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
+        <div className="imss-mobile-only mt-8 text-sm" style={{ color: C.textFaint }}>
+          {session && session.name && (
+            <div className="flex items-center justify-between gap-3 py-3 mb-3" style={{ borderTop: '1px solid ' + C.border, borderBottom: '1px solid ' + C.border }}>
+              <span style={{ color: C.textDim }}>{session.name}</span>
+              <span className="flex items-center gap-4">
+                <button onClick={() => setActive('account')} style={{ color: C.textDim }}>Sign-in & passkeys</button>
+                <button onClick={logout} className="inline-flex items-center gap-1.5" style={{ color: C.text }}><LogOut size={15} /> Sign out</button>
+              </span>
+            </div>
+          )}
+          {!supabase && <>
           {confirmReset ? (
             <span className="inline-flex gap-2">
               Clear all data?
@@ -722,6 +735,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
               <button onClick={() => setConfirmReseed(true)}>Reset to sample data</button>
             )}
           </div>
+          </>}
         </div>
         <LegalFooter />
         </div>
