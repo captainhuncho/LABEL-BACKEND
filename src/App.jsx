@@ -4219,7 +4219,7 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
 
   return (
     <div>
-      <SectionHeader title="Ledger" description="Non-royalty income and expenses — advances, recording costs, marketing spend, and anything else that isn't distributor revenue. Recoupable expenses reduce what an artist is due until their share covers them." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add entry</Btn>} />
+      <SectionHeader title="Expenses & income" description="Non-royalty income and expenses — advances, recording costs, marketing spend, and anything else that isn't distributor revenue. Recoupable expenses reduce what an artist is due until their share covers them." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add entry</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={TrendingUp} label="Income" value={formatCurrency(totals.income)} tone="teal" />
@@ -7033,16 +7033,19 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.catalog && { id: 'catalog', label: 'Catalog', icon: Disc3, group: 'Artists & Catalog' },
     perms.catalog && { id: 'submissions', label: 'Submissions', icon: Upload, group: 'Artists & Catalog' },
     session && session.mode === 'team' && { id: 'calendar', label: 'Release Calendar', icon: Calendar, group: 'Artists & Catalog' },
-    perms.edits && perms.catalog && { id: 'import', label: 'Import', icon: Upload, group: 'Artists & Catalog' },
 
-    perms.royalties && { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'Finance' },
-    perms.royalties && { id: 'mastergross', label: 'Money received', icon: Coins, group: 'Finance' },
-    perms.spend && { id: 'ledger', label: 'Ledger', icon: Wallet, group: 'Finance' },
-    perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Finance' },
-    (perms.spend || inInvoiceWorkflow) && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Finance' },
-    perms.royalties && { id: 'publish', label: 'Publish to artists', icon: Send, group: 'Finance' },
-    perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Finance' },
-    perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Finance' },
+    // Royalties, in the order the work happens: money lands, statements come in, artists see it, artists get paid.
+    perms.royalties && { id: 'mastergross', label: 'Money received', icon: Coins, group: 'Royalties' },
+    perms.edits && perms.royalties && { id: 'import', label: 'Import statements', icon: Upload, group: 'Royalties' },
+    perms.royalties && { id: 'revenue', label: 'Revenue', icon: DollarSign, group: 'Royalties' },
+    perms.royalties && { id: 'publish', label: 'Publish to artists', icon: Send, group: 'Royalties' },
+    perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Royalties' },
+    perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Royalties' },
+
+    // Spending: what the label pays out other than royalties.
+    (perms.spend || inInvoiceWorkflow) && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Spending' },
+    perms.spend && { id: 'ledger', label: 'Expenses & income', icon: Wallet, group: 'Spending' },
+    perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Spending' },
 
     isPrivileged && { id: 'team', label: 'Team', icon: UserCog, group: 'Team' },
     isPrivileged && { id: 'access-requests', label: 'Access Requests', icon: ShieldCheck, group: 'Team' },
