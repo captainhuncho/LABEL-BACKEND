@@ -183,9 +183,11 @@ revByArtistMonth[artist][month]  = sum of revenue.earning for that artist that m
 easy to get wrong:
 ```
 swiftShare(artist, month) =
-    masterGross[month].swiftFee × revByArtistMonth[artist][month] / revByMonth[month]
+    masterGross[month].swiftFee × revByArtistMonth[artist][month] / max(masterGross[month].totalGross, revByMonth[month])
 
-= 0 if there's no masterGross row for that month, or revByMonth[month] <= 0
+= 0 if there's no masterGross row for that month, or the base is 0.
+  The base is the money received, so an artist imported before the others
+  never carries the whole charge; the charge on unmatched money stays with the label.
 ```
 
 **Artist lifetime** (over every month that artist has revenue)

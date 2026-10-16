@@ -11,8 +11,10 @@ test('seed data matches the verified baseline', () => {
   assert.equal(cents(t.totalGross), 13256.50);
   assert.equal(cents(t.totalSwift), 840.00);
   assert.equal(cents(t.trackedGross), 9812.20);
-  assert.equal(cents(t.artistEarn), 6627.13);
-  assert.equal(cents(t.labelEarn), 2345.07);
+  assert.equal(cents(t.artistEarn), 6797.34);
+  assert.equal(cents(t.labelEarn), 2404.05);
+  // Artists carry the charge only on money matched to revenue; the rest stays with the label.
+  assert.equal(cents(t.trackedGross - t.trackedNet), 610.81);
   assert.equal(cents(t.untrackedGap), 3444.30);
 });
 

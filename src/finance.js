@@ -39,11 +39,15 @@ function buildMasterGrossByMonth(masterGross) {
   return m;
 }
 
-// b) Swift fee proportional split (per artist, per month)
+// b) Swift fee proportional split (per artist, per month). The share is of the
+// money actually received that month, not of the revenue imported so far, so an
+// artist imported first doesn't carry the whole charge; the charge on money not
+// yet matched to revenue stays with the label until it's imported.
+const chargeBase = (mg, trackedTotal) => Math.max(Number(mg.totalGross) || 0, trackedTotal);
 export function swiftShareFor(artistSlug, month, revenue, masterGross) {
   const mg = masterGrossByMonth(masterGross)[month];
   if (!mg) return 0;
-  const totalRev = revByMonth(revenue)[month] || 0;
+  const totalRev = chargeBase(mg, revByMonth(revenue)[month] || 0);
   if (totalRev <= 0) return 0;
   const artistRev = revByArtistMonth(revenue)[artistSlug + '|' + month] || 0;
   return mg.swiftFee * (artistRev / totalRev);
@@ -130,7 +134,7 @@ export function payoutStatementFor(artist, periodStart, periodEnd, revenue, mast
 // artist sum to the same totals as artistLifetime / payoutStatementFor.
 export function revenueRowSplit(row, revenue, masterGross, artistPct) {
   const mg = masterGrossByMonth(masterGross)[row.month];
-  const monthTotal = revByMonth(revenue)[row.month] || 0;
+  const monthTotal = mg ? chargeBase(mg, revByMonth(revenue)[row.month] || 0) : 0;
   const charge = mg && monthTotal > 0 ? mg.swiftFee * row.earning / monthTotal : 0;
   const net = row.earning - charge;
   return { gross: row.earning, charge, net, artistShare: net * artistPct, labelShare: net * (1 - artistPct) };

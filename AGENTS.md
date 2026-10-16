@@ -81,7 +81,7 @@ The one non-obvious rule: **the swift fee is split proportionally**, not evenly.
 On screen it's called the **Inbound Banking Charge**; the code keeps `swiftFee`/`swift`.
 
 ```
-swiftShare(artist, month) = swiftFee[month] × revByArtistMonth[artist][month] / revByMonth[month]
+swiftShare(artist, month) = swiftFee[month] × revByArtistMonth[artist][month] / max(totalGross[month], revByMonth[month])
 ```
 
 Then `net = gross − swift`, `artistShare = net × artistPct`, `labelShare = net × (1 − artistPct)`.
@@ -102,8 +102,9 @@ change is wrong unless you meant it:
 | Total gross (33 months) | $13,256.50 |
 | Total swift fees | $840.00 |
 | Tracked gross | $9,812.20 |
-| Artist earnings | $6,627.13 |
-| Label earnings | $2,345.07 |
+| Artist earnings | $6,797.34 |
+| Label earnings | $2,404.05 |
+| Charge carried by artists | $610.81 |
 | Untracked gap | $3,444.30 |
 
 ## Access control
