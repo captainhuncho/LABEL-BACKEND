@@ -105,8 +105,20 @@ async function audit(action: string, detail: string, artistId: string | null = n
   await db.from('audit_log').insert({ actor_email: 'system', actor_name: 'Scheduler', actor_kind: 'system', action, detail, artist_id: artistId });
 }
 
-async function send(to: string[], subject: string, html: string, replyKey?: string) {
-  const recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
+// Safety lock: artists are emailed only about royalties, statements (payouts) and
+// invoices. Any other email to an address on the roster is dropped and logged,
+// whatever the calling code asked for.
+const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice'];
+async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string) {
+  let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
+  if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
+    const artists = new Set((await section('roster')).map(a => lower(a.email)).filter(e => e.includes('@')));
+    const blocked = recipients.filter(r => artists.has(r));
+    if (blocked.length) {
+      recipients = recipients.filter(r => !artists.has(r));
+      await audit('blocked an artist email', `"${subject}" not sent to ${blocked.join(', ')}: artists only get royalty, statement and invoice emails`);
+    }
+  }
   if (!recipients.length) return { skipped: 'no recipients' };
   const inApp = await notifyInApp(recipients, subject);
   if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp };
@@ -173,7 +185,7 @@ async function handleEvent(ev: Event) {
       const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
       results.push(await send([email], `Your IMSS Records earnings for ${list} are ready`,
         page('New earnings in your portal', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records portal, with the breakdown by song, platform and country.`],
-          { label: 'See your earnings', url: `${APP_URL}/` })));
+          { label: 'See your earnings', url: `${APP_URL}/` }), undefined, 'earnings'));
     }
     return results;
   }
@@ -206,7 +218,7 @@ async function handleEvent(ev: Event) {
     const period = item.periodStart === item.periodEnd ? item.periodStart : `${item.periodStart} to ${item.periodEnd}`;
     return send([artistEmail], `Your IMSS Records statement is ready (${period})`,
       page('Your royalty statement is ready', [`Hi ${esc(artistName)},`, `Your statement for <b>${esc(period)}</b> is ready in your IMSS Records portal.`, `Your earnings for this period: <b>$${Number(item.artistShare || 0).toFixed(2)}</b>.`],
-        { label: 'View your statement', url: `${APP_URL}/` }));
+        { label: 'View your statement', url: `${APP_URL}/` }), undefined, 'statement');
   }
 
   if (ev.type === 'new') {
@@ -235,11 +247,11 @@ async function handleEvent(ev: Event) {
     if (item.status === 'Rejected') {
       return send([artistEmail], `Your invoice “${item.title}” wasn’t approved`,
         page('Your invoice wasn’t approved', [`Hi ${esc(artistName)}, your invoice <b>${esc(item.title)}</b> (${amount}) wasn’t approved.`],
-          { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined), replyKey);
+          { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
     }
     if (item.status === 'Paid') {
       return send([artistEmail], `Paid: your invoice “${item.title}” (${amount})`,
-        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }), replyKey);
+        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }), replyKey, 'invoice');
     }
     const reviewers = await stageReviewers(item.status, artist);
     const back = last.action === 'sent back', moved = last.action === 'moved by Admin';
@@ -258,7 +270,7 @@ async function handleEvent(ev: Event) {
     if (labelText) {
       return send([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`,
         page('The label replied', [`Hi ${esc(artistName)}, here’s a message about ${esc(what)}:`],
-          { label: 'Open your portal', url: `${APP_URL}/` }, labelText), replyKey);
+          { label: 'Open your portal', url: `${APP_URL}/` }, labelText), replyKey, 'invoice');
     }
     if (last && last.from === 'artist') {
       // Invoice replies go to whoever holds the invoice now, plus Admins.
