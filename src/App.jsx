@@ -1,5 +1,6 @@
 import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, Send, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
 import Papa from 'papaparse';
+import { parseEmpireDetailed } from './empire.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -729,7 +730,7 @@ function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, reven
             )}
           </div>
           )}
-          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
+          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0)} artistName={artist.name} showOriginal empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
           {canViewRoyalties && (
           <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
             <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
@@ -3335,11 +3336,16 @@ function RevenueBreakdownTable({ parts, label, format }) {
 }
 
 // Original royalty statement files kept on an artist's profile.
-// sourceLabel replaces the distributor name for artists (they deal with IMSS Records, not EMPIRE).
-function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.', sourceLabel = '' }) {
+// Statement files on an artist. Two IMSS-branded downloads built from the
+// artist's own rows: Detailed (every line, like the uploaded report) and By
+// track (one row per track per month). Team side also keeps the original file.
+// `rows` are this artist's revenue rows; `splitOf(row)` gives charge and earnings.
+function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.', sourceLabel = '', rows = [], splitOf = null, artistName = '', showOriginal = false }) {
   const [error, setError] = useState('');
   const sorted = [...files].sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
-  async function open(f) {
+  const fileName = (f, kind) => ((artistName || 'artist') + ' ' + (f.months || []).join(' ') + ' ' + kind).trim().replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+  const code = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  async function original(f) {
     setError('');
     try {
       const url = await statementFileUrl(f);
@@ -3347,20 +3353,59 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
       document.body.appendChild(a); a.click(); a.remove();
     } catch (err) { setError('Could not download that file. Try again in a moment.'); }
   }
+  // This file's lines that belong to the artist, each with its pro-rata charge and earnings.
+  async function fileLines(f) {
+    const text = await (await fetch(await statementFileUrl(f))).text();
+    const { lines } = parseEmpireDetailed(Papa.parse(text, { skipEmptyLines: false }).data);
+    const mine = rows.filter(r => (f.months || []).includes(r.month));
+    const rowOf = l => mine.find(r => r.month === l.statementMonth && ((l.isrc && code(r.isrc) === code(l.isrc)) || slug(r.title) === slug(l.trackTitle || l.productTitle)));
+    return lines.map(l => {
+      const r = rowOf(l); if (!r || !r.earning) return null;
+      const x = splitOf(r), k = l.gross / r.earning;
+      return { ...l, track: r.title, charge: x.charge * k, earnings: x.artistShare * k };
+    }).filter(Boolean);
+  }
+  const sum = (list, key) => list.reduce((t, l) => t + l[key], 0);
+  async function download(f, kind) {
+    setError('');
+    try {
+      const lines = await fileLines(f);
+      if (!lines.length) { setError('No lines in that file match this artist’s earnings.'); return; }
+      const total = ['Total', sum(lines, 'gross').toFixed(2), sum(lines, 'charge').toFixed(2), sum(lines, 'earnings').toFixed(2)];
+      if (kind === 'detailed') {
+        exportRowsToCsv(fileName(f, 'detailed'), ['Statement month', 'Sales month', 'Platform', 'Service', 'Country', 'Type', 'Commercial model', 'Usage', 'Track', 'ISRC', 'Quantity', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
+          [...lines.map(l => [l.statementMonth, l.salesMonth, l.serviceGroup, l.service, l.country, l.type, l.model, l.usage, l.track, l.isrc, Math.round(l.quantity), l.gross.toFixed(4), l.charge.toFixed(4), l.earnings.toFixed(4)]),
+           [total[0], '', '', '', '', '', '', '', '', '', '', ...total.slice(1)]]);
+      } else {
+        const groups = {};
+        lines.forEach(l => { const k = l.statementMonth + '|' + l.track; const g = groups[k] || (groups[k] = { month: l.statementMonth, track: l.track, isrc: l.isrc, quantity: 0, gross: 0, charge: 0, earnings: 0 }); g.quantity += l.quantity; g.gross += l.gross; g.charge += l.charge; g.earnings += l.earnings; });
+        const list = Object.values(groups).sort((a, b) => a.month.localeCompare(b.month) || a.track.localeCompare(b.track));
+        exportRowsToCsv(fileName(f, 'by-track'), ['Statement month', 'Track', 'ISRC', 'Streams / sales', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
+          [...list.map(g => [g.month, g.track, g.isrc, Math.round(g.quantity), g.gross.toFixed(2), g.charge.toFixed(2), g.earnings.toFixed(2)]), [total[0], '', '', '', ...total.slice(1)]]);
+      }
+    } catch (err) { setError('Could not build that statement. Try again in a moment.'); }
+  }
+  const link = { color: C.amber, fontWeight: 600, fontSize: 13 };
   return (
     <section aria-label={title} className="rounded border overflow-x-auto" style={{ background: C.panel, borderColor: C.border }}>
       <div className="imss-dash-ph"><h2>{title}</h2><span className="text-xs" style={{ color: C.textDim }}>{files.length} file{files.length === 1 ? '' : 's'}</span></div>
       {sorted.length === 0 ? <div className="px-4 pb-4 text-sm" style={{ color: C.textDim }}>{empty}</div> : (
-        <table className="w-full" style={{ minWidth: 560 }}>
-          <thead><tr><Th>Statement months</Th><Th>Songs</Th><Th align="right">Gross</Th><Th>Uploaded</Th><Th align="right">File</Th></tr></thead>
+        <table className="w-full" style={{ minWidth: 640 }}>
+          <thead><tr><Th>Statement months</Th><Th>Gross</Th><Th>Songs</Th><Th>Uploaded</Th><Th align="right">Download</Th></tr></thead>
           <tbody>
             {sorted.map(f => (
               <tr key={f.id}>
                 <Td>{(f.months || []).map(monthLabel).join(', ') || '—'}<div className="text-xs" style={{ color: C.textDim }}>{sourceLabel || f.source || 'Statement'}</div></Td>
+                <Td mono>{formatCents(f.gross)}</Td>
                 <Td>{(f.songs || []).join(', ') || '—'}</Td>
-                <Td align="right" mono>{formatCents(f.gross)}</Td>
                 <Td><span className="text-xs">{formatDate(String(f.uploadedAt || '').slice(0, 10))}{f.uploadedBy ? ' · ' + f.uploadedBy : ''}</span></Td>
-                <Td align="right"><button onClick={() => open(f)} className="inline-flex items-center gap-1" style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}><Download size={13} aria-hidden="true" /> Download</button></Td>
+                <Td align="right">
+                  <span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
+                    {splitOf && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> Detailed</button>}
+                    {splitOf && <button onClick={() => download(f, 'track')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> By track</button>}
+                    {(showOriginal || !splitOf) && <button onClick={() => original(f)} className="inline-flex items-center gap-1" style={{ ...link, color: C.textDim }}><Download size={13} aria-hidden="true" /> Original</button>}
+                  </span>
+                </Td>
               </tr>
             ))}
           </tbody>
@@ -6753,7 +6798,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             </div>
           );
         })()}
-        {tab === 'statements' && <div className="mb-6"><StatementFilesList sourceLabel="IMSS Records" title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
+        {tab === 'statements' && <div className="mb-6"><StatementFilesList sourceLabel="IMSS Records" rows={myRevenue} splitOf={splitOf} artistName={artist.name} title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
         {tab === 'statements' && (
           <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
         )}
