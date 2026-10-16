@@ -6,6 +6,7 @@ import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
 import { applyPublish, publishChecks, publishDiff, revenueRowSplit, slug } from '../finance.js';
 import { formatCents, formatDate, monthLabel, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
+import { isStale } from '../UpdateBanner.jsx';
 import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
 
 const STATE_TONE = { New: 'amber', Changed: 'amber', Removed: 'red', 'Awaiting approval': 'default' };
@@ -84,7 +85,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
     setSelected(new Set()); setNote(''); setPublishAt(''); setError('');
   }
   // Every publish, request and approval is re-checked; any error stops it.
-  const blocked = keys => { const c = publishChecks(keys, approvedRevenue, masterGross, roster, published); if (c.errors.length) { setError('Not published. Fix these first: ' + c.errors.join('; ') + '.'); return true; } return false; };
+  const blocked = keys => { if (isStale()) { setError('A new version of IMSS Records is out. Reload the page before publishing.'); return true; } const c = publishChecks(keys, approvedRevenue, masterGross, roster, published); if (c.errors.length) { setError('Not published. Fix these first: ' + c.errors.join('; ') + '.'); return true; } return false; };
   function go(keys, scope) { if (blocked(keys)) return; (direct ? publishNow : requestApproval)(keys, scope); }
 
   function approve(entry) {

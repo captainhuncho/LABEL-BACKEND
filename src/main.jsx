@@ -4,12 +4,14 @@ import { installStorage } from './storage.js';
 import RecordLabelDashboard from './App.jsx';
 import AuthGate from './AuthGate.jsx';
 import ArtistApp from './ArtistApp.jsx';
+import UpdateBanner from './UpdateBanner.jsx';
 import './index.css';
 
 installStorage();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <UpdateBanner />
     <AuthGate>{auth => auth.access === 'artist' ? <ArtistApp signOut={auth.signOut} /> : <RecordLabelDashboard {...auth} />}</AuthGate>
   </React.StrictMode>
 );
