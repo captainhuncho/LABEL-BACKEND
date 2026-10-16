@@ -40,6 +40,11 @@ handles HTTPS.
   which returns only that artist's rows, with each month's swift fee already
   split to their share (label totals stay in the database). New requests go
   through `artist_add()`, which stamps them as that artist's and unreviewed.
+- Sign-in is invite only, enforced in the database: `private.is_invited(email)`
+  (Team list or a Roster entry). A trigger on `auth.users` refuses to create
+  any other account, so nothing is stored and no email is sent; taking someone
+  off Team/Roster deletes their sign-in account (a save that would remove more
+  than 2 at once removes none and logs a warning). Add the email first.
 - `section()`, `my_artist()` and `js_slug()` are internal: API roles must not
   have EXECUTE on them. New functions get no API access unless granted.
 - With Supabase, a `DATA_VERSION` bump does **not** reseed; only an empty
