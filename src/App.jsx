@@ -7132,11 +7132,11 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const out = [];
-    roster.forEach(a => { if (a.name.toLowerCase().includes(q)) out.push({ label: a.name, type: 'Artist', tab: 'roster' }); });
+    roster.forEach(a => { if (a.name.toLowerCase().includes(q)) out.push({ label: a.name, type: 'Artist', tab: 'roster', photoUrl: a.photoUrl || '' }); });
     catalog.forEach(c => {
       if (c.title.toLowerCase().includes(q) || (c.isrc || '').toLowerCase().includes(q) || (c.upc || '').toLowerCase().includes(q)) out.push({ label: c.title, type: 'Product', tab: 'catalog' });
     });
-    staff.forEach(s => { if (s.name.toLowerCase().includes(q)) out.push({ label: s.name, type: 'Team', tab: 'team' }); });
+    staff.forEach(s => { if (s.name.toLowerCase().includes(q)) out.push({ label: s.name, type: 'Team', tab: 'team', photoUrl: s.photoUrl || '' }); });
     tasks.forEach(t => { if (t.title.toLowerCase().includes(q)) out.push({ label: t.title, type: 'Task', tab: 'tasks' }); });
     notices.forEach(n => { if (n.title.toLowerCase().includes(q)) out.push({ label: n.title, type: 'Notice', tab: 'notices' }); });
     return out.slice(0, 8);
@@ -7154,7 +7154,10 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
           <div className="rounded border" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 20, background: C.panel, borderColor: C.borderLight }}>
             {results.map((r, i) => (
               <button key={i} onClick={() => { setActive(r.tab); setQuery(''); }} className="flex items-center justify-between w-full text-left px-3 py-2 text-sm hover:bg-white/5">
-                <span>{r.label}</span>
+                <span className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                  {(r.type === 'Artist' || r.type === 'Team') && <Avatar name={r.label} photoUrl={r.photoUrl} size={28} />}
+                  <span>{r.label}</span>
+                </span>
                 <span className="text-xs" style={{ color: C.textFaint }}>{r.type}</span>
               </button>
             ))}
