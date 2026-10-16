@@ -192,8 +192,8 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                       <Td>{d.artist}</Td>
                       <Td mono>{monthLabel(d.month)}</Td>
                       <Td><Badge tone={waiting ? 'default' : STATE_TONE[d.state]}>{scheduledFor(d.key) ? 'Scheduled ' + fmtWhen(scheduledFor(d.key)) : waiting ? 'Awaiting approval' : STATE_LABEL[d.state]}</Badge></Td>
-                      <Td align="right" mono>{d.state === 'New' ? '—' : formatCents(publishedShare(d))}</Td>
-                      <Td align="right" mono>{d.state === 'Removed' ? '—' : formatCents(liveShare(d))}<div className="text-xs" style={{ color: C.textDim }}>of {formatCents(d.liveGross)} gross</div></Td>
+                      <Td align="right" mono>{d.state === 'New' ? <span className="text-xs" style={{ color: C.textDim, fontFamily: 'inherit' }}>Nothing yet</span> : formatCents(publishedShare(d))}</Td>
+                      <Td align="right" mono>{d.state === 'Removed' ? <span className="text-xs" style={{ color: C.textDim, fontFamily: 'inherit' }}>Removed</span> : formatCents(liveShare(d))}<div className="text-xs" style={{ color: C.textDim }}>of {formatCents(d.liveGross)} gross</div></Td>
                     </tr>
                   );
                 })}
