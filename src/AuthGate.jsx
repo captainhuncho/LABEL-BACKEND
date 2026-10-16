@@ -15,7 +15,10 @@ export default function AuthGate({ children }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
-  const [denied, setDenied] = useState('');
+  // Uninvited: the database refuses to create the account, so nothing about the
+  // attempt (not even the email) is kept, and no email is sent.
+  const [denied, setDenied] = useState(() => /Database(\+|%20| )error|invite_only/i.test(window.location.search + window.location.hash));
+  useEffect(() => { if (denied && /error/.test(window.location.search + window.location.hash)) window.history.replaceState(null, '', '/'); }, [denied]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -39,7 +42,7 @@ export default function AuthGate({ children }) {
   // straight back out and say why on the sign-in page.
   useEffect(() => {
     if (!supabase || !authEmail || access !== null) return;
-    setDenied(authEmail);
+    setDenied(true);
     supabase.auth.signOut();
   }, [authEmail, access]);
 
@@ -53,13 +56,13 @@ export default function AuthGate({ children }) {
   // Google sign-in: the Google account's email must be on the Team list or an
   // artist's Roster entry, exactly as with an email link (my_access decides).
   async function signInWithGoogle() {
-    setError(''); setDenied('');
+    setError(''); setDenied(false);
     const { error: err } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } } });
     if (err) setError(/not enabled|provider/i.test(err.message) ? 'Google sign-in isn’t switched on yet. Use the email link for now.' : err.message);
   }
   async function sendLink(e) {
     e.preventDefault();
-    setError(''); setDenied('');
+    setError(''); setDenied(false);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Enter your email address.'); return; }
     setBusy(true);
     const { error: err } = await supabase.auth.signInWithOtp({
@@ -67,7 +70,8 @@ export default function AuthGate({ children }) {
       options: { emailRedirectTo: window.location.origin },
     });
     setBusy(false);
-    if (err) setError(/rate|seconds/i.test(err.message) ? 'Please wait a minute before asking for another link.' : err.message);
+    if (err && /Database error|invite_only|not allowed|signups/i.test(err.message)) { setDenied(true); setEmail(''); setEmailMode(false); return; }
+    if (err) setError(/rate|seconds/i.test(err.message) ? 'Please wait a minute before asking for another link.' : 'Something went wrong. Try again.');
     else setSent(true);
   }
 
