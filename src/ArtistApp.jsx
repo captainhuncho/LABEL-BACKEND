@@ -1,7 +1,7 @@
 // Artist portal for a signed-in artist. The database's artist_portal() returns
 // only this artist's own data; new requests go through artist_add().
 import { useEffect, useState } from 'react';
-import { ArtistPortalShell } from './App.jsx';
+import { ArtistPortalShell } from './sections/ArtistPortal.jsx';
 import { supabase } from './storage.js';
 import { logActivity, logSignIn } from './audit.js';
 

@@ -51,7 +51,8 @@ handles HTTPS.
 
 | File | What's in it | Size |
 |---|---|---|
-| `src/App.jsx` | Every screen component + the root `RecordLabelDashboard` | ~6k lines |
+| `src/App.jsx` | Root `RecordLabelDashboard`, `Sidebar`, `TopBar`, `IdentityGate`, `teamAttention` | ~700 lines |
+| `src/sections/*.jsx` | One file per screen (Roster, Catalog, Payouts, Invoices, ArtistPortal, …) | 30–1,600 lines |
 | `src/finance.js` | The finance engine — all money math | ~120 lines |
 | `src/seed.js` | Seed data (real roster, catalog, revenue, master gross) | ~820 lines |
 | `src/constants.js` | Domain constants, roles/permissions, formatters | ~425 lines |
@@ -63,8 +64,9 @@ handles HTTPS.
 | `supabase/functions/notify/index.ts` | Email out (Resend) and replies in; deployed to Supabase | ~260 lines |
 | `test/finance.test.js` | Finance baseline and per-row split tests (`npm test`) | ~55 lines |
 
-`App.jsx` is still large. When you touch a screen, consider lifting that one
-component into `src/sections/` rather than refactoring the whole file at once.
+Each screen lives in its own file in `src/sections/`. Shared helpers sit
+next to the screen that owns them and are exported (e.g. invoice stages in
+`Invoices.jsx`). `ArtistPortal.jsx` is still large (~1,600 lines).
 
 ## The finance model
 
