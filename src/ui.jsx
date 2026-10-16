@@ -29,7 +29,7 @@ export function ArtworkThumb({ release, size = 40, radius = 6 }) {
     return <img src={release.artworkUrl} alt="" style={{ ...style, objectFit: 'cover' }} />;
   }
   return (
-    <div style={{ ...style, background: artworkColor(release ? release.title : '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14171A', fontWeight: 700, fontSize: Math.round(size * 0.34), fontFamily: HEADING_FONT }}>
+    <div style={{ ...style, background: artworkColor(release ? release.title : '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1d1d1f', fontWeight: 700, fontSize: Math.round(size * 0.34), fontFamily: HEADING_FONT }}>
       {artworkInitials(release ? release.title : '?')}
     </div>
   );
@@ -39,12 +39,12 @@ export function Avatar({ name, photoUrl, size = 40 }) {
   const style = { width: size, height: size, borderRadius: '50%', flexShrink: 0 };
   if (photoUrl) return <img src={photoUrl} alt="" style={{ ...style, objectFit: 'cover' }} />;
   return (
-    <div style={{ ...style, background: artworkColor(name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14171A', fontWeight: 700, fontSize: Math.round(size * 0.36), fontFamily: HEADING_FONT }}>
+    <div style={{ ...style, background: artworkColor(name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1d1d1f', fontWeight: 700, fontSize: Math.round(size * 0.36), fontFamily: HEADING_FONT }}>
       {artworkInitials(name)}
     </div>
   );
 }
-export const inputStyle = { background: 'rgba(20,23,26,0.85)', border: '1px solid rgba(255,255,255,0.18)', color: C.text, borderRadius: 10, padding: '7px 9px', fontSize: 13, fontFamily: HEADING_FONT };
+export const inputStyle = { background: 'var(--field)', border: '1px solid var(--field-line)', color: C.text, borderRadius: 12, padding: '9px 12px', fontSize: 15, fontFamily: HEADING_FONT, minHeight: 40 };
 
 export function Input(props) {
   const { style, className, ...rest } = props;
@@ -60,7 +60,7 @@ export function TextArea(props) {
 
 export function Field({ label, children, full }) {
   return (
-    <label className={'flex flex-col gap-1 text-xs ' + (full ? 'imss-span-2' : '')} style={{ color: C.textDim }}>
+    <label className={'flex flex-col gap-1.5 ' + (full ? 'imss-span-2' : '')} style={{ color: C.textDim, fontSize: 13 }}>
       {label}
       {children}
     </label>
@@ -68,14 +68,15 @@ export function Field({ label, children, full }) {
 }
 
 export function Btn({ children, onClick, variant = 'ghost', type = 'button', disabled = false }) {
+  // Apple-style pills: filled amber for the main action, soft grey for the rest.
   const styles = {
-    primary: { background: 'linear-gradient(135deg, ' + C.amber + ', #C77F1F)', color: '#1A1500', border: '1px solid rgba(231,162,61,0.6)' },
-    ghost: { background: 'rgba(255,255,255,0.04)', color: C.text, border: '1px solid rgba(255,255,255,0.12)' },
-    danger: { background: 'rgba(193,88,74,0.1)', color: C.red, border: '1px solid rgba(193,88,74,0.5)' },
+    primary: { background: C.amberFill, color: C.onAmber },
+    ghost: { background: C.fill, color: C.text },
+    danger: { background: C.redSoft, color: C.red },
   };
   return (
-    <button type={type} onClick={disabled ? undefined : onClick} disabled={disabled} className="imss-btn rounded inline-flex items-center gap-1.5 text-sm px-3.5 py-2"
-      style={{ ...styles[variant], fontWeight: 500, fontFamily: HEADING_FONT, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+    <button type={type} onClick={disabled ? undefined : onClick} disabled={disabled} className={'imss-btn inline-flex items-center justify-center gap-1.5 is-' + variant}
+      style={{ ...styles[variant], fontFamily: HEADING_FONT, opacity: disabled ? 0.45 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
       {children}
     </button>
   );
@@ -83,21 +84,21 @@ export function Btn({ children, onClick, variant = 'ghost', type = 'button', dis
 
 export function Badge({ children, tone = 'default' }) {
   const map = {
-    default: { bg: 'transparent', color: C.textDim, border: C.border },
-    amber: { bg: C.amberSoft, color: C.amber, border: 'rgba(231,162,61,0.55)' },
-    teal: { bg: C.tealSoft, color: C.teal, border: 'rgba(95,165,147,0.55)' },
-    red: { bg: C.redSoft, color: C.red, border: 'rgba(193,88,74,0.55)' },
+    default: { bg: C.fill, color: C.textDim },
+    amber: { bg: C.amberSoft, color: C.amber },
+    teal: { bg: C.tealSoft, color: C.teal },
+    red: { bg: C.redSoft, color: C.red },
   };
   const s = map[tone] || map.default;
-  return <span className="text-xs px-2 py-0.5 rounded inline-block" style={{ background: s.bg, color: s.color, border: '1px solid ' + s.border, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: 10.5 }}>{children}</span>;
+  return <span className="inline-block" style={{ background: s.bg, color: s.color, fontWeight: 600, fontSize: 12, padding: '3px 10px', borderRadius: 9999, whiteSpace: 'nowrap' }}>{children}</span>;
 }
 
 export function EmptyState({ icon: Icon, title, description }) {
   return (
-    <div className="text-center py-14 border rounded" style={{ borderColor: C.border, borderStyle: 'dashed' }}>
-      <Icon size={22} style={{ color: C.textFaint, margin: '0 auto 10px' }} />
-      <div style={{ fontWeight: 600 }}>{title}</div>
-      {description && <div className="text-sm mt-1 px-6" style={{ color: C.textDim }}>{description}</div>}
+    <div className="text-center py-16 rounded" style={{ background: C.panel }}>
+      <Icon size={28} strokeWidth={1.5} style={{ color: C.textDim, margin: '0 auto 12px' }} />
+      <div style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>{title}</div>
+      {description && <div className="mt-1.5 px-6 mx-auto" style={{ color: C.textDim, fontSize: 15, maxWidth: 460 }}>{description}</div>}
     </div>
   );
 }
@@ -168,24 +169,24 @@ export function SegmentedToggle({ options, value, onChange }) {
 export function KPICard({ icon: Icon, label, value, sub, tone }) {
   const accent = tone === 'amber' ? C.amber : tone === 'teal' ? C.teal : tone === 'red' ? C.red : C.text;
   return (
-    <div className="imss-kpi rounded p-4 border flex-1" style={{ background: C.panel, borderColor: C.border, minWidth: 170, maxWidth: 340 }}>
-      <div className="flex items-center gap-2 mb-3" style={{ color: C.textFaint }}>
-        <Icon size={14} />
-        <span className="text-xs">{label}</span>
+    <div className="imss-kpi rounded flex-1" style={{ background: C.panel, minWidth: 170, maxWidth: 340, padding: '18px 20px' }}>
+      <div className="flex items-center gap-2 mb-2" style={{ color: C.textDim }}>
+        <Icon size={15} />
+        <span style={{ fontSize: 13 }}>{label}</span>
       </div>
-      <div style={{ fontFamily: MONO_FONT, fontSize: 22, fontWeight: 600, color: accent }}>{value}</div>
-      {sub && <div className="text-xs mt-1" style={{ color: C.textFaint }}>{sub}</div>}
+      <div style={{ fontFamily: MONO_FONT, fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em', color: accent, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      {sub && <div className="mt-1" style={{ color: C.textDim, fontSize: 13 }}>{sub}</div>}
     </div>
   );
 }
 
 export function SectionHeader({ title, description, action, artistNote }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
+    <div className="flex items-end justify-between gap-4 mb-8 flex-wrap">
       <div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{title}</h2>
-        {description && <p className="text-sm mt-1" style={{ color: C.textDim, maxWidth: 520 }}>{description}</p>}
-        {artistNote && <p className="text-xs mt-2" style={{ color: C.teal, maxWidth: 520 }}><b>Artists see:</b> {artistNote}</p>}
+        <h2 className="imss-title">{title}</h2>
+        {description && <p className="mt-2" style={{ color: C.textDim, maxWidth: 640, fontSize: 17, lineHeight: 1.45 }}>{description}</p>}
+        {artistNote && <p className="mt-2" style={{ color: C.textDim, maxWidth: 640, fontSize: 14 }}><b style={{ color: C.text }}>Artists see:</b> {artistNote}</p>}
       </div>
       {action}
     </div>

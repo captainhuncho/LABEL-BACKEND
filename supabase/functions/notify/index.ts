@@ -66,14 +66,21 @@ async function stageReviewers(status: string, artist: Item | undefined): Promise
 // ---------- mail ----------
 const esc = (s: string) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 function page(title: string, lines: string[], cta: { label: string; url: string }, quote?: string) {
-  return `<!doctype html><html><body style="margin:0;background:#14171A;padding:24px;font-family:Helvetica,Arial,sans-serif;color:#EEEAE2">
-<table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background:#1B1F23;border:1px solid #2E3337;border-radius:14px"><tr><td style="padding:28px">
-<div style="font-weight:700;letter-spacing:.04em;font-size:13px;color:#E7A23D">IMSS RECORDS</div>
-<h1 style="font-size:20px;line-height:1.3;margin:14px 0 12px;color:#EEEAE2">${esc(title)}</h1>
-${lines.map(l => `<p style="margin:0 0 10px;font-size:15px;line-height:1.55;color:#C9CDCC">${l}</p>`).join('')}
-${quote ? `<div style="margin:16px 0;padding:12px 14px;border-left:3px solid #E7A23D;background:#22272B;border-radius:0 8px 8px 0;font-size:15px;line-height:1.55;color:#EEEAE2;white-space:pre-wrap">${esc(quote)}</div>` : ''}
-<p style="margin:20px 0 0"><a href="${cta.url}" style="display:inline-block;background:#E7A23D;color:#1A1500;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:12px">${esc(cta.label)}</a></p>
+  // Apple-style: soft grey ground, white card, system type, amber pill. Dark in mail apps that support it.
+  const font = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif";
+  return `<!doctype html><html><head><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">
+<style>@media (prefers-color-scheme: dark){.bg{background:#000!important}.card{background:#1c1c1e!important}.t{color:#f5f5f7!important}.t2{color:#a1a1a6!important}.q{background:#2c2c2e!important;color:#f5f5f7!important}.logo{color:#f5f5f7!important}}</style></head>
+<body class="bg" style="margin:0;background:#f5f5f7;padding:32px 16px;font-family:${font};color:#1d1d1f;-webkit-font-smoothing:antialiased">
+<table role="presentation" width="100%" style="max-width:560px;margin:0 auto"><tr><td>
+<div class="logo" style="font-weight:700;font-size:15px;letter-spacing:-0.01em;color:#1d1d1f;padding:0 4px 16px">IMSS Records</div>
+<table role="presentation" width="100%" class="card" style="background:#ffffff;border-radius:18px"><tr><td style="padding:32px 28px">
+<h1 class="t" style="font-size:28px;line-height:1.15;letter-spacing:-0.025em;font-weight:700;margin:0 0 16px;color:#1d1d1f">${esc(title)}</h1>
+${lines.map(l => `<p class="t2" style="margin:0 0 12px;font-size:17px;line-height:1.5;color:#424245">${l}</p>`).join('')}
+${quote ? `<div class="q" style="margin:18px 0;padding:14px 16px;background:#f5f5f7;border-radius:14px;font-size:17px;line-height:1.5;color:#1d1d1f;white-space:pre-wrap">${esc(quote)}</div>` : ''}
+<p style="margin:24px 0 0"><a href="${cta.url}" style="display:inline-block;background:#E7A23D;color:#1d1d1f;text-decoration:none;font-weight:600;font-size:17px;padding:12px 22px;border-radius:980px">${esc(cta.label)}</a></p>
 <!--REPLY_NOTE-->
+</td></tr></table>
+<p class="t2" style="margin:18px 4px 0;font-size:12px;line-height:1.5;color:#6e6e73">© IMSS Records. Confidential: this email is for the named recipient only.</p>
 </td></tr></table></body></html>`;
 }
 
@@ -82,7 +89,7 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   if (!recipients.length || !RESEND_KEY) return { skipped: !RESEND_KEY ? 'no RESEND_API_KEY' : 'no recipients' };
   // Only emails with a reply address (submissions, requests, invoices) say replies work.
   const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
-  const note = replyable ? '<p style="margin:18px 0 0;font-size:13px;color:#9BA1A1">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
+  const note = replyable ? '<p class="t2" style="margin:20px 0 0;font-size:14px;color:#6e6e73">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
   const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html: html.replace('<!--REPLY_NOTE-->', note) };
   if (replyable) body.reply_to = `reply-${replyKey}@${RECEIVE_DOMAIN}`;
   const res = await fetch('https://api.resend.com/emails', {

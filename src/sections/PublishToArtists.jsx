@@ -214,7 +214,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
               </Field>
               <div className="mt-3" style={{ maxWidth: 280 }}>
                 <Field label="Publish at (optional, leave empty for now)">
-                  <Input type="datetime-local" value={publishAt} onChange={e => { setPublishAt(e.target.value); setError(''); }} style={{ colorScheme: 'dark' }} />
+                  <Input type="datetime-local" value={publishAt} onChange={e => { setPublishAt(e.target.value); setError(''); }}  />
                 </Field>
               </div>
               <div className="mt-4 rounded border p-3 text-sm" role="status" style={{ borderColor: checks.errors.length ? C.red : checks.warnings.length ? C.amber : C.border }}>

@@ -30,7 +30,7 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
           nav.forEach(item => {
             if (item.group && item.group !== lastGroup) {
               out.push(
-                <div key={'group-' + item.group} className="imss-desktop-only" style={{ color: C.textFaint, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '12px 12px 4px' }}>
+                <div key={'group-' + item.group} className="imss-desktop-only" style={{ color: C.textDim, fontSize: 12, fontWeight: 600, padding: '14px 12px 4px' }}>
                   {item.group}
                 </div>
               );
@@ -195,24 +195,20 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
       </section>
 
       {myTeamNotices.length > 0 && (
-        <div className="rounded border p-4 mb-6" style={{ background: C.amberSoft, borderColor: C.amber }}>
-          <div className="text-xs mb-3" style={{ color: C.amber, fontWeight: 600 }}>Worth knowing</div>
-          <div className="flex flex-col gap-3">
-            {myTeamNotices.map(n => (
-              <div key={n.id} className="rounded p-3" style={{ background: C.panel, border: '1px solid ' + C.border }}>
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
-                  <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(n.createdAt)}</div>
-                </div>
-                <div className="text-sm mt-1" style={{ color: C.textDim }}>{n.message}</div>
+        <section aria-label="Notices" className="rounded mb-6" style={{ background: C.amberSoft }}>
+          {myTeamNotices.map((n, i) => (
+            <div key={n.id} style={{ padding: '16px 20px', borderTop: i ? '1px solid ' + C.border : 'none' }}>
+              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.02em' }}>{n.title}</div>
+                <div style={{ color: C.textDim, fontSize: 13 }}>{formatDate(n.createdAt)}</div>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="mt-1" style={{ color: C.text, fontSize: 15, lineHeight: 1.45 }}>{n.message}</div>
+            </div>
+          ))}
+        </section>
       )}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Date range</div>
         <div className="imss-form-grid gap-3">
           <Field label="From"><Input type="date" value={filters.startDate} onChange={e => { setFilters({ ...filters, startDate: e.target.value }); setRangeError(''); }} /></Field>
           <Field label="To"><Input type="date" value={filters.endDate} onChange={e => { setFilters({ ...filters, endDate: e.target.value }); setRangeError(''); }} /></Field>
@@ -253,7 +249,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
                   <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
                   <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -271,7 +267,7 @@ function Overview({ roster, catalog, revenue, masterGross = [], streams, artistM
                   <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
                     {platformTotals.map((p) => (<Cell key={p.name} fill={PLATFORM_COLORS[p.name] || C.textFaint} />))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} formatter={(v) => formatNumber(v)} />
                   <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -638,7 +634,7 @@ function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, reven
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
                     <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                    <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
+                    <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} labelStyle={{ color: C.text }} formatter={(v) => formatCurrency(v)} />
                     <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -657,7 +653,7 @@ function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, reven
                   <Pie data={platformTotals} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} paddingAngle={2}>
                     {platformTotals.map((p) => (<Cell key={p.name} fill={PLATFORM_COLORS[p.name] || C.textFaint} />))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} formatter={(v) => formatNumber(v)} />
                   <Legend wrapperStyle={{ fontSize: 11, color: C.textDim }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -872,7 +868,6 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
 
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3">
           <Field label="Status">
             <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
@@ -1475,7 +1470,6 @@ function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', a
       </div>
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3">
           <Field label="Status">
             <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
@@ -1809,7 +1803,6 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
       )}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3">
           <Field label="Artist">
             <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
@@ -2054,7 +2047,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
             return (
               <div key={status} className="rounded border p-3" style={{ background: C.panel, borderColor: C.border, minWidth: 220 }}>
                 <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs" style={{ color: C.textFaint, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{status}</div>
+                  <div style={{ color: C.textDim, fontWeight: 600, fontSize: 13 }}>{status}</div>
                   <Badge>{inStage.length}</Badge>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -2115,7 +2108,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
                 <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
                   <ArtworkThumb release={r} size="100%" radius={0} />
                   {r.status !== 'Released' && prog.total > 0 && (
-                    <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'rgba(0,0,0,0.45)' }}>
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'var(--fill)' }}>
                       <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
                     </div>
                   )}
@@ -2272,7 +2265,6 @@ function RevenueSection({ revenue, update, roster, catalog = [], canEdit = true,
       )}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3 mb-3">
           <Field label="Start month"><Input type="month" value={filters.startMonth} onChange={e => { setFilters({ ...filters, startMonth: e.target.value }); setRangeError(''); }} /></Field>
           <Field label="End month"><Input type="month" value={filters.endMonth} onChange={e => { setFilters({ ...filters, endMonth: e.target.value }); setRangeError(''); }} /></Field>
@@ -2466,7 +2458,6 @@ function StreamsSection({ streams, update, catalog, releaseMap, artistMap, canEd
       <SectionHeader title="Streams" description="Track stream counts by platform and product over time." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3 mb-3">
           <Field label="Start date"><Input type="date" value={filters.startDate} onChange={e => { setFilters({ ...filters, startDate: e.target.value }); setRangeError(''); }} /></Field>
           <Field label="End date"><Input type="date" value={filters.endDate} onChange={e => { setFilters({ ...filters, endDate: e.target.value }); setRangeError(''); }} /></Field>
@@ -2618,7 +2609,7 @@ function StreamsSection({ streams, update, catalog, releaseMap, artistMap, canEd
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
                   <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? Math.round(v / 1000) + 'k' : v} />
-                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} formatter={(v) => formatNumber(v)} />
                   <Line type="monotone" dataKey="value" stroke={C.teal} strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
@@ -2754,7 +2745,6 @@ function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
       <SectionHeader title="Release Calendar" description="Every release plotted on the calendar, plus what's coming up next — your release radar. Click any release to see the full details." />
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3">
           <Field label="Artist">
             <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
@@ -3607,7 +3597,7 @@ function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null
                                 <div className="flex gap-2 flex-wrap mt-3">
                                   <Btn variant="primary" onClick={() => onAccept(sub)}><CheckCircle2 size={14} /> Accept to catalog</Btn>
                                   <Btn variant="ghost" onClick={() => addMessage(sub, 'Needs info')}><MessageSquare size={14} /> Request more info</Btn>
-                                  <a href={mailto(sub)} className="imss-btn rounded inline-flex items-center gap-1.5 text-sm px-3.5 py-2" style={{ background: 'rgba(255,255,255,0.04)', color: C.text, border: '1px solid rgba(255,255,255,0.12)', fontWeight: 500 }}><Mail size={14} /> Email artist</a>
+                                  <a href={mailto(sub)} className="imss-btn is-ghost inline-flex items-center gap-1.5" style={{ background: 'var(--fill)', color: C.text, border: '1px solid rgba(255,255,255,0.12)', fontWeight: 500 }}><Mail size={14} /> Email artist</a>
                                   <Btn variant="danger" onClick={() => addMessage(sub, 'Rejected')}>Reject</Btn>
                                 </div>
                                 {passed < checks.length && <div className="text-xs mt-2" style={{ color: C.amber }}>{checks.length - passed} check{checks.length - passed === 1 ? '' : 's'} not passing. You can still accept, or ask the artist first.</div>}
@@ -3957,7 +3947,6 @@ function ArtistRequestsSection({ artistRequests, update, roster, sessionName, pm
       </div>
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3">
           <Field label="Artist">
             <Select value={filterArtist} onChange={e => setFilterArtist(e.target.value)}>
@@ -4124,7 +4113,6 @@ function TasksSection({ tasks, update, staff, roster, catalog }) {
       ) : (
         <>
           <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-            <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
             <div className="imss-form-grid gap-3">
               <Field label="Assignee">
                 <Select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
@@ -4352,7 +4340,6 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
       )}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-        <div className="text-xs mb-3" style={{ color: C.textFaint }}>Filters</div>
         <div className="imss-form-grid gap-3">
           <Field label="Type">
             <Select value={filterType} onChange={e => setFilterType(e.target.value)}>
@@ -4765,7 +4752,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
                       scheduleId === p.id ? (
                         <span className="inline-flex flex-col gap-1">
                           <span className="inline-flex items-center gap-2">
-                            <input type="datetime-local" aria-label="Send at" value={scheduleAt} onChange={e => { setScheduleAt(e.target.value); setScheduleError(''); }} style={{ ...inputStyle, height: 32, colorScheme: 'dark' }} />
+                            <input type="datetime-local" aria-label="Send at" value={scheduleAt} onChange={e => { setScheduleAt(e.target.value); setScheduleError(''); }} style={{ ...inputStyle, height: 32,  }} />
                             <button onClick={() => schedule(p.id)} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>Schedule</button>
                             <button onClick={() => { setScheduleId(null); setScheduleError(''); }} style={{ color: C.textDim, fontSize: 13 }}>Cancel</button>
                           </span>
@@ -5780,7 +5767,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <dl className="mt-4 pt-4 flex flex-col gap-2.5" style={{ borderTop: '1px solid ' + C.border }}>
               {[['Product Manager', artist.productManager], ['A&R', artist.anr]].filter(([, name]) => name).map(([role, name]) => (
                 <div key={role}>
-                  <dt style={{ color: C.textDim, fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{role}</dt>
+                  <dt style={{ color: C.textDim, fontSize: 12 }}>{role}</dt>
                   <dd className="text-sm" style={{ color: C.text, fontWeight: 500, overflowWrap: 'anywhere' }}>{name}</dd>
                 </div>
               ))}
@@ -5805,7 +5792,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   <Icon size={16} />
                   <span style={{ flex: 1, textAlign: 'left' }}>{t.label}</span>
                   {t.id === 'requests' && openRequestCount > 0 && (
-                    <span aria-label={openRequestCount + ' open'} style={{ background: C.amber, color: '#1A1500', borderRadius: 9999, fontSize: 10, fontWeight: 700, minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{openRequestCount}</span>
+                    <span aria-label={openRequestCount + ' open'} style={{ background: C.amberFill, color: C.onAmber, borderRadius: 9999, fontSize: 10, fontWeight: 700, minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{openRequestCount}</span>
                   )}
                 </button>
               );
@@ -6236,7 +6223,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
                         <ArtworkThumb release={r} size="100%" radius={0} />
                         {r.status !== 'Released' && prog.total > 0 && (
-                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'rgba(0,0,0,0.45)' }}>
+                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'var(--fill)' }}>
                             <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
                           </div>
                         )}
@@ -6626,7 +6613,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                         <XAxis dataKey="month" tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
                         <YAxis tick={{ fill: C.textFaint, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => formatCents(v)} />
+                        <Tooltip contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} labelStyle={{ color: C.text }} formatter={(v) => formatCents(v)} />
                         <Bar dataKey="value" fill={C.amber} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -6679,7 +6666,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                         <XAxis dataKey="month" tick={{ fill: C.textDim, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
                         <YAxis tick={{ fill: C.textDim, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 4, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(v) => [formatCents(v), 'Your earnings']} />
+                        <Tooltip cursor={{ fill: 'var(--hover)' }} contentStyle={{ background: C.panel2, border: '1px solid ' + C.border, borderRadius: 12, fontSize: 13, color: C.text }} labelStyle={{ color: C.text }} formatter={(v) => [formatCents(v), 'Your earnings']} />
                         <Bar dataKey="value" fill={C.teal} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -6980,9 +6967,9 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
 
 
   return (
-    <div className="imss-print-hide flex items-center justify-between gap-3 mb-6 flex-wrap">
-      <div style={{ position: 'relative', maxWidth: 320, width: '100%' }}>
-        <div className="flex items-center gap-2 rounded px-3 py-2" style={{ background: C.panel2, border: '1px solid ' + C.border }}>
+    <div className="imss-print-hide flex items-center justify-between gap-3 mb-6">
+      <div style={{ position: 'relative', maxWidth: 320, flex: '1 1 auto', minWidth: 0 }}>
+        <div className="flex items-center gap-2 px-3 py-2" style={{ background: C.fill, borderRadius: 980 }}>
           <Search size={14} color={C.textFaint} />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search artists, products, team" className="w-full text-sm bg-transparent" style={{ color: C.text, fontFamily: HEADING_FONT, border: 'none' }} />
         </div>
@@ -6998,8 +6985,8 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
         )}
       </div>
       <div style={{ position: 'relative' }}>
-        <button onClick={() => setShowNotifs(s => !s)} className="rounded inline-flex items-center gap-1.5 text-sm px-3 py-2" style={{ border: '1px solid ' + C.border, color: C.text }}>
-          <Bell size={14} /> Alerts
+        <button onClick={() => setShowNotifs(s => !s)} aria-label="Alerts" className="imss-alerts inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 14px', fontSize: 14 }}>
+          <Bell size={15} /> <span className="imss-alerts-label">Alerts</span>
           {notifications.length > 0 && <Badge tone="amber">{notifications.length}</Badge>}
         </button>
         {showNotifs && (
@@ -7217,11 +7204,11 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.analytics && { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Analytics' },
     perms.analytics && { id: 'streams', label: 'Streams', icon: Radio, group: 'Analytics' },
 
-    perms.roster && { id: 'roster', label: 'Roster', icon: Users, group: 'Artists & Catalog' },
-    perms.roster && { id: 'artist-requests', label: 'Artist Requests', icon: MessageSquare, group: 'Artists & Catalog' },
-    perms.catalog && { id: 'catalog', label: 'Catalog', icon: Disc3, group: 'Artists & Catalog' },
-    perms.catalog && { id: 'submissions', label: 'Submissions', icon: Upload, group: 'Artists & Catalog' },
-    session && session.mode === 'team' && { id: 'calendar', label: 'Release Calendar', icon: Calendar, group: 'Artists & Catalog' },
+    perms.roster && { id: 'roster', label: 'Roster', icon: Users, group: 'Artists & catalog' },
+    perms.roster && { id: 'artist-requests', label: 'Artist requests', icon: MessageSquare, group: 'Artists & catalog' },
+    perms.catalog && { id: 'catalog', label: 'Catalog', icon: Disc3, group: 'Artists & catalog' },
+    perms.catalog && { id: 'submissions', label: 'Submissions', icon: Upload, group: 'Artists & catalog' },
+    session && session.mode === 'team' && { id: 'calendar', label: 'Release calendar', icon: Calendar, group: 'Artists & catalog' },
 
     // Royalties, in the order the work happens: money lands, statements come in, artists see it, artists get paid.
     perms.royalties && { id: 'mastergross', label: 'Money received', icon: Coins, group: 'Royalties' },
@@ -7237,12 +7224,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Spending' },
 
     isPrivileged && { id: 'team', label: 'Team', icon: UserCog, group: 'Team' },
-    isPrivileged && { id: 'access-requests', label: 'Access Requests', icon: ShieldCheck, group: 'Team' },
+    isPrivileged && { id: 'access-requests', label: 'Access requests', icon: ShieldCheck, group: 'Team' },
     session && session.mode === 'team' && { id: 'tasks', label: 'Tasks', icon: ClipboardList, group: 'Team' },
     perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: 'Team' },
-    session && session.mode === 'team' && { id: 'activity', label: 'Activity Log', icon: History, group: 'Team' },
+    session && session.mode === 'team' && { id: 'activity', label: 'Activity log', icon: History, group: 'Team' },
 
-    isPrivileged && { id: 'backup', label: 'Backup & Restore', icon: FileDown, group: 'System' },
+    isPrivileged && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
   ].filter(Boolean);
 
   useEffect(() => {
