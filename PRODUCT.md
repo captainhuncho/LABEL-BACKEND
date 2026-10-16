@@ -553,6 +553,13 @@ every label expense recorded against them, and their own expense claims once
 approved for payment (Pay Approved or Paid). Service/fee invoices are payment
 for work and are not recouped. Label costs with no artist are not recouped.
 
+Artists don't pay recoupable spend back in cash: it's recovered from their
+royalties, and claims count against their allocated budget (budget used = label
+spend on them + approved claims). The rare exception, cash the label asks an
+artist to pay back, is recorded under Expenses & income as **income** from that
+artist in the **Cash repayment** category: it settles recoupable spend and never
+touches their earnings.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

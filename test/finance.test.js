@@ -195,8 +195,22 @@ test('recoupment: all label spend on the artist plus approved expense claims', a
     { artistId: 'aizo', kind: 'service', status: 'Paid', amount: 500 },        // payment for work
     { artistId: 'other', kind: 'expense', status: 'Paid', amount: 80 },
   ];
-  assert.deepEqual(artistSpend(artist, ledger, invoices), { byLabel: 150, claims: 230, total: 380 });
+  assert.deepEqual(artistSpend(artist, ledger, invoices), { byLabel: 150, claims: 230, repaidCash: 0, budgetUsed: 380, total: 380 });
   const rev = [{ id: 'r', artistSlug: 'aizo-clutch', month: '2026-06', earning: 1000 }];
   const r = recoupmentForArtist(artist, ledger, rev, [], invoices);   // earned 700, spent 380
   assert.equal(r.recouped, 380); assert.equal(r.unrecouped, 0); assert.equal(r.dueOnTop, 320);
+});
+
+test('a cash repayment the label asked for settles spend without touching earnings', async () => {
+  const { recoupmentForArtist, artistSpend } = await import('../src/finance.js');
+  const artist = { id: 'aizo', name: 'Aizo Clutch', artistPct: 0.7 };
+  const ledger = [
+    { type: 'expense', artist: 'Aizo Clutch', amount: 500 },
+    { type: 'income', artist: 'Aizo Clutch', category: 'Cash repayment', amount: 150 },
+    { type: 'income', artist: 'Aizo Clutch', category: 'Other', amount: 999 },   // other income doesn't count
+  ];
+  assert.deepEqual(artistSpend(artist, ledger, []), { byLabel: 500, claims: 0, repaidCash: 150, budgetUsed: 500, total: 350 });
+  const rev = [{ id: 'r', artistSlug: 'aizo-clutch', month: '2026-06', earning: 200 }];   // earned 140
+  const r = recoupmentForArtist(artist, ledger, rev, [], []);
+  assert.equal(r.earned, 140); assert.equal(r.recouped, 140); assert.equal(r.unrecouped, 210);
 });

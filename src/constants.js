@@ -1,7 +1,10 @@
 // Domain constants, role/permission model and shared formatters.
 import { Radio, Video } from 'lucide-react';
 
-export const LEDGER_CATEGORIES = ['Advance', 'Recording', 'Video Production', 'Marketing', 'Tour Support', 'Overhead', 'Software & Tools', 'Legal', 'Distro', 'Studio', 'Other'];
+export const LEDGER_CATEGORIES = ['Advance', 'Recording', 'Video Production', 'Marketing', 'Tour Support', 'Overhead', 'Software & Tools', 'Legal', 'Distro', 'Studio', 'Cash repayment', 'Other'];
+// Income from an artist in this category is cash they paid back on request: it settles
+// recoupable spend without touching their earnings.
+export const CASH_REPAYMENT = 'Cash repayment';
 // Includes the track-level types the royalty ledger actually uses, so every
 // imported revenue row has an exact matching option rather than silently
 // snapping to the first one when edited.

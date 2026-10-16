@@ -414,7 +414,8 @@ function ArtistDetailPanel({ invoices = [], dealSection = null, statementFiles =
   const balance = netAfterRecoupment - paid;
   const myExpenses = [...ledger.filter(x => x.artist === artist.name && x.type === 'expense')].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const isFunded = artist.fundingTier === 'Funded';
-  const totalSpent = myExpenses.reduce((s, x) => s + x.amount, 0);
+  // Budget used: label spend on the artist plus their approved claims.
+  const totalSpent = artistSpend(artist, ledger, invoices).budgetUsed;
   const budgetRemaining = (artist.annualBudget || 0) - totalSpent;
   const budgetPct = artist.annualBudget > 0 ? Math.min(100, Math.round((totalSpent / artist.annualBudget) * 100)) : 0;
   const myPayouts = [...payouts.filter(p => p.artistSlug === aSlug)].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -4447,7 +4448,10 @@ function LedgerSection({ invoices = [], ledger: rawLedger, update, roster: fullR
           <Field label="Date"><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
           <Field label="Description" full><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Studio time for Afterglow" /></Field>
           {form.type === 'expense' && (
-            <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>{form.artist ? 'Recorded against ' + form.artist + ', so it’s recouped from their earnings.' : 'No artist chosen: a label cost, not recouped from anyone.'}</div>
+            <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>{form.artist ? 'Recorded against ' + form.artist + ', so it’s recouped from their earnings and counts against their budget.' : 'No artist chosen: a label cost, not recouped from anyone.'}</div>
+          )}
+          {form.type === 'income' && form.category === 'Cash repayment' && (
+            <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>{form.artist ? 'Cash ' + form.artist + ' paid back at the label’s request. It settles their recoupable spend; their earnings aren’t touched.' : 'Choose the artist who paid the cash back.'}</div>
           )}
           <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
           <div className="imss-span-2 flex gap-2 mt-1">
@@ -5476,7 +5480,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const paid = myPayouts.filter(p => p.status === 'paid').reduce((s, p) => s + (p.artistShare || 0), 0);
   const balance = netAfterRecoupment - paid;
   const isFunded = artist.fundingTier === 'Funded';
-  const totalSpent = myExpenses.reduce((s, x) => s + x.amount, 0);
+  // Budget used: label spend on the artist plus their approved claims.
+  const totalSpent = artistSpend(artist, ledger, invoices).budgetUsed;
   const budgetRemaining = (artist.annualBudget || 0) - totalSpent;
   const budgetPct = artist.annualBudget > 0 ? Math.min(100, Math.round((totalSpent / artist.annualBudget) * 100)) : 0;
 
@@ -6818,8 +6823,9 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 const { byLabel, claims: approvedClaims } = artistSpend(artist, ledger, invoices);
                 return <KPICard icon={Wallet} label="Artist’s approved spend" value={formatCents(byLabel + approvedClaims)} sub={formatCents(byLabel) + ' by the label · ' + formatCents(approvedClaims) + ' your approved claims'} />;
               })()}
-              <KPICard icon={Wallet} label="Still being recouped" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />
-              <KPICard icon={FileText} label="Claimed by you" value={formatCents(myExpenseClaims.reduce((t, i) => t + (Number(i.amount) || 0), 0))} sub={formatCents(myExpenseClaims.filter(i => i.status === 'Paid').reduce((t, i) => t + (Number(i.amount) || 0), 0)) + ' paid back'} />
+              <KPICard icon={Wallet} label="Still being recouped" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} sub="From your royalties, not paid in cash" />
+              {artistSpend(artist, ledger, invoices).repaidCash > 0 && <KPICard icon={Wallet} label="Repaid in cash" value={formatCents(artistSpend(artist, ledger, invoices).repaidCash)} sub="At the label’s request; not taken from your earnings" />}
+              <KPICard icon={FileText} label="Claimed by you" value={formatCents(myExpenseClaims.reduce((t, i) => t + (Number(i.amount) || 0), 0))} sub={formatCents(myExpenseClaims.filter(i => i.status === 'Paid').reduce((t, i) => t + (Number(i.amount) || 0), 0)) + ' paid to you · recouped from royalties'} />
             </div>
 
             <h2 className="mb-3" style={{ fontWeight: 600, fontSize: 17 }}>Paid by the label</h2>

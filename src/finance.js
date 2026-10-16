@@ -126,10 +126,15 @@ export function ledgerTotals(ledger) {
 // for payment (Pay Approved or Paid). Service/fee invoices are payment for work,
 // not spend, so they're not recouped.
 export const RECOUPED_CLAIM_STATUSES = ['Pay Approved', 'Paid'];
+// Artists don't pay recoupable spend back in cash; it comes out of royalties.
+// The rare exception, cash the label asked for, is recorded as income from the
+// artist in the 'Cash repayment' category and settles spend directly.
 export function artistSpend(artist, ledger, invoices = []) {
   const byLabel = ledger.filter(l => l.type === 'expense' && l.artist === artist.name).reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const claims = invoices.filter(i => i.artistId === artist.id && i.kind === 'expense' && RECOUPED_CLAIM_STATUSES.includes(i.status)).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  return { byLabel, claims, total: byLabel + claims };
+  const repaidCash = ledger.filter(l => l.type === 'income' && l.artist === artist.name && l.category === 'Cash repayment').reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  // budgetUsed: what counts against an allocated budget; total: what's left to recoup from royalties.
+  return { byLabel, claims, repaidCash, budgetUsed: byLabel + claims, total: Math.max(0, byLabel + claims - repaidCash) };
 }
 export function recoupmentForArtist(artist, ledger, revenue, masterGross, invoices = []) {
   const spent = artistSpend(artist, ledger, invoices).total;
