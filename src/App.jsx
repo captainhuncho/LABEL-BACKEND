@@ -5,7 +5,7 @@ import { logActivity, logSignIn } from './audit.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
-import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
+import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, licenseOf, rightsLine, LICENSE_YEARS, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
 import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, artistSpend, dealTermsOf, expandRemittances, pctAt, termsAt, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
@@ -437,7 +437,7 @@ function ArtistDetailPanel({ invoices = [], dealSection = null, statementFiles =
   if (contractStat && contractStat.label !== 'Active') alerts.push({ tone: contractStat.tone, text: 'Contract ' + contractStat.label.toLowerCase() + (artist.contractExpiration ? ' (' + formatDate(artist.contractExpiration) + ')' : '') });
   artistCatalog.forEach(c => {
     if (!c.licenseExpiration) return;
-    const st = expirationStatus(c.licenseExpiration);
+    const st = c.license;
     if (st.label !== 'Active') alerts.push({ tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase() });
   });
   if (canViewRoyalties && remainingRecoupable > 0) alerts.push({ tone: 'amber', text: formatCurrency(remainingRecoupable) + ' still unrecouped against future earnings' });
@@ -675,7 +675,7 @@ function ArtistDetailPanel({ invoices = [], dealSection = null, statementFiles =
             <thead><tr><Th></Th><Th>Title</Th><Th>Type</Th><Th>Release date</Th><Th>Status</Th><Th>License</Th></tr></thead>
             <tbody>
               {artistCatalog.map(c => {
-                const lic = c.licenseExpiration ? expirationStatus(c.licenseExpiration) : null;
+                const lic = c.licenseExpiration ? c.license : null;
                 return (
                   <tr key={c.id}>
                     <Td><ArtworkThumb release={c} size={32} /></Td>
@@ -791,7 +791,7 @@ function SendLinkButton({ email, labeled = false }) {
 
 function RosterSection({ invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
-  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
+  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '', licenseYears: 5, recoupedOn: '' };
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
@@ -951,6 +951,12 @@ function RosterSection({ invoices = [], dealChanges = [], updateDealChanges, ses
             </Select>
           </Field>
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
+          <Field label="License period (from each song's release date)">
+            <Select value={String(form.licenseYears || 5)} onChange={e => setForm({ ...form, licenseYears: Number(e.target.value) })}>
+              {LICENSE_YEARS.map(y => <option key={y} value={y}>{y} {y === 1 ? 'year' : 'years'}</option>)}
+            </Select>
+          </Field>
+          <Field label="Account marked recouped on (licenses past their period end then)"><Input type="date" value={form.recoupedOn || ''} onChange={e => setForm({ ...form, recoupedOn: e.target.value })} /></Field>
           <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
           <Field label="Funding tier">
             <Select disabled={!!editing} value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value, dealType: (DEAL_TYPES[e.target.value] || [])[0] || '' })}>
@@ -1790,7 +1796,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
     if (filterMarket !== 'all' && c.primaryMarket !== filterMarket && c.secondaryMarket !== filterMarket) return false;
     if (filterLicense !== 'all') {
-      const lic = expirationStatus(c.licenseExpiration);
+      const lic = c.license;
       if (filterLicense === 'none' && lic) return false;
       if (filterLicense !== 'none' && (!lic || lic.label !== filterLicense)) return false;
     }
@@ -1834,8 +1840,9 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
               <option value="all">All licenses</option>
               <option value="Active">Active</option>
               <option value="Expiring soon">Expiring soon</option>
-              <option value="Expired">Expired</option>
-              <option value="none">No license on file</option>
+              <option value="Held until recouped">Held until recouped</option>
+              <option value="Expired">Expired (rights returned)</option>
+              <option value="none">No release date</option>
             </Select>
           </Field>
           <Field label="Market">
@@ -1895,7 +1902,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
           <Field label="ISRC (recording code)"><Input value={form.isrc} onChange={e => setForm({ ...form, isrc: e.target.value })} placeholder="US-XXX-YY-NNNNN" /></Field>
           <Field label="UPC (release code)"><Input value={form.upc} onChange={e => setForm({ ...form, upc: e.target.value })} placeholder="e.g. 198004512367" /></Field>
           <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
-          <Field label="License expiration"><Input type="date" value={form.licenseExpiration} onChange={e => setForm({ ...form, licenseExpiration: e.target.value })} /></Field>
+          <Field label="License expiration (from release date + artist's license period)"><Input type="date" value={licenseOf(form, roster.find(a => a.id === form.artistId)).expires} disabled /></Field>
           <Field label="Primary market">
             <Select value={form.primaryMarket} onChange={e => setForm({ ...form, primaryMarket: e.target.value })}>
               <option value="">— none —</option>
@@ -2114,7 +2121,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
       ) : view === 'grid' ? (
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
           {sorted.map(r => {
-            const lic = r.licenseExpiration ? expirationStatus(r.licenseExpiration) : null;
+            const lic = r.licenseExpiration ? r.license : null;
             const prog = checklistProgress(r.checklist);
             return (
               <button key={r.id} onClick={() => canEdit && openEdit(r)} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
@@ -2183,7 +2190,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
                     {!r.licenseExpiration ? <span style={{ color: C.textFaint }}>—</span> : (
                       <div style={{ lineHeight: 1.5 }}>
                         <div style={{ fontFamily: MONO_FONT, fontSize: 12 }}>{formatDate(r.licenseExpiration)}</div>
-                        <Badge tone={expirationStatus(r.licenseExpiration).tone}>{expirationStatus(r.licenseExpiration).label}</Badge>
+                        <Badge tone={r.license.tone}>{r.license.label}</Badge>
                       </div>
                     )}
                   </Td>
@@ -2736,7 +2743,7 @@ function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
     });
     catalog.forEach(c => {
       if (!c.licenseExpiration || c.licenseExpiration < today) return;
-      const st = expirationStatus(c.licenseExpiration);
+      const st = c.license;
       if (st.label === 'Active') return;
       items.push({ id: 'license-' + c.id, type: 'License', tone: st.tone, label: c.title + ' license', sub: st.label, date: c.licenseExpiration });
     });
@@ -2792,7 +2799,7 @@ function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
               <Badge>{selected.type}</Badge>
               <Badge tone={releaseStatusTone(selected.status)}>{selected.status}</Badge>
               {selected.hasVideo && <Badge tone="default"><Video size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />Video</Badge>}
-              {selected.licenseExpiration && <Badge tone={expirationStatus(selected.licenseExpiration).tone}>License {expirationStatus(selected.licenseExpiration).label.toLowerCase()}</Badge>}
+              {selected.licenseExpiration && <Badge tone={selected.license.tone}>License {selected.license.label.toLowerCase()}</Badge>}
             </div>
             <div className="text-xs" style={{ color: C.textFaint, lineHeight: 1.7 }}>
               <div>Release date: <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatDate(selected.releaseDate)}</span></div>
@@ -6304,7 +6311,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </section>
             )}
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Song Title', 'Primary Artist(s)', 'Featured Artist(s)', 'Release Type', 'Release Date', 'ISRC', 'UPC', 'Label', '℗ Line', 'Genre', 'Explicit/Clean', 'Duration', 'Written By (Songwriters)', 'Produced By', 'Splits', 'Recording Engineer', 'Mixing Engineer', 'Mastering Engineer', 'Dolby Atmos', 'Dolby Engineer', 'Lyrics', 'Music Video', 'Status', 'Primary Market', 'Secondary Market']} rows={artistCatalog.filter(r => !pickedReleases.length || pickedReleases.includes(r.id)).map(r => {
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Song Title', 'Primary Artist(s)', 'Featured Artist(s)', 'Release Type', 'Release Date', 'ISRC', 'UPC', 'Label', '℗ Line', 'Genre', 'Explicit/Clean', 'Duration', 'Written By (Songwriters)', 'Produced By', 'Splits', 'Recording Engineer', 'Mixing Engineer', 'Mastering Engineer', 'Dolby Atmos', 'Dolby Engineer', 'Lyrics', 'Music Video', 'Status', 'Primary Market', 'Secondary Market', 'IMSS Records rights']} rows={artistCatalog.filter(r => !pickedReleases.length || pickedReleases.includes(r.id)).map(r => {
               // Track transfer / publishing template: everything a new distributor or publisher asks for.
               const cr = r.credits || {};
               const collabs = r.collaborators || [];
@@ -6335,6 +6342,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 r.status,
                 r.primaryMarket || '',
                 r.secondaryMarket || '',
+                rightsLine(r, artist),
               ];
             })} />
             {artistCatalog.length > 0 && (
@@ -7025,8 +7033,8 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   });
   catalog.forEach(c => {
     if (!c.licenseExpiration) return;
-    const st = expirationStatus(c.licenseExpiration);
-    if (st && st.label !== 'Active') items.push({ id: 'license-' + c.id, tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase(), tab: 'catalog' });
+    const st = c.license;
+    if (st && st.label === 'Expiring soon') items.push({ id: 'license-' + c.id, tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase(), tab: 'catalog' });
   });
   catalog.forEach(c => {
     if (c.status === 'Released') return;
@@ -7311,7 +7319,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }
 
   function updateRoster(next) { logChange('Roster', roster, next); setRoster(next); persist('roster', next); }
-  function updateCatalog(next) { logChange('Catalog', catalog, next); setCatalog(next); persist('catalog', next); }
+  function updateCatalog(next) { next = next.map(({ license, licenseExpiration, ...c }) => c); logChange('Catalog', catalog, next); setCatalog(next); persist('catalog', next); }
   function updateRevenue(next) { logChange('Revenue', revenue, next); setRevenue(next); persist('revenue', next); }
   function updateStreams(next) { logChange('Streams', streams, next); setStreams(next); persist('streams', next); }
   function updatePayouts(next) { logChange('Payouts', payouts, next); setPayouts(next); persist('payouts', next); }
@@ -7348,6 +7356,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }
 
   const artistMap = useMemo(() => Object.fromEntries(roster.map(a => [a.id, a])), [roster]);
+  // License expiry is computed from release date + the artist's license period, never stored.
+  const catalogView = useMemo(() => catalog.map(c => { const l = licenseOf(c, artistMap[c.artistId]); return { ...c, licenseExpiration: l.expires, license: l.status }; }), [catalog, artistMap]);
   const releaseMap = useMemo(() => Object.fromEntries(catalog.map(r => [r.id, r])), [catalog]);
   const approvedRevenue = useMemo(() => revenue.filter(e => (e.approvalStatus || 'Approved') === 'Approved'), [revenue]);
   // Payments entered over several carried-forward months, spread per month for all the money math.
@@ -7364,8 +7374,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
   const attention = useMemo(() => (session && session.mode === 'team'
-    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name })
-    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, perms.royalties, isAdmin]);
+    ? teamAttention({ roster, catalog: catalogView, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name })
+    : []), [session, roster, catalogView, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, perms.royalties, isAdmin]);
 
   // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
   const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
@@ -7448,7 +7458,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     const shownPayouts = payouts.filter(p => p.artistSlug === slug(artist.name) && p.sentAt);
     const shownLedger = approvedLedger.filter(l => lastPub && String(l.date || '').slice(0, 7) <= lastPub);
     const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (
@@ -7461,14 +7471,14 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
-        <TopBar roster={roster} catalog={catalog} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} />
+        <TopBar roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} />
         {error && (
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
         )}
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
-        {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
-        {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'overview' && <Overview roster={roster} catalog={catalogView} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
+        {active === 'import' && <ImportSection roster={roster} catalog={catalogView} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
+        {active === 'roster' && <RosterSection invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
@@ -7477,10 +7487,10 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}
           dataVersion={DATA_VERSION}
         />}
-        {active === 'catalog' && <CatalogSection catalog={catalog} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
-        {active === 'calendar' && <ReleaseCalendarSection catalog={catalog} roster={roster} artistMap={artistMap} tasks={tasks} />}
-        {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} catalog={catalog} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
-        {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalog} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
+        {active === 'catalog' && <CatalogSection catalog={catalogView} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
+        {active === 'calendar' && <ReleaseCalendarSection catalog={catalogView} roster={roster} artistMap={artistMap} tasks={tasks} />}
+        {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} catalog={catalogView} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
+        {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalogView} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
@@ -7491,7 +7501,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
         {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
-        {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalog} />}
+        {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
         {active === 'activity' && <AuditSection roster={roster} />}
         <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
           {confirmReset ? (
