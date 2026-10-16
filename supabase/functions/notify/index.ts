@@ -94,6 +94,13 @@ async function notifyInApp(recipients: string[], subject: string) {
   const { error } = await db.from('notifications').insert(recipients.map(r => ({ recipient_email: r, title: subject, tab: topicOf(subject) })));
   return error ? String(error.message) : null;
 }
+// Artists get emails only about royalties, invoices, statements and payouts.
+// Everything else reaches them in the portal: a bell notification, no email.
+async function inAppOnly(to: string[], subject: string) {
+  const recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
+  if (!recipients.length) return { skipped: 'no recipients' };
+  return { inApp: await notifyInApp(recipients, subject) || 'ok' };
+}
 async function audit(action: string, detail: string, artistId: string | null = null) {
   await db.from('audit_log').insert({ actor_email: 'system', actor_name: 'Scheduler', actor_kind: 'system', action, detail, artist_id: artistId });
 }
@@ -181,21 +188,11 @@ async function handleEvent(ev: Event) {
       const catalog = await section('catalog');
       const titles = (item.releaseIds || []).map((id: string) => (catalog.find(s => s.id === id) || {}).title).filter(Boolean);
       const list = titles.length > 1 ? titles.slice(0, -1).join(', ') + ' and ' + titles[titles.length - 1] : titles[0] || 'your songs';
-      return send([email], `Your rights to ${list} have returned to you`,
-        page('Your rights have returned', [`Hi ${esc(a.name)},`, `IMSS Records’ license to <b>${esc(list)}</b> has ended, and the rights return to you from <b>${esc(item.date)}</b>.`,
-          `Your Product Manager will be in touch about transferring or taking down the release. Royalties IMSS Records receives for earlier periods are still paid to you as usual.`],
-          { label: 'Open your portal', url: `${APP_URL}/` }));
+      return { legal, artist: await inAppOnly([email], `Your rights to ${list} have returned to you from ${item.date}`) };
     }
-    if (item.kind) return { skipped: 'internal license change' };
-    const pct = (x: unknown) => Math.round(Number(x) * 10000) / 100 + '%';
+    if (item.kind) return { legal, skipped: 'internal license change' };
     const month = new Date(item.from + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    const deal = (item.fundingTier || 'Non-Funded') + (item.dealType ? ' · ' + item.dealType : '');
-    const was = item.was && item.was.artistPct != null ? ` (previously ${pct(item.was.artistPct)})` : '';
-    return send([email], `Your IMSS Records deal has been updated from ${month}`,
-      page('Your deal has been updated', [`Hi ${esc(a.name)},`, `Your deal with IMSS Records changes from your <b>${esc(month)}</b> earnings.`,
-        `Your share of net earnings: <b>${pct(item.artistPct)}</b>${was}.`, `Deal: <b>${esc(deal)}</b>.`,
-        `Earnings before ${esc(month)} stay at your previous terms. If you have questions, reply to your Product Manager or the label.`],
-        { label: 'See your deal', url: `${APP_URL}/` }));
+    return { legal, artist: await inAppOnly([email], `Your IMSS Records deal has been updated from ${month}`) };
   }
 
   const artist = ev.key === 'payouts'
@@ -257,6 +254,7 @@ async function handleEvent(ev: Event) {
     const what = ev.key === 'releaseSubmissions' ? `your release “${item.title}”` : ev.key === 'invoices' ? `your invoice “${item.title}”` : `your request “${item.title || item.category}”`;
     // A label response on a request (the older single-response field) counts as a label message.
     const labelText = last && last.from === 'label' ? last.text : (ev.key === 'artistRequests' && item.response && (!last || last.from !== 'artist') ? item.response : null);
+    if (labelText && ev.key !== 'invoices') return inAppOnly([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`);
     if (labelText) {
       return send([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`,
         page('The label replied', [`Hi ${esc(artistName)}, here’s a message about ${esc(what)}:`],
@@ -304,7 +302,7 @@ async function sendDueStatements() {
   return { sent: changed, published: due.length, warned };
 }
 
-// Licenses ending within 6 months: tell the artist once per end date (mirrors src/licenses.js).
+// Licenses ending within 6 months: tell the artist in the portal once per end date (mirrors src/licenses.js).
 async function warnExpiringLicenses() {
   const roster = await section('roster');
   const catalog = await section('catalog');
@@ -329,9 +327,7 @@ async function warnExpiringLicenses() {
   for (const [id, songs] of Object.entries(byArtist)) {
     const a = roster.find(r => r.id === id)!;
     const held = a.contractType === '2026' && !a.noExtension && !songs.some(x => x.fixed) ? ' If your account isn’t recouped by then, the license continues until the end of the quarter in which it recoups.' : '';
-    await send([a.email], `Your IMSS Records license for ${songs.length === 1 ? songs[0].title : songs.length + ' songs'} ends soon`,
-      page('A license is ending soon', [`Hi ${esc(a.name)},`, ...songs.map(x => `<b>${esc(x.title)}</b>: licensed to IMSS Records until <b>${esc(x.end)}</b>.`), `This is a 6-month notice.${held} Your Product Manager can answer any questions.`],
-        { label: 'Open your portal', url: `${APP_URL}/` }));
+    await inAppOnly([a.email], `License notice: ${songs.map(x => x.title + ' until ' + x.end).join(', ')}.${held}`);
     await audit('sent license expiry notice', a.name + ': ' + songs.map(x => x.title + ' (' + x.end + ')').join(', '), id);
     sent++;
   }
