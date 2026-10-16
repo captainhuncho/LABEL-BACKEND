@@ -5776,10 +5776,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             </div>
           </div>
           {(artist.productManager || artist.anr) && (
-            <div className="text-xs mt-3" style={{ color: C.textDim, lineHeight: 1.6 }}>
-              {artist.productManager && <div>Product Manager · {artist.productManager}</div>}
-              {artist.anr && <div>A&amp;R · {artist.anr}</div>}
-            </div>
+            <dl className="mt-4 pt-4 flex flex-col gap-2.5" style={{ borderTop: '1px solid ' + C.border }}>
+              {[['Product Manager', artist.productManager], ['A&R', artist.anr]].filter(([, name]) => name).map(([role, name]) => (
+                <div key={role}>
+                  <dt style={{ color: C.textDim, fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{role}</dt>
+                  <dd className="text-sm" style={{ color: C.text, fontWeight: 500, overflowWrap: 'anywhere' }}>{name}</dd>
+                </div>
+              ))}
+            </dl>
           )}
         </div>
         <nav className="imss-nav gap-1 px-2 py-2">
