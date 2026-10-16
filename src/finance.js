@@ -161,3 +161,45 @@ export function labelPnL(roster, revenue, masterGross, ledger) {
   return { labelEarn: totals.labelEarn, ledgerIncome: lt.income, ledgerExpense: lt.expense, netProfit: totals.labelEarn + lt.income - lt.expense };
 }
 /* ================== end finance model ================== */
+
+// i) Publishing to artists. Artists see a snapshot of revenue taken at publish
+// time, each row carrying its Inbound Banking Charge share so later edits to
+// other artists' months can't move it.
+export function publishSnapshot(rows, approvedRevenue, masterGross) {
+  const at = new Date().toISOString();
+  return rows.map(r => ({ ...r, swiftShare: revenueRowSplit(r, approvedRevenue, masterGross, 0).charge, publishedAt: at }));
+}
+
+// What one artist sees from the snapshot: their rows, plus a per-month charge
+// equal to their own share (so the portal's proportional split gives it back exactly).
+export function artistPublishedView(published, artistSlug) {
+  const revenue = published.filter(r => r.artistSlug === artistSlug);
+  const fees = {};
+  revenue.forEach(r => { fees[r.month] = (fees[r.month] || 0) + (Number(r.swiftShare) || 0); });
+  return { revenue, masterGross: Object.keys(fees).map(month => ({ month, totalGross: 0, swiftFee: fees[month] })) };
+}
+
+// Per artist-month: is the live book different from what artists can see?
+const rowSig = rows => rows.map(r => r.id + ':' + Math.round((Number(r.earning) || 0) * 100)).sort().join('|');
+export function publishDiff(approvedRevenue, published) {
+  const group = list => {
+    const m = {};
+    list.forEach(r => { const k = r.artistSlug + '|' + r.month; (m[k] = m[k] || []).push(r); });
+    return m;
+  };
+  const live = group(approvedRevenue), pub = group(published);
+  return [...new Set([...Object.keys(live), ...Object.keys(pub)])].map(k => {
+    const l = live[k] || [], p = pub[k] || [];
+    const [artistSlug, month] = k.split('|');
+    const state = !p.length ? 'New' : !l.length ? 'Removed' : rowSig(l) === rowSig(p) ? 'Published' : 'Changed';
+    return { key: k, artistSlug, month, artist: (l[0] || p[0]).artist, liveRows: l, liveGross: l.reduce((t, r) => t + r.earning, 0), publishedGross: p.reduce((t, r) => t + r.earning, 0), state };
+  }).sort((a, b) => b.month.localeCompare(a.month) || a.artist.localeCompare(b.artist));
+}
+
+// Replace the snapshot for the given artist-months with the live rows.
+export function applyPublish(published, keys, approvedRevenue, masterGross) {
+  const set = new Set(keys);
+  const keep = published.filter(r => !set.has(r.artistSlug + '|' + r.month));
+  const rows = approvedRevenue.filter(r => set.has(r.artistSlug + '|' + r.month));
+  return [...keep, ...publishSnapshot(rows, approvedRevenue, masterGross)];
+}

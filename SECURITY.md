@@ -53,6 +53,13 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - `artist_reply_invoice()` lets an artist add a message only to their own
   invoice, and not once it's Paid. Email replies to an invoice land on the same
   thread via the notify function.
+- **Artists see published revenue only.** `artist_portal()` reads
+  `publishedRevenue` (a snapshot taken on Publish), never the live `revenue`
+  books, and its Inbound Banking Charge comes from the `swiftShare` fixed on
+  each snapshot row. Statement files show once every month they cover is
+  published. Who may publish (Finance asks, Admin approves, unless an Admin
+  turns on `labelSettings.financePublishDirect`) is enforced in the app, like
+  other role rules.
 - Internal helpers (`section()`, `my_artist()`, `js_slug()`) are not callable
   from the API. Default privileges in `public` grant no API access to new
   functions; every function exposed to the API is granted explicitly.

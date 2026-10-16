@@ -1,13 +1,14 @@
-import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
+import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, Send, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
 import Papa from 'papaparse';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, slug, swiftShareFor } from './finance.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
+import PublishToArtists from './sections/PublishToArtists.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
 import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, DropZone, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
@@ -6692,7 +6693,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 }
 
 // Everything waiting on this team member: shown on the Overview and in Alerts.
-function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, isAdmin = false, sessionName = '' }) {
+function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], isAdmin = false, sessionName = '' }) {
   const items = [];
   const today = todayStr();
   roster.forEach(a => {
@@ -6756,6 +6757,10 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   const myPendingSubmissions = releaseSubmissions.filter(s => s.status === 'Pending' && (isAdmin || s.sentTo === sessionName));
   if (myPendingSubmissions.length > 0) {
     items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'submissions' });
+  }
+  const publishWaiting = revenuePublish.filter(e => e.status === 'Awaiting approval').length;
+  if (isAdmin && publishWaiting > 0) {
+    items.push({ id: 'publish-approvals', tone: 'amber', text: publishWaiting + ' publish ' + (publishWaiting === 1 ? 'request' : 'requests') + ' to artists waiting on your approval', tab: 'publish' });
   }
   // Invoices sitting in a queue this person handles (Admins also share PM Approval).
   const me = staff.find(m => m.name === sessionName);
@@ -6845,6 +6850,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [artistRequests, setArtistRequests] = useState(SEED_ARTIST_REQUESTS);
   const [invoices, setInvoices] = useState(SEED_INVOICES);
   const [statementFiles, setStatementFiles] = useState([]);
+  const [publishedRevenue, setPublishedRevenue] = useState([]);
+  const [revenuePublish, setRevenuePublish] = useState([]);
   const [acceptingSubmission, setAcceptingSubmission] = useState(null);
   const [releaseSubmissions, setReleaseSubmissions] = useState(SEED_RELEASE_SUBMISSIONS);
   const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
@@ -6885,6 +6892,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['artistRequests', setArtistRequests, SEED_ARTIST_REQUESTS],
         ['invoices', setInvoices, SEED_INVOICES],
         ['statementFiles', setStatementFiles, []],
+        // Without a saved snapshot (local mode), artists start out seeing all approved seed revenue.
+        ['publishedRevenue', setPublishedRevenue, publishSnapshot(SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_MASTER_GROSS)],
+        ['revenuePublish', setRevenuePublish, []],
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
       ];
@@ -6921,7 +6931,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   // open, so re-read them when the tab regains focus and once a minute.
   useEffect(() => {
     if (!supabase || loading) return;
-    const live = [['invoices', setInvoices], ['artistRequests', setArtistRequests], ['releaseSubmissions', setReleaseSubmissions], ['profileRequests', setProfileRequests]];
+    const live = [['revenuePublish', setRevenuePublish], ['invoices', setInvoices], ['artistRequests', setArtistRequests], ['releaseSubmissions', setReleaseSubmissions], ['profileRequests', setProfileRequests]];
     async function refresh() {
       if (document.visibilityState === 'hidden') return;
       for (const [key, setter] of live) {
@@ -6972,6 +6982,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   function updateProfileRequests(next) { logChange('Profile requests', profileRequests, next); setProfileRequests(next); persist('profileRequests', next); }
   function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
   function updateArtistRequests(next) { logChange('Artist requests', artistRequests, next); setArtistRequests(next); persist('artistRequests', next); }
+  function updatePublishedRevenue(next) { setPublishedRevenue(next); persist('publishedRevenue', next); }
+  function updateRevenuePublish(next) { logChange('Publish to artists', revenuePublish, next); setRevenuePublish(next); persist('revenuePublish', next); }
   function updateStatementFiles(next) { logChange('Statement files', statementFiles, next); setStatementFiles(next); persist('statementFiles', next); }
   function updateInvoices(next) { logChange('Invoices', invoices, next); setInvoices(next); persist('invoices', next); }
   function updateReleaseSubmissions(next) { logChange('Release submissions', releaseSubmissions, next); setReleaseSubmissions(next); persist('releaseSubmissions', next); }
@@ -7006,8 +7018,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
   const attention = useMemo(() => (session && session.mode === 'team'
-    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, isAdmin, sessionName: session.name })
-    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, isAdmin]);
+    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, isAdmin, sessionName: session.name })
+    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, isAdmin]);
 
   // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
   const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
@@ -7028,6 +7040,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.spend && { id: 'ledger', label: 'Ledger', icon: Wallet, group: 'Finance' },
     perms.spend && !pmScope && { id: 'budget', label: 'Budget', icon: DollarSign, group: 'Finance' },
     (perms.spend || inInvoiceWorkflow) && { id: 'invoices', label: 'Invoices', icon: FileText, group: 'Finance' },
+    perms.royalties && { id: 'publish', label: 'Publish to artists', icon: Send, group: 'Finance' },
     perms.royalties && { id: 'payouts', label: 'Payouts', icon: Wallet, group: 'Finance' },
     perms.royalties && { id: 'statements', label: 'Statements', icon: Eye, group: 'Finance' },
 
@@ -7079,7 +7092,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   if (session.mode === 'artist') {
     const artist = roster.find(a => a.id === session.artistId);
     if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={statementFiles} labelSettings={labelSettings} onLogout={logout} />;
+    const view = artistPublishedView(publishedRevenue, slug(artist.name));
+    const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (
@@ -7115,6 +7130,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
+        {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={masterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={masterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}

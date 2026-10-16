@@ -18,7 +18,7 @@ const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -100,6 +100,25 @@ async function handleEvent(ev: Event) {
   const item = items.find(x => x.id === ev.id);
   if (!item) return { skipped: 'not found' };
   const roster = await section('roster');
+
+  // Earnings published: one email per artist, naming their months.
+  if (ev.type === 'earnings') {
+    const byArtist: Record<string, string[]> = {};
+    for (const i of (item.items || [])) if (i.artistId) (byArtist[i.artistId] = byArtist[i.artistId] || []).push(i.month);
+    const results = [];
+    for (const [artistId, months] of Object.entries(byArtist)) {
+      const a = roster.find(r => r.id === artistId);
+      const email = String(a?.email || '').trim();
+      if (!email) { results.push({ skipped: 'no email for ' + artistId }); continue; }
+      const names = [...new Set(months)].sort().map(m => new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+      const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+      results.push(await send([email], `Your IMSS Records earnings for ${list} are ready`,
+        page('New earnings in your portal', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records portal, with the breakdown by song, platform and country.`],
+          { label: 'See your earnings', url: `${APP_URL}/` })));
+    }
+    return results;
+  }
+
   const artist = ev.key === 'payouts'
     ? roster.find(a => slug(a.name) === item.artistSlug)
     : roster.find(a => a.id === item.artistId);
@@ -147,9 +166,9 @@ async function handleEvent(ev: Event) {
         page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }), replyKey);
     }
     const reviewers = await stageReviewers(item.status, artist);
-    const back = last.action === 'sent back';
+    const back = last.action === 'sent back', moved = last.action === 'moved by Admin';
     return send(reviewers, `${back ? 'Sent back' : 'Ready'} for ${item.status}: ${artistName}, ${amount}`,
-      page(`${item.status}: ${artistName}`, [`<b>${esc(item.title)}</b> · ${amount}`, back ? `${esc(last.by || 'Someone')} sent it back from ${esc(last.from || 'the next queue')}.` : `${esc(last.by || 'It')} approved it at ${esc(last.from || 'the previous queue')}; it’s now waiting for you.`],
+      page(`${item.status}: ${artistName}`, [`<b>${esc(item.title)}</b> · ${amount}`, back ? `${esc(last.by || 'Someone')} sent it back from ${esc(last.from || 'the next queue')}.` : moved ? `${esc(last.by || 'An Admin')} moved it here from ${esc(last.from || 'another queue')}; it’s now waiting for you.` : `${esc(last.by || 'It')} approved it at ${esc(last.from || 'the previous queue')}; it’s now waiting for you.`],
         { label: 'Open Invoices', url: `${APP_URL}/` }, last.note || undefined), replyKey);
   }
 

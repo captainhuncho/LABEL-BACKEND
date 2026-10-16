@@ -464,6 +464,17 @@ existing catalog entry.
 
 ---
 
+## 6b. Publishing to artists
+
+Imports and edits stay internal. **Publish to artists** (Finance) lists every
+artist-month where the books differ from what artists see (not published yet,
+changed since publish, removed). Publish selected artist-months or all of them.
+Finance's publishes go to an Admin to approve unless an Admin has ticked "Let
+Finance publish without Admin approval"; Admins publish directly. Publishing
+copies the live rows into `publishedRevenue` and logs it in `revenuePublish`;
+artists get an email naming their months. Existing data was published as-is
+when this was introduced.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

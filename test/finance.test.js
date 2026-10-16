@@ -64,3 +64,22 @@ test('breakdowns split the artist earnings across platforms without losing any',
   const total = parts.reduce((t, p) => t + p.yours, 0);
   assert.equal(cents(total), cents((90 + 45) * 0.7));
 });
+
+test('publishing: snapshot, diff and artist view', async () => {
+  const { applyPublish, publishDiff, artistPublishedView } = await import('../src/finance.js');
+  const rev = [
+    { id: 'a_s_2026-01', artistSlug: 'a', artist: 'A', title: 's', month: '2026-01', earning: 75 },
+    { id: 'b_t_2026-01', artistSlug: 'b', artist: 'B', title: 't', month: '2026-01', earning: 25 },
+  ];
+  const mg = [{ month: '2026-01', totalGross: 100, swiftFee: 20 }];
+  assert.deepEqual(publishDiff(rev, []).map(d => d.state), ['New', 'New']);
+  const pub = applyPublish([], ['a|2026-01'], rev, mg);
+  assert.equal(pub.length, 1);
+  assert.equal(Math.round(pub[0].swiftShare * 100), 1500);
+  const view = artistPublishedView(pub, 'a');
+  assert.equal(Math.round(view.masterGross[0].swiftFee * 100), 1500);
+  assert.equal(artistPublishedView(pub, 'b').revenue.length, 0);
+  const edited = [{ ...rev[0], earning: 80 }, rev[1]];
+  const states = Object.fromEntries(publishDiff(edited, pub).map(d => [d.artistSlug, d.state]));
+  assert.deepEqual(states, { a: 'Changed', b: 'New' });
+});
