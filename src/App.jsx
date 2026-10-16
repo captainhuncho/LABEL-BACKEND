@@ -6304,18 +6304,39 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </section>
             )}
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Title', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'Has Video', 'Collaborators']} rows={artistCatalog.filter(r => !pickedReleases.length || pickedReleases.includes(r.id)).map(r => [
-              r.title,
-              r.type,
-              r.releaseDate || '',
-              r.isrc || '',
-              r.upc || '',
-              r.status,
-              r.primaryMarket || '',
-              r.secondaryMarket || '',
-              r.hasVideo ? 'Yes' : 'No',
-              (r.collaborators || []).map(c => c.name + ' (' + c.role + ', ' + c.splitPercent + '%)').join('; '),
-            ])} />
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-releases'} headers={['Song Title', 'Primary Artist(s)', 'Featured Artist(s)', 'Release Type', 'Release Date', 'ISRC', 'UPC', 'Label', '℗ Line', 'Genre', 'Explicit/Clean', 'Duration', 'Written By (Songwriters)', 'Produced By', 'Splits', 'Recording Engineer', 'Mixing Engineer', 'Mastering Engineer', 'Dolby Atmos', 'Dolby Engineer', 'Lyrics', 'Music Video', 'Status', 'Primary Market', 'Secondary Market']} rows={artistCatalog.filter(r => !pickedReleases.length || pickedReleases.includes(r.id)).map(r => {
+              // Track transfer / publishing template: everything a new distributor or publisher asks for.
+              const cr = r.credits || {};
+              const collabs = r.collaborators || [];
+              const label = r.label || 'IMSS Records';
+              return [
+                r.title,
+                [artist.name, ...(r.primaryArtists || [])].filter(Boolean).join(' & '),
+                collabs.filter(c => c.role === 'Feature').map(c => c.name).join(', '),
+                r.type,
+                r.releaseDate || '',
+                r.isrc || '',
+                r.upc || '',
+                label,
+                r.releaseDate ? '℗ ' + r.releaseDate.slice(0, 4) + ' ' + label : '',
+                r.genre || artist.genre || '',
+                r.explicit && r.explicit !== 'Not Set' ? r.explicit : '',
+                r.duration || '',
+                cr.writtenBy || '',
+                cr.producedBy || collabs.filter(c => c.role === 'Producer').map(c => c.name).join(', '),
+                collabs.map(c => c.name + ' (' + c.role + ', ' + c.splitPercent + '%)').join('; '),
+                cr.recordingEngineer || '',
+                cr.mixingEngineer || '',
+                cr.masteringEngineer || '',
+                r.dolbyAtmos ? 'Yes' : 'No',
+                cr.dolbyEngineer || '',
+                r.lyrics || '',
+                r.hasVideo ? 'Yes' : 'No',
+                r.status,
+                r.primaryMarket || '',
+                r.secondaryMarket || '',
+              ];
+            })} />
             {artistCatalog.length > 0 && (
               <div className="text-sm mb-3 flex items-center gap-3 flex-wrap" style={{ color: C.textDim }}>
                 <span>{pickedReleases.length ? 'Exporting ' + pickedReleases.length + ' of ' + artistCatalog.length + ' selected' : 'Exporting all ' + artistCatalog.length + '. Tick releases to export only those.'}</span>
