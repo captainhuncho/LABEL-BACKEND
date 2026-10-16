@@ -730,7 +730,7 @@ function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, reven
             )}
           </div>
           )}
-          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0)} artistName={artist.name} showOriginal empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
+          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0)} artistName={artist.name} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
           {canViewRoyalties && (
           <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
             <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
@@ -3080,6 +3080,19 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
     exportRowsToCsv(exportName('simple'), ['Statement month', 'Track', 'ISRC', 'Streams / sales', 'Gross (USD)', 'Inbound Banking Charge (USD)', 'Your earnings (USD)'],
       [...list.map(({ t, x }) => [t.month, t.title, t.isrc || '', t.quantity || '', x.gross.toFixed(2), x.charge.toFixed(2), x.artistShare.toFixed(2)]), ['Total', '', '', '', tot.g.toFixed(2), tot.c.toFixed(2), tot.e.toFixed(2)]]);
   }
+  // Label Partner Copy: EMPIRE's original files for these months, unchanged.
+  async function exportPartnerCopy() {
+    setExportError('');
+    const months = monthRows.map(m => m.month);
+    const files = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).some(m => months.includes(m)));
+    if (!files.length) { setExportError('There’s no Label Partner Copy for this period.'); return; }
+    try {
+      for (const f of files) {
+        const a = document.createElement('a'); a.href = await statementFileUrl(f); a.download = f.name || 'statement.csv'; a.rel = 'noopener';
+        document.body.appendChild(a); a.click(); a.remove();
+      }
+    } catch (e) { setExportError('Could not download the Label Partner Copy. Try again in a moment.'); }
+  }
   // Detailed: every line from the uploaded statements for these months.
   async function exportDetailed() {
     setExportError('');
@@ -3132,6 +3145,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
           )}
           {shown && <Btn variant="ghost" onClick={exportSimple}><Download size={14} /> Simple CSV</Btn>}
           {shown && <Btn variant="ghost" onClick={exportDetailed}><Download size={14} /> Detailed CSV</Btn>}
+          {shown && <Btn variant="ghost" onClick={exportPartnerCopy}><Download size={14} /> Label Partner Copy</Btn>}
           {exportError && <div className="w-full text-sm" role="alert" style={{ color: C.amber }}>{exportError}</div>}
           {shown && <Btn variant="ghost" onClick={() => window.print()}><Printer size={14} /> Print / save as PDF</Btn>}
         </div>
@@ -3394,9 +3408,9 @@ function csvByTrack(name, lines) {
 
 // Statement files on an artist. Two IMSS-branded downloads built from the
 // artist's own rows: Detailed (every line, like the uploaded report) and By
-// track (one row per track per month). Team side also keeps the original file.
+// track (one row per track per month), plus EMPIRE's original as the Label Partner Copy.
 // `rows` are this artist's revenue rows; `splitOf(row)` gives charge and earnings.
-function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.', sourceLabel = '', rows = [], splitOf = null, artistName = '', showOriginal = false }) {
+function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.', sourceLabel = '', rows = [], splitOf = null, artistName = '' }) {
   const [error, setError] = useState('');
   const sorted = [...files].sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
   const fileName = (f, kind) => ((artistName || 'artist') + ' ' + (f.months || []).join(' ') + ' ' + kind).trim().replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
@@ -3434,7 +3448,7 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
                   <span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
                     {splitOf && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> Detailed</button>}
                     {splitOf && <button onClick={() => download(f, 'track')} className="inline-flex items-center gap-1" style={link}><Download size={13} aria-hidden="true" /> By track</button>}
-                    {(showOriginal || !splitOf) && <button onClick={() => original(f)} className="inline-flex items-center gap-1" style={{ ...link, color: C.textDim }}><Download size={13} aria-hidden="true" /> Original</button>}
+                    <button onClick={() => original(f)} className="inline-flex items-center gap-1" style={{ ...link, color: C.textDim }}><Download size={13} aria-hidden="true" /> Label Partner Copy</button>
                   </span>
                 </Td>
               </tr>
