@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, expandRemittances, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, dealTermsOf, expandRemittances, pctAt, termsAt, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
@@ -727,7 +727,7 @@ function ArtistDetailPanel({ statementFiles = [], artist, roster, catalog, reven
             )}
           </div>
           )}
-          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0)} artistName={artist.name} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
+          {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, pctAt(artist, r.month))} artistName={artist.name} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
           {canViewRoyalties && (
           <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
             <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
@@ -784,7 +784,7 @@ function SendLinkButton({ email, labeled = false }) {
   );
 }
 
-function RosterSection({ statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+function RosterSection({ publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
@@ -799,13 +799,36 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
   const photoInputRef = useRef(null);
 
   function openAdd() { setForm({ ...empty, productManager: pmScope || '' }); setEditing(null); setShowForm(true); }
-  function openEdit(a) { setForm({ ...empty, ...a }); setEditing(a.id); setShowForm(true); }
+  function openEdit(a) { setForm({ ...empty, ...a }); setEditing(a.id); setShowForm(true); setTermsFrom(todayStr().slice(0, 7)); setFormError(''); }
+  // Deal terms are dated. A change to the %, funding, deal, reporting or threshold
+  // on an existing artist becomes a new entry from a chosen month; earlier months keep theirs.
+  const [termsFrom, setTermsFrom] = useState(todayStr().slice(0, 7));
+  const [formError, setFormError] = useState('');
+  const termValues = f => ({ artistPct: Number(f.royaltyRate) / 100, fundingTier: f.fundingTier || 'Non-Funded', dealType: f.dealType || '', reportingPeriod: f.reportingPeriod || 'quarterly', deliveryDays: Number(f.deliveryDays) || '', payoutThreshold: Number(f.payoutThreshold) || 0 });
+  const original = editing ? roster.find(a => a.id === editing) : null;
+  const originalTerms = original ? termValues({ ...original, royaltyRate: Math.round((original.artistPct != null ? original.artistPct : original.royaltyRate / 100) * 10000) / 100 }) : null;
+  const termsChanged = !!original && JSON.stringify(termValues(form)) !== JSON.stringify(originalTerms);
+  const lastPublished = original ? publishedRevenue.filter(r => r.artistSlug === slug(original.name)).reduce((m, r) => r.month > m ? r.month : m, '') : '';
   function closeForm() { setShowForm(false); setEditing(null); if (photoInputRef.current) photoInputRef.current.value = ''; }
 
   function save(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    const payload = { ...form, royaltyRate: Number(form.royaltyRate), payoutThreshold: Number(form.payoutThreshold) || 0, deliveryDays: Number(form.deliveryDays) || '', annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
+    let payload = { ...form, royaltyRate: Number(form.royaltyRate), artistPct: Number(form.royaltyRate) / 100, payoutThreshold: Number(form.payoutThreshold) || 0, deliveryDays: Number(form.deliveryDays) || '', annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
+    if (editing && termsChanged) {
+      const history = dealTermsOf(original);
+      const latest = history[history.length - 1];
+      if (!/^\d{4}-\d{2}$/.test(termsFrom)) { setFormError('Pick the month the new deal terms start.'); return; }
+      if (lastPublished && termsFrom <= lastPublished) { setFormError('Earnings up to ' + monthLabel(lastPublished) + ' are already published to ' + original.name + ' on the current terms. New terms must start after that.'); return; }
+      if (latest.from && termsFrom < latest.from) { setFormError('The latest terms start ' + monthLabel(latest.from) + '. New terms can’t start before them.'); return; }
+      const dealTerms = [...history.filter(t => t.from !== termsFrom), { from: termsFrom, ...termValues(form), setBy: sessionName, setAt: new Date().toISOString() }];
+      // The artist's current fields show the terms in force today (a future change waits for its month).
+      const now = termsAt({ ...original, dealTerms }, todayStr().slice(0, 7));
+      payload = { ...payload, dealTerms, artistPct: now.artistPct, royaltyRate: Math.round(now.artistPct * 10000) / 100, fundingTier: now.fundingTier, dealType: now.dealType, reportingPeriod: now.reportingPeriod, deliveryDays: now.deliveryDays, payoutThreshold: now.payoutThreshold };
+    } else if (editing) {
+      payload = { ...payload, artistPct: original.artistPct, royaltyRate: original.royaltyRate };
+    }
+    setFormError('');
     if (editing) update(roster.map(a => a.id === editing ? { ...payload, id: editing } : a));
     else update([...roster, { ...payload, id: uid() }]);
     closeForm();
@@ -952,6 +975,26 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
               {(DEAL_TYPES[form.fundingTier || 'Non-Funded'] || []).map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </Field>
+          {termsChanged && (
+            <div className="imss-span-2 rounded p-4" style={{ background: C.amberSoft }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>You’re changing {original.name}’s deal terms</div>
+              <div className="mt-1" style={{ color: C.textDim, fontSize: 14 }}>Earlier months keep the old terms; earnings from the month below use the new ones.{lastPublished ? ' Already published up to ' + monthLabel(lastPublished) + '.' : ''}</div>
+              <div className="mt-3" style={{ maxWidth: 240 }}><Field label="New terms start from"><Input type="month" value={termsFrom} onChange={e => { setTermsFrom(e.target.value); setFormError(''); }} /></Field></div>
+            </div>
+          )}
+          {original && dealTermsOf(original).length > 1 && (
+            <div className="imss-span-2">
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Deal history</div>
+              <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
+                <table className="w-full" style={{ minWidth: 560 }}>
+                  <thead><tr><Th>From</Th><Th align="right">Artist %</Th><Th>Funding · deal</Th><Th>Reporting</Th><Th align="right">Threshold</Th><Th>Set by</Th></tr></thead>
+                  <tbody>{dealTermsOf(original).map((t, i) => (
+                    <tr key={i}><Td mono>{t.from ? monthLabel(t.from) : 'Start'}</Td><Td align="right" mono>{Math.round(t.artistPct * 10000) / 100}%</Td><Td>{(t.fundingTier || 'Non-Funded') + (t.dealType ? ' · ' + t.dealType : '')}</Td><Td>{t.reportingPeriod || 'quarterly'}</Td><Td align="right" mono>{t.payoutThreshold ? formatCents(t.payoutThreshold) : '—'}</Td><Td>{t.setBy || '—'}</Td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {form.fundingTier === 'Funded' && (
             <Field label="Annual budget"><Input type="number" min="0" step="0.01" value={form.annualBudget} onChange={e => setForm({ ...form, annualBudget: e.target.value })} placeholder="Total allocated for this artist" /></Field>
           )}
@@ -977,6 +1020,7 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
             </Select>
           </Field>
           <Field label="Notes" full><TextArea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></Field>
+          {formError && <div className="imss-span-2" role="alert" style={{ color: C.red, fontSize: 14 }}>{formError}</div>}
           <div className="imss-span-2 flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add artist'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
@@ -3028,7 +3072,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
   const monthRows = monthsToShow.map(month => {
     const tracks = artistRevenue.filter(r => r.month === month);
     const gross = tracks.reduce((s, r) => s + r.earning, 0);
-    const splits = tracks.map(r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0));
+    const splits = tracks.map(r => revenueRowSplit(r, revenue, masterGross, pctAt(artist, r.month)));
     const swift = splits.reduce((t, x) => t + x.charge, 0);
     const net = gross - swift;
     const artistShare = splits.reduce((t, x) => t + x.artistShare, 0);
@@ -3064,7 +3108,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
     setGenerated({ mode: periodMode, start: rangeStart, end: rangeEnd });
   }
   const exportName = kind => ['imss-records', artist.name, periodLabel(), kind].join(' ').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
-  const splitOfRow = r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0);
+  const splitOfRow = r => revenueRowSplit(r, revenue, masterGross, pctAt(artist, r.month));
   // Simple: one row per track per month, from the figures on screen.
   function exportSimple() {
     const list = monthRows.flatMap(m => m.tracks.map(t => ({ t, x: splitOfRow(t) }))).sort((a, b) => a.t.month.localeCompare(b.t.month) || a.t.title.localeCompare(b.t.title));
@@ -7297,7 +7341,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
         {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
         {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'roster' && <RosterSection publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}

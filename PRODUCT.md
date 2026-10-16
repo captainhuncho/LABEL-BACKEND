@@ -520,6 +520,18 @@ all money math the app spreads that payment and its single Inbound Banking
 Charge across the covered months by what each earned (`expandRemittances` in
 `finance.js`); the Money received screen keeps the entry as typed.
 
+## 6e. Deal terms over time
+
+An artist keeps one account; their deal is a dated history (`dealTerms`: from
+month, artist %, funding tier, deal, reporting period, delivery days, payout
+threshold). Every money calculation uses the terms in force for that revenue
+month (`termsAt` / `pctAt` in `finance.js`), so a statement spanning a change
+shows each month at its own rate. Changing any of these on an existing artist
+asks for the month the new terms start; it must be after the last month
+already published to that artist. The artist's current fields mirror the terms
+in force today, and the Roster form shows the deal history with who set each
+entry. Artists with no history behave as one open-ended entry.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

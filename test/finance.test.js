@@ -159,3 +159,22 @@ test('published rows are shown as stored, never recomputed', async () => {
     assert.equal(artistLifetime(roster[0], pub, anyMg).artistShare.toFixed(2), '40.11');
   }
 });
+
+test('deal terms: each month uses the % in force that month', async () => {
+  const { termsAt, pctAt, artistLifetime, payoutStatementFor, applyPublish } = await import('../src/finance.js');
+  const artist = { name: 'Aizo Clutch', artistPct: 0.75, dealTerms: [
+    { from: '', artistPct: 0.7, fundingTier: 'Non-Funded', dealType: 'Distro+' },
+    { from: '2026-07', artistPct: 0.75, fundingTier: 'Funded', dealType: 'Recordings+' },
+  ] };
+  assert.equal(pctAt(artist, '2026-06'), 0.7);
+  assert.equal(pctAt(artist, '2026-07'), 0.75);
+  assert.equal(termsAt(artist, '2027-01').dealType, 'Recordings+');
+  const rev = [{ id: 'j', artistSlug: 'aizo-clutch', month: '2026-06', earning: 100 }, { id: 'k', artistSlug: 'aizo-clutch', month: '2026-07', earning: 100 }];
+  // No money received → no charge: 100×0.70 + 100×0.75 = 145.
+  assert.equal(artistLifetime(artist, rev, []).artistShare.toFixed(2), '145.00');
+  assert.equal(payoutStatementFor(artist, '2026-06', '2026-07', rev, []).artistShare.toFixed(2), '145.00');
+  const pub = applyPublish([], ['aizo-clutch|2026-06', 'aizo-clutch|2026-07'], rev, [], [artist]);
+  assert.deepEqual(pub.map(r => r.artistShare), [70, 75]);
+  // An artist with no history behaves exactly as before.
+  assert.equal(pctAt({ name: 'X', artistPct: 0.8 }, '2020-01'), 0.8);
+});
