@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
 import { logActivity, logSignIn } from './audit.js';
 import { useEffect, useMemo, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
@@ -335,14 +335,15 @@ function TopBar({ openItem, roster, catalog, staff, tasks = [], revenue = [], le
       <div className="flex items-center gap-2">
       <NotificationBell routes={{ deal: 'deals', earnings: 'publish', statement: 'payouts', invoice: 'invoices', submission: 'submissions', request: 'artist-requests' }} onOpen={setActive} />
       <div style={{ position: 'relative' }}>
-        <button onClick={() => setShowNotifs(s => !s)} aria-label="Alerts" className="imss-alerts inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 14px', fontSize: 14 }}>
-          <Bell size={15} /> <span className="imss-alerts-label">Alerts</span>
-          {notifications.length > 0 && <Badge tone="amber">{notifications.length}</Badge>}
+        {/* Alerts (things to act on) are a warning sign; the bell is for updates sent to you. */}
+        <button onClick={() => setShowNotifs(s => !s)} aria-label={'Needs your attention' + (notifications.length ? ', ' + notifications.length : '')} title="Needs your attention" className="imss-alerts inline-flex items-center gap-1.5" style={{ background: notifications.length ? (notifications.some(n => n.tone === 'red') ? C.redSoft : C.amberSoft) : C.fill, color: notifications.length ? (notifications.some(n => n.tone === 'red') ? C.red : C.amber) : C.text, borderRadius: 980, padding: '8px 14px', fontSize: 14, fontWeight: 600 }}>
+          <TriangleAlert size={15} /> <span className="imss-alerts-label">Needs attention</span>
+          {notifications.length > 0 && <span style={{ minWidth: 18, textAlign: 'center' }}>{notifications.length}</span>}
         </button>
         {showNotifs && (
           <div className="rounded border" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 20, background: C.panel, borderColor: C.borderLight, width: 320, maxHeight: 360, overflowY: 'auto' }}>
             {notifications.length === 0 ? (
-              <div className="p-3 text-sm" style={{ color: C.textDim }}>You're all caught up.</div>
+              <div className="p-3 text-sm" style={{ color: C.textDim }}>Nothing needs your attention.</div>
             ) : notifications.map(n => (
               <button key={n.id} onClick={() => { openItem(n); setShowNotifs(false); }} className="flex items-start gap-2 w-full text-left px-3 py-2 text-sm hover:bg-white/5" style={{ borderBottom: '1px solid ' + C.border }}>
                 <span style={{ width: 6, height: 6, borderRadius: 9999, marginTop: 6, flexShrink: 0, background: n.tone === 'red' ? C.red : n.tone === 'amber' ? C.amber : C.teal }}></span>
