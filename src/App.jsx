@@ -2972,7 +2972,7 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
                     <Td mono>{monthLabel(g.month)}</Td>
                     <Td><span className="text-xs" style={{ color: C.textDim }}>{g.remittanceId || '—'}</span></Td>
                     <Td mono>{formatDate(g.paidOn)}</Td>
-                    <Td mono>{g.receivedOn ? formatDate(g.receivedOn) : <span style={{ color: C.amber }}>Not yet</span>}</Td>
+                    <Td mono>{g.receivedOn ? formatDate(g.receivedOn) : <span className="text-xs" style={{ color: C.textDim }}>Date not recorded</span>}</Td>
                     <Td align="right" mono>{formatCurrency(g.totalGross)}</Td>
                     <Td align="right" mono>{formatCurrency(g.swiftFee)}</Td>
                     <Td align="right" mono>{formatCurrency(g.totalGross - g.swiftFee)}</Td>
