@@ -179,12 +179,13 @@ export function KPICard({ icon: Icon, label, value, sub, tone }) {
   );
 }
 
-export function SectionHeader({ title, description, action }) {
+export function SectionHeader({ title, description, action, artistNote }) {
   return (
     <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{title}</h2>
         {description && <p className="text-sm mt-1" style={{ color: C.textDim, maxWidth: 520 }}>{description}</p>}
+        {artistNote && <p className="text-xs mt-2" style={{ color: C.teal, maxWidth: 520 }}><b>Artists see:</b> {artistNote}</p>}
       </div>
       {action}
     </div>

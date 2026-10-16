@@ -70,7 +70,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
 
   return (
     <div>
-      <SectionHeader title="Publish to artists" description="Revenue you import or edit stays inside the label until it’s published here. Artists see exactly what was published, and get an email when it is." />
+      <SectionHeader title="Publish to artists" artistNote="exactly what was last published here: revenue, breakdowns, their Inbound Banking Charge share and statement files. Nothing else changes their earnings view." description="Revenue you import or edit stays inside the label until it’s published here. Artists see exactly what was published, and get an email when it is." />
 
       {isAdmin && (
         <label className="flex items-start gap-2 text-sm rounded border p-3 mb-6" style={{ borderColor: C.border, background: C.panel, cursor: 'pointer' }}>

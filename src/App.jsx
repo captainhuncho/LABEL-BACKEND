@@ -2245,7 +2245,7 @@ function RevenueSection({ revenue, update, roster, canEdit = true, isAdmin = fal
 
   return (
     <div>
-      <SectionHeader title="Revenue" description="One row per track per month — the source of truth every finance calculation is built from." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add revenue</Btn>} />
+      <SectionHeader title="Revenue" artistNote="nothing from this screen directly. Changes here reach artists only through Publish to artists." description="One row per track per month — the source of truth every finance calculation is built from." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add revenue</Btn>} />
 
       {!isAdmin && pendingCount > 0 && (
         <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
@@ -2915,7 +2915,7 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
 
   return (
     <div>
-      <SectionHeader title="Money received" description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
+      <SectionHeader title="Money received" artistNote="never the label’s totals. Only their share of each month’s Inbound Banking Charge, fixed when their earnings are published." description="One row per calendar month, company-wide — the real money the label received from the distributor, and the flat inbound banking charge split proportionally across every artist who earned that month." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log month</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Total gross (all months)" value={formatCurrency(totals.totalGross)} tone="teal" />
@@ -3641,7 +3641,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
 
   return (
     <div>
-      <SectionHeader title="Invoices" description="Artist expense claims and service invoices move through PM Approval, Finance, LH and DP before they’re approved for payment and paid."
+      <SectionHeader title="Invoices" artistNote="their own invoices with simple progress (In review, Approved for payment, Paid, Rejected), the rejection reason, and messages. Never the internal queue names or who holds it." description="Artist expense claims and service invoices move through PM Approval, Finance, LH and DP before they’re approved for payment and paid."
         action={isAdmin && <Btn variant="ghost" onClick={() => setShowWorkflow(v => !v)}><UserCog size={14} /> {showWorkflow ? 'Close workflow' : 'Workflow'}</Btn>} />
 
       {isAdmin && showWorkflow && (
@@ -4154,7 +4154,7 @@ function StatementsSection({ roster, revenue, masterGross, ledger, payouts }) {
 
   return (
     <div>
-      <SectionHeader title="Statements" description="A per-artist royalty statement, generated on demand from revenue and money received." />
+      <SectionHeader title="Statements" artistNote="nothing. This is your preview; artists get statements through Payouts → Send to artist." description="A per-artist royalty statement, generated on demand from revenue and money received." />
       <div className="rounded border p-4 mb-6 imss-print-hide" style={{ background: C.panel, borderColor: C.border }}>
         <Field label="Artist">
           <Select value={selectedArtist} onChange={e => setSelectedArtist(e.target.value)}>
@@ -4219,7 +4219,7 @@ function LedgerSection({ ledger: rawLedger, update, roster: fullRoster, revenue,
 
   return (
     <div>
-      <SectionHeader title="Expenses & income" description="Non-royalty income and expenses — advances, recording costs, marketing spend, and anything else that isn't distributor revenue. Recoupable expenses reduce what an artist is due until their share covers them." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add entry</Btn>} />
+      <SectionHeader title="Expenses & income" artistNote="approved expenses recorded against their name, in their Expenses tab. Recoupable ones reduce what they’re due." description="Non-royalty income and expenses — advances, recording costs, marketing spend, and anything else that isn't distributor revenue. Recoupable expenses reduce what an artist is due until their share covers them." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add entry</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={TrendingUp} label="Income" value={formatCurrency(totals.income)} tone="teal" />
@@ -4413,7 +4413,7 @@ function BudgetSection({ labelBudgets, update, ledger, roster, canEdit = true })
 
   return (
     <div>
-      <SectionHeader title="Budget" description="Label-wide budget planning by category, tracked against everything logged in Expenses — artist-specific and label operations alike. Visible to team members only." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Allocate budget</Btn>} />
+      <SectionHeader title="Budget" artistNote="nothing. Budgets are internal." description="Label-wide budget planning by category, tracked against everything logged in Expenses — artist-specific and label operations alike. Visible to team members only." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Allocate budget</Btn>} />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Total allocated" value={formatCurrency(totalAllocated)} />
@@ -4522,7 +4522,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
 
   return (
     <div>
-      <SectionHeader title="Payouts" description="Generate a payout statement for an artist over any period — computed live from revenue and money received, per the inbound banking charge split formula." />
+      <SectionHeader title="Payouts" artistNote="a statement only after you press Send to artist (or its scheduled time passes). They get an email." description="Generate a payout statement for an artist over any period — computed live from revenue and money received, per the inbound banking charge split formula." />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Label earnings (lifetime)" value={formatCurrency(pnl.labelEarn)} tone="teal" />
@@ -4912,7 +4912,7 @@ function ImportSection({ roster, catalog, revenue, streams, updateRoster, update
 
   return (
     <div>
-      <SectionHeader title="Import" description="Upload a royalty statement CSV from a distributor or DSP. IMSS Records matches it to your roster and catalog, and logs the earnings automatically — including the store-by-store breakdown artists see." />
+      <SectionHeader title="Import" artistNote="nothing yet. Imported revenue and statement files stay internal until you publish them." description="Upload a royalty statement CSV from a distributor or DSP. IMSS Records matches it to your roster and catalog, and logs the earnings automatically — including the store-by-store breakdown artists see." />
 
       {mode === 'empire' && (
         <EmpireImport roster={roster} catalog={catalog} revenue={revenue} masterGross={masterGross} updateRevenue={updateRevenue} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} onDone={reset} />
