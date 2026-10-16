@@ -3029,9 +3029,10 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
   const monthRows = monthsToShow.map(month => {
     const tracks = artistRevenue.filter(r => r.month === month);
     const gross = tracks.reduce((s, r) => s + r.earning, 0);
-    const swift = swiftShareFor(artistSlug, month, revenue, masterGross);
+    const splits = tracks.map(r => revenueRowSplit(r, revenue, masterGross, artist.artistPct != null ? artist.artistPct : 0));
+    const swift = splits.reduce((t, x) => t + x.charge, 0);
     const net = gross - swift;
-    const artistShare = net * (artist.artistPct != null ? artist.artistPct : 0);
+    const artistShare = splits.reduce((t, x) => t + x.artistShare, 0);
     return { month, tracks, gross, swift, net, artistShare };
   });
 
@@ -7021,7 +7022,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['invoices', setInvoices, SEED_INVOICES],
         ['statementFiles', setStatementFiles, []],
         // Without a saved snapshot (local mode), artists start out seeing all approved seed revenue.
-        ['publishedRevenue', setPublishedRevenue, publishSnapshot(SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_MASTER_GROSS)],
+        ['publishedRevenue', setPublishedRevenue, publishSnapshot(SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_MASTER_GROSS, SEED_ROSTER)],
         ['revenuePublish', setRevenuePublish, []],
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],

@@ -482,6 +482,12 @@ and the 10-minute job in the notify function swaps them in at that time and
 emails the artists. Scheduled publishes can be published early or cancelled.
 Finance can request a time; the Admin's approval keeps it.
 
+All money is worked out on the team side. Publishing saves each row's final
+figures (`swiftShare` charge, `artistPct`, `artistShare`, `final: true`); the
+artist portal and its downloads show those as stored and never recompute them
+(`isFinal` in `finance.js`). A changed charge or % shows as "changed since
+publish" until it's republished.
+
 Before any publish, request approval or Admin approval, `publishChecks`
 recomputes every artist-month's charge from the raw figures. It **blocks** on
 a charge that doesn't match, a charge above the gross, a month's charges

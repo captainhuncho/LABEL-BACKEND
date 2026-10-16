@@ -27,7 +27,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
   const scheduled = log.filter(e => e.status === 'Scheduled').sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
   const requestedKeys = new Set([...pending, ...scheduled].flatMap(e => (e.items || []).map(i => i.key)));
   const scheduledFor = key => (scheduled.find(e => (e.items || []).some(i => i.key === key)) || {}).scheduledFor;
-  const diff = useMemo(() => publishDiff(approvedRevenue, published, masterGross).filter(d => d.state !== 'Published'), [approvedRevenue, published, masterGross]);
+  const diff = useMemo(() => publishDiff(approvedRevenue, published, masterGross, roster).filter(d => d.state !== 'Published'), [approvedRevenue, published, masterGross, roster]);
   const shown = diff.filter(d => !artistFilter || d.artistSlug === artistFilter);
   const artistsInDiff = [...new Map(diff.map(d => [d.artistSlug, d.artist])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   // What the artist actually gets: gross less their Inbound Banking Charge share, times their %.
@@ -45,11 +45,11 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
 
   const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   // A future publish keeps the rows as they are now; a timed job swaps them in at that time.
-  const snapshotRows = keys => applyPublish([], keys, approvedRevenue, masterGross);
+  const snapshotRows = keys => applyPublish([], keys, approvedRevenue, masterGross, roster);
   function release(keys, items, extra) {
     const when = extra.scheduledFor;
     if (when && Date.parse(when) > Date.now()) return { ...extra, status: 'Scheduled', rows: snapshotRows(keys) };
-    updatePublished(applyPublish(published, keys, approvedRevenue, masterGross));
+    updatePublished(applyPublish(published, keys, approvedRevenue, masterGross, roster));
     return { ...extra, status: 'Published', scheduledFor: '' };
   }
   function scheduleTime() {
@@ -197,7 +197,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                       <Td><input type="checkbox" checked={selected.has(d.key)} onChange={() => toggle(d.key)} aria-label={'Select ' + d.artist + ' ' + monthLabel(d.month)} style={{ accentColor: C.amber }} /></Td>
                       <Td>{d.artist}</Td>
                       <Td mono>{monthLabel(d.month)}</Td>
-                      <Td><Badge tone={waiting ? 'default' : STATE_TONE[d.state]}>{scheduledFor(d.key) ? 'Scheduled ' + fmtWhen(scheduledFor(d.key)) : waiting ? 'Awaiting approval' : d.chargeChanged ? 'Charge corrected since publish' : STATE_LABEL[d.state]}</Badge></Td>
+                      <Td><Badge tone={waiting ? 'default' : STATE_TONE[d.state]}>{scheduledFor(d.key) ? 'Scheduled ' + fmtWhen(scheduledFor(d.key)) : waiting ? 'Awaiting approval' : d.chargeChanged ? 'Charge or % changed since publish' : STATE_LABEL[d.state]}</Badge></Td>
                       <Td align="right" mono>{d.state === 'New' ? <span className="text-xs" style={{ color: C.textDim, fontFamily: 'inherit' }}>Nothing yet</span> : formatCents(publishedShare(d))}</Td>
                       <Td align="right" mono>{d.state === 'Removed' ? <span className="text-xs" style={{ color: C.textDim, fontFamily: 'inherit' }}>Removed</span> : formatCents(liveShare(d))}<div className="text-xs" style={{ color: C.textDim }}>of {formatCents(d.liveGross)} gross</div></Td>
                     </tr>

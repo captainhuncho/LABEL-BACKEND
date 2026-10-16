@@ -45,6 +45,8 @@ function buildMasterGrossByMonth(masterGross) {
 // yet matched to revenue stays with the label until it's imported.
 const chargeBase = (mg, trackedTotal) => Math.max(Number(mg.totalGross) || 0, trackedTotal);
 export function swiftShareFor(artistSlug, month, revenue, masterGross) {
+  const own = revenue.filter(r => r.artistSlug === artistSlug && r.month === month);
+  if (own.length && own.every(isFinal)) return own.reduce((t, r) => t + r.swiftShare, 0);
   const mg = masterGrossByMonth(masterGross)[month];
   if (!mg) return 0;
   const totalRev = chargeBase(mg, revByMonth(revenue)[month] || 0);
@@ -61,6 +63,11 @@ export function artistMonthsWithRevenue(artistSlug, revenue) {
 }
 export function artistLifetime(artist, revenue, masterGross) {
   const aSlug = slug(artist.name);
+  const own = revenue.filter(r => r.artistSlug === aSlug);
+  if (own.length && own.every(isFinal)) {
+    const gross = own.reduce((t, r) => t + r.earning, 0), swift = own.reduce((t, r) => t + r.swiftShare, 0), share = own.reduce((t, r) => t + r.artistShare, 0);
+    return { gross, swift, net: gross - swift, artistPct: artist.artistPct != null ? artist.artistPct : 0, artistShare: share, labelShare: gross - swift - share, monthCount: new Set(own.map(r => r.month)).size };
+  }
   const months = artistMonthsWithRevenue(aSlug, revenue);
   const byArtistMonth = revByArtistMonth(revenue);
   let gross = 0, swift = 0;
@@ -132,7 +139,11 @@ export function payoutStatementFor(artist, periodStart, periodEnd, revenue, mast
 // g2) One revenue row's breakdown: its slice of that month's inbound banking
 // charge (proportional to its earning), then the artist/label split. Rows of an
 // artist sum to the same totals as artistLifetime / payoutStatementFor.
+// A published row carries its final figures (`final`); artists' screens show
+// those as-is and never recompute them.
+export const isFinal = r => !!r && r.final === true;
 export function revenueRowSplit(row, revenue, masterGross, artistPct) {
+  if (isFinal(row)) { const net = row.earning - row.swiftShare; return { gross: row.earning, charge: row.swiftShare, net, artistShare: row.artistShare, labelShare: net - row.artistShare }; }
   const mg = masterGrossByMonth(masterGross)[row.month];
   const monthTotal = mg ? chargeBase(mg, revByMonth(revenue)[row.month] || 0) : 0;
   const charge = mg && monthTotal > 0 ? mg.swiftFee * row.earning / monthTotal : 0;
@@ -169,9 +180,14 @@ export function labelPnL(roster, revenue, masterGross, ledger) {
 // i) Publishing to artists. Artists see a snapshot of revenue taken at publish
 // time, each row carrying its Inbound Banking Charge share so later edits to
 // other artists' months can't move it.
-export function publishSnapshot(rows, approvedRevenue, masterGross) {
+export function publishSnapshot(rows, approvedRevenue, masterGross, roster = null) {
   const at = new Date().toISOString();
-  return rows.map(r => ({ ...r, swiftShare: revenueRowSplit(r, approvedRevenue, masterGross, 0).charge, publishedAt: at }));
+  const pctOf = s => { const a = roster && roster.find(x => slug(x.name) === s); return a && a.artistPct != null ? a.artistPct : null; };
+  return rows.map(r => {
+    const charge = revenueRowSplit(r, approvedRevenue, masterGross, 0).charge, pct = pctOf(r.artistSlug);
+    // With the artist's % known, the row is final: charge, % and earnings are fixed here.
+    return pct == null ? { ...r, swiftShare: charge, publishedAt: at } : { ...r, swiftShare: charge, artistPct: pct, artistShare: (r.earning - charge) * pct, final: true, publishedAt: at };
+  });
 }
 
 // What one artist sees from the snapshot: their rows, plus a per-month charge
@@ -187,7 +203,7 @@ export function artistPublishedView(published, artistSlug) {
 const rowSig = rows => rows.map(r => r.id + ':' + Math.round((Number(r.earning) || 0) * 100)).sort().join('|');
 // With masterGross, a published month whose charge no longer matches today's
 // calculation also counts as Changed, so a corrected charge can be republished.
-export function publishDiff(approvedRevenue, published, masterGross = null) {
+export function publishDiff(approvedRevenue, published, masterGross = null, roster = null) {
   const group = list => {
     const m = {};
     list.forEach(r => { const k = r.artistSlug + '|' + r.month; (m[k] = m[k] || []).push(r); });
@@ -200,7 +216,12 @@ export function publishDiff(approvedRevenue, published, masterGross = null) {
     let state = !p.length ? 'New' : !l.length ? 'Removed' : rowSig(l) === rowSig(p) ? 'Published' : 'Changed';
     let chargeChanged = false;
     if (state === 'Published' && masterGross) {
-      chargeChanged = l.some(r => { const q = p.find(x => x.id === r.id); return !q || Math.abs((Number(q.swiftShare) || 0) - revenueRowSplit(r, approvedRevenue, masterGross, 0).charge) >= 0.005; });
+      const pct = roster && (roster.find(a => slug(a.name) === artistSlug) || {}).artistPct;
+      chargeChanged = l.some(r => {
+        const q = p.find(x => x.id === r.id); if (!q) return true;
+        const charge = revenueRowSplit(r, approvedRevenue, masterGross, 0).charge;
+        return Math.abs((Number(q.swiftShare) || 0) - charge) >= 0.005 || (pct != null && (!q.final || Math.abs(q.artistShare - (r.earning - charge) * pct) >= 0.005));
+      });
       if (chargeChanged) state = 'Changed';
     }
     return { key: k, artistSlug, month, chargeChanged, artist: (l[0] || p[0]).artist, liveRows: l, liveGross: l.reduce((t, r) => t + r.earning, 0), publishedGross: p.reduce((t, r) => t + r.earning, 0), state };
@@ -208,11 +229,11 @@ export function publishDiff(approvedRevenue, published, masterGross = null) {
 }
 
 // Replace the snapshot for the given artist-months with the live rows.
-export function applyPublish(published, keys, approvedRevenue, masterGross) {
+export function applyPublish(published, keys, approvedRevenue, masterGross, roster = null) {
   const set = new Set(keys);
   const keep = published.filter(r => !set.has(r.artistSlug + '|' + r.month));
   const rows = approvedRevenue.filter(r => set.has(r.artistSlug + '|' + r.month));
-  return [...keep, ...publishSnapshot(rows, approvedRevenue, masterGross)];
+  return [...keep, ...publishSnapshot(rows, approvedRevenue, masterGross, roster)];
 }
 
 // j) Each artist's reporting schedule. Periods close on calendar month ends
@@ -274,7 +295,7 @@ export function publishChecks(keys, approvedRevenue, masterGross, roster, publis
   masterGross.forEach(g => { fee[g.month] = (fee[g.month] || 0) + (Number(g.swiftFee) || 0); base[g.month] = (base[g.month] || 0) + (Number(g.totalGross) || 0); });
   const tracked = {};
   approvedRevenue.forEach(r => { tracked[r.month] = (tracked[r.month] || 0) + (Number(r.earning) || 0); });
-  const rows = applyPublish(published, keys, approvedRevenue, masterGross);
+  const rows = applyPublish(published, keys, approvedRevenue, masterGross, roster);
   const nameOf = s => (roster.find(a => slug(a.name) === s) || {}).name || s;
   keys.forEach(k => {
     const [aSlug, month] = k.split('|');
@@ -291,6 +312,10 @@ export function publishChecks(keys, approvedRevenue, masterGross, roster, publis
     const expected = fee[month] && denom > 0 ? fee[month] * gross / denom : 0;
     if (Math.abs(charged - expected) >= 0.01) errors.push(label + ': charge ' + charged.toFixed(2) + ' should be ' + expected.toFixed(2));
     if (charged > gross + 0.005) errors.push(label + ': charge is more than the gross');
+    if (artist && artist.artistPct != null) {
+      const stored = mine.reduce((t, r) => t + (Number(r.artistShare) || 0), 0), due = (gross - expected) * artist.artistPct;
+      if (Math.abs(stored - due) >= 0.01) errors.push(label + ': earnings ' + stored.toFixed(2) + ' should be ' + due.toFixed(2));
+    }
     if ((tracked[month] || 0) > (base[month] || 0) + 0.01 && base[month] !== undefined) warnings.push(label + ': imported revenue for ' + month + ' (' + (tracked[month]).toFixed(2) + ') is more than the money received (' + base[month].toFixed(2) + ')');
   });
   // Across everyone who'd be published for a month, charges can't exceed that month's fee.

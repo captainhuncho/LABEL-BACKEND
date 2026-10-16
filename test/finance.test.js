@@ -143,3 +143,19 @@ test('a published month whose charge is now different shows as changed', async (
   assert.equal(publishDiff(rev, stale, mg)[0].chargeChanged, true);
   assert.equal(publishDiff(rev, applyPublish([], ['aizo-clutch|2026-05'], rev, mg), mg)[0].state, 'Published');
 });
+
+test('published rows are shown as stored, never recomputed', async () => {
+  const { applyPublish, artistLifetime, revenueRowSplit, swiftShareFor } = await import('../src/finance.js');
+  const roster = [{ name: 'Aizo Clutch', artistPct: 0.7 }];
+  const rev = [{ id: 'm', artistSlug: 'aizo-clutch', artist: 'Aizo Clutch', month: '2026-05', earning: 61.67240040072716 }];
+  const mg = [{ month: '2026-05', totalGross: 423.64, swiftFee: 30 }];
+  const pub = applyPublish([], ['aizo-clutch|2026-05'], rev, mg, roster);
+  assert.equal(pub[0].final, true);
+  assert.equal(pub[0].artistShare.toFixed(2), '40.11');
+  // Whatever money-received data the artist side has (none, or wrong), the stored figures win.
+  for (const anyMg of [[], [{ month: '2026-05', totalGross: 0, swiftFee: 999 }]]) {
+    assert.equal(revenueRowSplit(pub[0], pub, anyMg, 0.5).artistShare.toFixed(2), '40.11');
+    assert.equal(swiftShareFor('aizo-clutch', '2026-05', pub, anyMg).toFixed(2), '4.37');
+    assert.equal(artistLifetime(roster[0], pub, anyMg).artistShare.toFixed(2), '40.11');
+  }
+});
