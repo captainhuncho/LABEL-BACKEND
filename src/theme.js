@@ -73,6 +73,8 @@ img[alt="IMSS Records"] { filter: var(--logo-filter); }
 .imss-mobile-only { display: block !important; }
 .imss-content { padding: 20px 16px !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; }
 .imss-content-inner { max-width: 1280px; margin: 0 auto; animation: imss-enter 420ms cubic-bezier(0.28, 0.11, 0.32, 1) both; }
+.imss-signin-card { padding: 8px 0; }
+@media (min-width: 640px) { .imss-signin-card { background: var(--panel); border-radius: 24px; padding: 44px 40px 36px !important; box-shadow: var(--shadow); } }
 @keyframes imss-flash-kf { 0%, 60% { box-shadow: 0 0 0 3px var(--amber); background-color: var(--amber-soft); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .imss-flash { animation: imss-flash-kf 2.4s ease-out; border-radius: 12px; }
 @keyframes imss-enter { from { opacity: 0.001; transform: translateY(6px); } to { opacity: 1; transform: none; } }
