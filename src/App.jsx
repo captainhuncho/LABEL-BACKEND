@@ -6639,18 +6639,22 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         {tab === 'payouts' && (
           <div>
             <div className="flex flex-wrap gap-3 mb-6">
-              <KPICard icon={DollarSign} label="Gross accrued" value={formatCents(lifetime.artistShare)} />
-              {recoupable > 0 && <KPICard icon={Wallet} label="Unrecouped balance" value={formatCents(remainingRecoupable)} tone={remainingRecoupable > 0 ? 'amber' : undefined} />}
-              <KPICard icon={DollarSign} label="Paid to date" value={formatCents(paid)} tone="teal" />
-              <KPICard icon={Wallet} label="Balance due" value={formatCents(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} />
+              {/* These add up: earnings − recouped − paid = balance due. */}
+              <KPICard icon={DollarSign} label="Your earnings" value={formatCents(lifetime.artistShare)} sub="All time, your share after charges" />
+              {recoupment.recouped > 0 && <KPICard icon={Wallet} label="Recouped" value={'−' + formatCents(recoupment.recouped)} sub="Taken from earnings to cover spend on you" />}
+              <KPICard icon={DollarSign} label="Paid to date" value={(paid > 0 ? '−' : '') + formatCents(paid)} tone="teal" />
+              <KPICard icon={Wallet} label="Balance due" value={formatCents(Math.max(0, balance))} tone={balance > 0 ? 'amber' : undefined} sub="Payable to you now" />
             </div>
 
-            {recoupable > 0 && (
-              <div className="rounded px-3 py-2 text-xs mb-6" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
-                {formatCents(recoupable)} in expenses is being recouped before this balance is fully payable.
-                {isFunded && ' See the Budget & Expenses tab for the full breakdown.'}
+            {remainingRecoupable > 0 ? (
+              <div className="rounded mb-6" style={{ background: C.amberSoft, padding: '14px 18px', fontSize: 15 }}>
+                <b>{formatCents(remainingRecoupable)} of spend on you is still to be recouped.</b> It comes out of future royalties before anything more is payable. The full breakdown is under Expenses.
               </div>
-            )}
+            ) : recoupment.recouped > 0 ? (
+              <div className="rounded mb-6" style={{ background: C.panel, padding: '14px 18px', fontSize: 15, color: C.textDim }}>
+                All {formatCents(recoupment.recouped)} of spend on you has been recouped from your earnings, so nothing is outstanding. The full breakdown is under Expenses.
+              </div>
+            ) : null}
 
             <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
               <div className="text-xs px-4 pt-4 pb-2" style={{ color: C.textFaint }}>Payout history</div>
