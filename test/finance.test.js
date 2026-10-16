@@ -83,3 +83,19 @@ test('publishing: snapshot, diff and artist view', async () => {
   const states = Object.fromEntries(publishDiff(edited, pub).map(d => [d.artistSlug, d.state]));
   assert.deepEqual(states, { a: 'Changed', b: 'New' });
 });
+
+test('reporting schedule and payout threshold', async () => {
+  const { lastClosedPeriod, applyThreshold, reportingTerms } = await import('../src/finance.js');
+  const q = { reportingPeriod: 'quarterly' };
+  assert.deepEqual(lastClosedPeriod(q, '2026-10-16'), { start: '2026-07', end: '2026-09', cutoff: '2026-09-30', due: '2026-12-29' });
+  assert.equal(lastClosedPeriod(q, '2026-04-01').due, '2026-06-29');
+  const m = { reportingPeriod: 'monthly' };
+  assert.deepEqual(lastClosedPeriod(m, '2026-11-05'), { start: '2026-10', end: '2026-10', cutoff: '2026-10-31', due: '2026-11-30' });
+  assert.equal(lastClosedPeriod({ reportingPeriod: 'half-yearly' }, '2026-10-16').end, '2026-06');
+  assert.equal(reportingTerms({}).period, 'quarterly');
+  const first = applyThreshold(30, null, 50);
+  assert.deepEqual(first, { carriedIn: 0, totalDue: 30, belowThreshold: true, carriedOut: 30 });
+  const second = applyThreshold(25, first, 50);
+  assert.deepEqual(second, { carriedIn: 30, totalDue: 55, belowThreshold: false, carriedOut: 0 });
+  assert.equal(applyThreshold(10, null, 0).belowThreshold, false);
+});

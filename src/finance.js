@@ -203,3 +203,36 @@ export function applyPublish(published, keys, approvedRevenue, masterGross) {
   const rows = approvedRevenue.filter(r => set.has(r.artistSlug + '|' + r.month));
   return [...keep, ...publishSnapshot(rows, approvedRevenue, masterGross)];
 }
+
+// j) Each artist's reporting schedule. Periods close on calendar month ends
+// (quarterly: Mar/Jun/Sep/Dec, half-yearly: Jun/Dec); the statement is due a
+// set number of days after the cutoff.
+export const REPORTING_PERIODS = { monthly: 1, quarterly: 3, 'half-yearly': 6 };
+export const DEFAULT_DELIVERY_DAYS = { monthly: 30, quarterly: 90, 'half-yearly': 90 };
+const addMonths = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+const lastDay = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
+
+export function reportingTerms(artist) {
+  const period = REPORTING_PERIODS[artist.reportingPeriod] ? artist.reportingPeriod : 'quarterly';
+  const days = Number(artist.deliveryDays) > 0 ? Number(artist.deliveryDays) : DEFAULT_DELIVERY_DAYS[period];
+  return { period, months: REPORTING_PERIODS[period], deliveryDays: days, threshold: Number(artist.payoutThreshold) || 0 };
+}
+
+// The most recent period whose cutoff is on or before `today` (YYYY-MM-DD).
+export function lastClosedPeriod(artist, today) {
+  const { months, deliveryDays } = reportingTerms(artist);
+  let end = addMonths(today.slice(0, 7), -1);
+  while (Number(end.slice(5, 7)) % months !== 0) end = addMonths(end, -1);
+  const cutoff = lastDay(end);
+  const due = new Date(Date.parse(cutoff + 'T00:00:00Z') + deliveryDays * 86400000).toISOString().slice(0, 10);
+  return { start: addMonths(end, 1 - months), end, cutoff, due };
+}
+
+// Threshold with carry-forward: a balance under the threshold rolls into the
+// next statement. `previous` is the artist's last non-draft statement, if any.
+export function applyThreshold(periodShare, previous, threshold) {
+  const carriedIn = previous ? Number(previous.carriedOut) || 0 : 0;
+  const totalDue = periodShare + carriedIn;
+  const below = threshold > 0 && totalDue < threshold;
+  return { carriedIn, totalDue, belowThreshold: below, carriedOut: below ? totalDue : 0 };
+}

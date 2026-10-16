@@ -475,6 +475,19 @@ copies the live rows into `publishedRevenue` and logs it in `revenuePublish`;
 artists get an email naming their months. Existing data was published as-is
 when this was introduced.
 
+## 6c. Reporting schedule and payout threshold
+
+Each Roster entry has `reportingPeriod` (monthly, quarterly, half-yearly;
+default quarterly), `deliveryDays` (statement due this many days after the
+cutoff; default 30 monthly, 90 otherwise) and `payoutThreshold` (USD).
+Cutoffs are calendar month ends: quarterly 31 Mar / 30 Jun / 30 Sep / 31 Dec.
+Payouts lists each artist's last closed period, its due date and status, with
+Prepare to fill the form. A statement under the threshold is still generated
+and sent, marked "carried forward"; its balance (`carriedOut`) is added to the
+artist's next statement (`carriedIn`). Artists see their schedule and threshold
+on their Statements tab. Logic: `reportingTerms`, `lastClosedPeriod`,
+`applyThreshold` in `finance.js`.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, slug, swiftShareFor } from './finance.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, lastClosedPeriod, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
@@ -788,7 +788,7 @@ function SendLinkButton({ email, labeled = false }) {
 
 function RosterSection({ statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
-  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '' };
+  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
@@ -807,7 +807,7 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
   function save(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    const payload = { ...form, royaltyRate: Number(form.royaltyRate), annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
+    const payload = { ...form, royaltyRate: Number(form.royaltyRate), payoutThreshold: Number(form.payoutThreshold) || 0, deliveryDays: Number(form.deliveryDays) || '', annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
     if (editing) update(roster.map(a => a.id === editing ? { ...payload, id: editing } : a));
     else update([...roster, { ...payload, id: uid() }]);
     closeForm();
@@ -935,6 +935,15 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
             </Select>
           </Field>
           <Field label="Royalty rate (% to artist)"><Input type="number" min="0" max="100" value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>
+          <Field label="Reporting period">
+            <Select value={form.reportingPeriod || 'quarterly'} onChange={e => setForm({ ...form, reportingPeriod: e.target.value })}>
+              <option value="monthly">Monthly (cutoff end of each month)</option>
+              <option value="quarterly">Quarterly (cutoff 31 Mar, 30 Jun, 30 Sep, 31 Dec)</option>
+              <option value="half-yearly">Half-yearly (cutoff 30 Jun, 31 Dec)</option>
+            </Select>
+          </Field>
+          <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
+          <Field label="Payout threshold (USD, smaller balances carry forward)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
           <Field label="Funding tier">
             <Select value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value })}>
               {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -4486,6 +4495,20 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
 
   const selectedArtist = roster.find(a => a.id === form.artistId) || null;
   const preview = selectedArtist ? payoutStatementFor(selectedArtist, form.periodStart, form.periodEnd, revenue, masterGross) : null;
+  // The artist's last real (non-draft) statement before this period carries any under-threshold balance in.
+  const previousFor = (aSlug, start) => [...payouts].filter(p => p.artistSlug === aSlug && p.status !== 'draft' && p.periodEnd < start).sort((x, y) => y.periodEnd.localeCompare(x.periodEnd))[0] || null;
+  const terms = selectedArtist ? reportingTerms(selectedArtist) : null;
+  const carry = preview ? applyThreshold(preview.artistShare, previousFor(slug(selectedArtist.name), form.periodStart), terms.threshold) : null;
+  const today = todayStr();
+  const dueList = roster.filter(a => (a.status || 'Active') === 'Active').map(a => {
+    const per = lastClosedPeriod(a, today), aSlug = slug(a.name);
+    const done = payouts.find(p => p.artistSlug === aSlug && p.periodStart === per.start && p.periodEnd === per.end && p.status !== 'draft');
+    const share = payoutStatementFor(a, per.start, per.end, revenue, masterGross).artistShare;
+    const c = applyThreshold(share, previousFor(aSlug, per.start), reportingTerms(a).threshold);
+    const daysLeft = Math.round((Date.parse(per.due) - Date.parse(today)) / 86400000);
+    return { artist: a, per, done, c, daysLeft, terms: reportingTerms(a) };
+  }).sort((x, y) => (!!x.done - !!y.done) || x.per.due.localeCompare(y.per.due));
+  function prepare(row) { setForm({ ...empty, artistId: row.artist.id, periodStart: row.per.start, periodEnd: row.per.end }); }
 
   function generateStatement(status) {
     if (!selectedArtist || !preview || form.periodStart > form.periodEnd) return;
@@ -4494,7 +4517,9 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
       periodStart: form.periodStart, periodEnd: form.periodEnd,
       grossEarning: preview.gross, swiftShare: preview.swift, netAfterSwift: preview.net,
       artistPct: preview.artistPct, artistShare: preview.artistShare, labelShare: preview.labelShare,
-      status, createdAt: Date.now(), notes: form.notes,
+      ...carry, threshold: terms.threshold,
+      // Under the threshold nothing is paid; the balance rolls into the next statement.
+      status: status === 'paid' && carry.belowThreshold ? 'carried forward' : status, createdAt: Date.now(), notes: form.notes,
     };
     update([...payouts, stmt]);
     setForm({ ...empty, artistId: form.artistId });
@@ -4531,6 +4556,29 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
         <KPICard icon={ClipboardList} label="Label net profit (P&L)" value={formatCurrency(pnl.netProfit)} tone={pnl.netProfit < 0 ? 'red' : 'teal'} />
       </div>
 
+      <h2 className="mb-2" style={{ fontWeight: 600, fontSize: 17 }}>Statements due</h2>
+      <p className="text-xs mb-3" style={{ color: C.textDim }}>Each artist’s last closed reporting period, from their schedule on the Roster.</p>
+      <div className="rounded border overflow-x-auto mb-6" style={{ borderColor: C.border, background: C.panel }}>
+        <table className="w-full" style={{ minWidth: 820 }}>
+          <thead><tr><Th>Artist</Th><Th>Schedule</Th><Th>Period</Th><Th>Due by</Th><Th align="right">Due to artist</Th><Th>Status</Th><Th align="right"><span className="sr-only">Actions</span></Th></tr></thead>
+          <tbody>
+            {dueList.map(r => (
+              <tr key={r.artist.id}>
+                <Td>{r.artist.name}</Td>
+                <Td><span className="text-xs" style={{ color: C.textDim }}>{r.terms.period}, {r.terms.deliveryDays} days{r.terms.threshold ? ', min ' + formatCurrency(r.terms.threshold) : ''}</span></Td>
+                <Td mono>{monthLabel(r.per.start)}{r.per.start !== r.per.end ? ' – ' + monthLabel(r.per.end) : ''}</Td>
+                <Td mono>{formatDate(r.per.due)}</Td>
+                <Td align="right" mono>{formatCurrency(r.c.totalDue)}</Td>
+                <Td>{r.done ? <Badge tone="teal">{r.done.status === 'carried forward' ? 'Done · carried forward' : 'Done'}</Badge>
+                  : r.daysLeft < 0 ? <Badge tone="red">Overdue {-r.daysLeft} days</Badge>
+                  : <Badge tone="amber">Due in {r.daysLeft} days</Badge>}{!r.done && r.c.belowThreshold && <div className="text-xs mt-1" style={{ color: C.textDim }}>Under threshold, will carry forward</div>}</Td>
+                <Td align="right">{!r.done && canEdit && <Btn variant="ghost" onClick={() => prepare(r)}>Prepare</Btn>}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       {canEdit && (
         <div className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
           <Field label="Artist">
@@ -4549,11 +4597,14 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
               <div className="text-xs" style={{ color: C.textFaint }}>Net <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.net)}</div></div>
               <div className="text-xs" style={{ color: C.textFaint }}>Artist share ({Math.round(preview.artistPct * 100)}%) <div style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.artistShare)}</div></div>
               <div className="text-xs" style={{ color: C.textFaint }}>Label share <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(preview.labelShare)}</div></div>
+              {carry.carriedIn > 0 && <div className="text-xs" style={{ color: C.textFaint }}>Carried in <div style={{ color: C.text, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(carry.carriedIn)}</div></div>}
+              <div className="text-xs" style={{ color: C.textFaint }}>Total due <div style={{ color: carry.belowThreshold ? C.amber : C.teal, fontWeight: 600, fontFamily: MONO_FONT, fontSize: 14 }}>{formatCurrency(carry.totalDue)}</div></div>
+              {carry.belowThreshold && <div className="text-xs w-full" style={{ color: C.amber }}>Under {selectedArtist.name}’s {formatCurrency(terms.threshold)} payout threshold: the statement is still sent, and {formatCurrency(carry.totalDue)} carries forward to the next one.</div>}
             </div>
           )}
           <div className="imss-span-2 flex gap-2 mt-1">
             <Btn variant="ghost" onClick={() => generateStatement('draft')}>Save as draft</Btn>
-            <Btn variant="primary" onClick={() => generateStatement('paid')}>Generate &amp; mark paid</Btn>
+            <Btn variant="primary" onClick={() => generateStatement('paid')}>{carry && carry.belowThreshold ? 'Generate (carry forward)' : <>Generate &amp; mark paid</>}</Btn>
           </div>
         </div>
       )}
@@ -4596,7 +4647,7 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
                   <Td align="right" mono>{formatCurrency(p.grossEarning)}</Td>
                   <Td align="right" mono>{formatCurrency(p.netAfterSwift)}</Td>
                   <Td align="right" mono>{formatCurrency(p.artistShare)}</Td>
-                  <Td><Badge tone={p.status === 'paid' ? 'teal' : 'amber'}>{p.status}</Badge></Td>
+                  <Td><Badge tone={p.status === 'paid' ? 'teal' : 'amber'}>{p.status}</Badge>{p.carriedOut > 0 && <div className="text-xs mt-1" style={{ color: C.textDim }}>{formatCurrency(p.carriedOut)} carried forward</div>}</Td>
                   <Td>
                     {p.sentAt ? (
                       <span className="text-xs" style={{ color: C.teal }}>Sent {fmtWhen(p.sentAt)}</span>
@@ -6682,6 +6733,17 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           </div>
         )}
 
+        {tab === 'statements' && (() => {
+          const t = reportingTerms(artist), next = lastClosedPeriod(artist, todayStr());
+          const cut = { monthly: 'the end of each month', quarterly: '31 March, 30 June, 30 September and 31 December', 'half-yearly': '30 June and 31 December' }[t.period];
+          return (
+            <div className="rounded border p-4 mb-6 text-sm" style={{ borderColor: C.border, background: C.panel }}>
+              <div style={{ fontWeight: 600 }}>Your reporting schedule</div>
+              <p className="mt-1" style={{ color: C.textDim }}>{t.period.charAt(0).toUpperCase() + t.period.slice(1)} statements. Accounts close on {cut}, and each statement arrives within {t.deliveryDays} days. Your latest period closed {formatDate(next.cutoff)}; its statement is due by {formatDate(next.due)}.</p>
+              {t.threshold > 0 && <p className="mt-1" style={{ color: C.textDim }}>Payments are made once your balance reaches <b style={{ color: C.text }}>{formatCurrency(t.threshold)}</b>. Smaller balances still get a statement and carry forward to the next one.</p>}
+            </div>
+          );
+        })()}
         {tab === 'statements' && <div className="mb-6"><StatementFilesList title="Statement files from the label" files={statementFiles.filter(f => f.artistId === artist.id)} empty="When the label uploads your royalty statements, the original files appear here to download." /></div>}
         {tab === 'statements' && (
           <ArtistStatementView artist={artist} revenue={revenue} masterGross={masterGross} ledger={ledger} payouts={payouts} requireGenerate />
@@ -6693,7 +6755,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 }
 
 // Everything waiting on this team member: shown on the Overview and in Alerts.
-function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], isAdmin = false, sessionName = '' }) {
+function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], payouts = [], canRoyalties = false, isAdmin = false, sessionName = '' }) {
   const items = [];
   const today = todayStr();
   roster.forEach(a => {
@@ -6757,6 +6819,18 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   const myPendingSubmissions = releaseSubmissions.filter(s => s.status === 'Pending' && (isAdmin || s.sentTo === sessionName));
   if (myPendingSubmissions.length > 0) {
     items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'submissions' });
+  }
+  // Statements due within two weeks, or overdue, from each artist's schedule.
+  if (canRoyalties) {
+    let overdue = 0, soon = 0;
+    roster.filter(a => (a.status || 'Active') === 'Active').forEach(a => {
+      const per = lastClosedPeriod(a, today);
+      const done = payouts.some(p => p.artistSlug === slug(a.name) && p.periodStart === per.start && p.periodEnd === per.end && p.status !== 'draft');
+      const days = Math.round((Date.parse(per.due) - Date.parse(today)) / 86400000);
+      if (!done && days < 0) overdue++; else if (!done && days <= 14) soon++;
+    });
+    if (overdue) items.push({ id: 'statements-overdue', tone: 'red', text: overdue + ' artist ' + (overdue === 1 ? 'statement is' : 'statements are') + ' overdue', tab: 'payouts' });
+    if (soon) items.push({ id: 'statements-soon', tone: 'amber', text: soon + ' artist ' + (soon === 1 ? 'statement is' : 'statements are') + ' due in the next 14 days', tab: 'payouts' });
   }
   const publishWaiting = revenuePublish.filter(e => e.status === 'Awaiting approval').length;
   if (isAdmin && publishWaiting > 0) {
@@ -7018,8 +7092,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
   const attention = useMemo(() => (session && session.mode === 'team'
-    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, isAdmin, sessionName: session.name })
-    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, isAdmin]);
+    ? teamAttention({ roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name })
+    : []), [session, roster, catalog, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, payouts, perms.royalties, isAdmin]);
 
   // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
   const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
