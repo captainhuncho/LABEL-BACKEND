@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import { ARTIST_STATUSES, COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, FUNDING_TIERS, GENRES, IMPORT_FIELD_LABELS, LEDGER_CATEGORIES, MARKETS, PERMISSION_FIELDS, PLATFORMS, PLATFORM_COLORS, RELEASE_STATUSES, RELEASE_TYPES, STAFF_ROLES, STAFF_STATUSES, SUB_GENRES, artistStatusTone, buildImportGroups, checklistProgress, computePlatformLeaderboard, defaultPermissionsForRole, emptyCredits, expirationStatus, extractPivotTable, formatCents, formatCurrency, formatDate, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, isTopRole, makeDistributionDocs, makeOnboardingChecklist, makeReleaseChecklist, missingRequiredDocs, monthKey, monthLabel, normalizeIsrc, normalizeStr, onboardingProgress, parseAmount, parseQuantity, parseStatementDate, permissionsFor, releaseStatusTone, todayStr, trackOptionLabel, uid } from './constants.js';
-import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, lastClosedPeriod, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
+import { artistLifetime, companyFinanceTotals, labelPnL, ledgerTotals, payoutStatementFor, recoupmentForArtist, revByMonth, revenueBreakdown, revenueRowSplit, artistPublishedView, publishSnapshot, applyThreshold, expandRemittances, lastClosedPeriod, monthRange, reportingTerms, DEFAULT_DELIVERY_DAYS, slug, swiftShareFor } from './finance.js';
 import { DATA_VERSION, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES, REQUEST_STATUSES, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS, TASK_STATUSES } from './seed.js';
 import { statementFileUrl, supabase } from './storage.js';
 import EmpireImport from './sections/EmpireImport.jsx';
@@ -2894,13 +2894,13 @@ function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
 function MasterGrossSection({ masterGross, update, roster, revenue, labelSettings, updateLabelSettings, canEdit = true }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const empty = { month: todayStr().slice(0, 7), remittanceId: '', paidOn: '', receivedOn: '', totalGross: '', swiftFee: String(labelSettings.swiftFee) };
+  const empty = { month: todayStr().slice(0, 7), periodStart: '', remittanceId: '', paidOn: '', receivedOn: '', totalGross: '', swiftFee: String(labelSettings.swiftFee) };
   const [form, setForm] = useState(empty);
   const [confirmId, setConfirmId] = useState(null);
   const [feeInput, setFeeInput] = useState(String(labelSettings.swiftFee));
 
   function openAdd() { setForm({ ...empty, swiftFee: String(labelSettings.swiftFee) }); setEditing(null); setShowForm(true); }
-  function openEdit(g) { setForm({ month: g.month, remittanceId: g.remittanceId || '', paidOn: g.paidOn || '', receivedOn: g.receivedOn || '', totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
+  function openEdit(g) { setForm({ month: g.month, periodStart: g.periodStart || '', remittanceId: g.remittanceId || '', paidOn: g.paidOn || '', receivedOn: g.receivedOn || '', totalGross: String(g.totalGross), swiftFee: String(g.swiftFee) }); setEditing(g.id); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditing(null); }
   function save(e) {
     e.preventDefault();
@@ -2908,9 +2908,11 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
     const swiftFee = Number(form.swiftFee);
     if (!form.month || totalGross < 0 || swiftFee < 0) return;
     // month = the statement month this money pays for (what everything matches on); the dates are records only.
-    const payload = { id: form.month, month: form.month, remittanceId: form.remittanceId.trim(), paidOn: form.paidOn || '', receivedOn: form.receivedOn || '', totalGross, swiftFee };
+    const periodStart = form.periodStart && form.periodStart < form.month ? form.periodStart : '';
+    const payload = { id: form.month, month: form.month, periodStart, remittanceId: form.remittanceId.trim(), paidOn: form.paidOn || '', receivedOn: form.receivedOn || '', totalGross, swiftFee };
     if (editing) update(masterGross.map(g => g.id === editing ? payload : g));
-    else update([...masterGross.filter(g => g.month !== form.month), payload]);
+    // A new entry replaces any entry for a month it now covers.
+    else update([...masterGross.filter(g => !monthRange(periodStart || form.month, form.month).includes(g.month)), payload]);
     closeForm();
   }
   function remove(id) { update(masterGross.filter(g => g.id !== id)); setConfirmId(null); }
@@ -2945,6 +2947,8 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
       {showForm && (
         <form onSubmit={save} className="rounded border p-4 mb-6 imss-form-grid gap-3" style={{ background: C.panel, borderColor: C.borderLight }}>
           <Field label="Statement month it pays for"><Input type="month" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} disabled={!!editing} /></Field>
+          <Field label="Carried forward from (optional)"><Input type="month" value={form.periodStart} max={form.month} onChange={e => setForm({ ...form, periodStart: e.target.value })} /></Field>
+          <div className="imss-span-2 text-xs" style={{ color: C.textDim, marginTop: -4 }}>If EMPIRE held earlier months back (under its $300 minimum) and paid them in this one payment, pick the first month it covers. The amount and the single charge are spread across those months by what each earned.</div>
           <Field label="Remittance ID"><Input value={form.remittanceId} onChange={e => setForm({ ...form, remittanceId: e.target.value })} placeholder="e.g. JAN26-16344-21056" /></Field>
           <Field label="Money sent (EMPIRE payment date)"><Input type="date" value={form.paidOn} onChange={e => setForm({ ...form, paidOn: e.target.value })} /></Field>
           <Field label="Money received (bank credit date)"><Input type="date" value={form.receivedOn} onChange={e => setForm({ ...form, receivedOn: e.target.value })} /></Field>
@@ -2965,11 +2969,11 @@ function MasterGrossSection({ masterGross, update, roster, revenue, labelSetting
             <thead><tr><Th>Statement month</Th><Th>Remittance</Th><Th>Money sent</Th><Th>Money received</Th><Th align="right">Total gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Net received</Th><Th align="right">Tracked revenue</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(g => {
-                const trackedThisMonth = revByMonth(revenue)[g.month] || 0;
+                const trackedThisMonth = monthRange(g.periodStart || g.month, g.month).reduce((t, m) => t + (revByMonth(revenue)[m] || 0), 0);
                 const gap = g.totalGross - trackedThisMonth;
                 return (
                   <tr key={g.id}>
-                    <Td mono>{monthLabel(g.month)}</Td>
+                    <Td mono>{g.periodStart ? monthLabel(g.periodStart) + ' – ' : ''}{monthLabel(g.month)}{g.periodStart && <div className="text-xs" style={{ color: C.textDim, fontFamily: 'inherit' }}>Carried forward, paid together</div>}</Td>
                     <Td><span className="text-xs" style={{ color: C.textDim }}>{g.remittanceId || '—'}</span></Td>
                     <Td mono>{formatDate(g.paidOn)}</Td>
                     <Td mono>{g.receivedOn ? formatDate(g.receivedOn) : <span className="text-xs" style={{ color: C.textDim }}>Date not recorded</span>}</Td>
@@ -7088,6 +7092,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const artistMap = useMemo(() => Object.fromEntries(roster.map(a => [a.id, a])), [roster]);
   const releaseMap = useMemo(() => Object.fromEntries(catalog.map(r => [r.id, r])), [catalog]);
   const approvedRevenue = useMemo(() => revenue.filter(e => (e.approvalStatus || 'Approved') === 'Approved'), [revenue]);
+  // Payments entered over several carried-forward months, spread per month for all the money math.
+  const monthlyMasterGross = useMemo(() => expandRemittances(masterGross, approvedRevenue), [masterGross, approvedRevenue]);
   const approvedLedger = useMemo(() => ledger.filter(x => (x.approvalStatus || 'Approved') === 'Approved'), [ledger]);
 
   const perms = session && session.mode === 'team' ? session.permissions : {};
@@ -7197,9 +7203,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
         )}
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
-        {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={masterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
-        {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={masterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={masterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'overview' && <Overview roster={roster} catalog={catalog} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
+        {active === 'import' && <ImportSection roster={roster} catalog={catalog} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
+        {active === 'roster' && <RosterSection statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalog} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
@@ -7215,12 +7221,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
-        {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={masterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
-        {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} canEdit={canEdit} />}
-        {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={masterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
+        {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
+        {active === 'payouts' && <PayoutsSection payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
+        {active === 'ledger' && <LedgerSection ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
-        {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={masterGross} ledger={approvedLedger} payouts={payouts} />}
+        {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalog} />}
         {active === 'activity' && <ActivityLogSection activityLog={activityLog} />}
         <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>

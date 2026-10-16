@@ -488,6 +488,15 @@ artist's next statement (`carriedIn`). Artists see their schedule and threshold
 on their Statements tab. Logic: `reportingTerms`, `lastClosedPeriod`,
 `applyThreshold` in `finance.js`.
 
+## 6d. Carried-forward payments
+
+EMPIRE pays only once a balance reaches $300; smaller months are carried
+forward and paid together. A Money received entry can cover several statement
+months (`periodStart` to `month`), entered once as on the remittance sheet. For
+all money math the app spreads that payment and its single Inbound Banking
+Charge across the covered months by what each earned (`expandRemittances` in
+`finance.js`); the Money received screen keeps the entry as typed.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

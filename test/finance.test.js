@@ -99,3 +99,12 @@ test('reporting schedule and payout threshold', async () => {
   assert.deepEqual(second, { carriedIn: 30, totalDue: 55, belowThreshold: false, carriedOut: 0 });
   assert.equal(applyThreshold(10, null, 0).belowThreshold, false);
 });
+
+test('a payment covering several months spreads by earnings', async () => {
+  const { expandRemittances } = await import('../src/finance.js');
+  const rev = [{ artistSlug: 'a', month: '2026-02', earning: 30 }, { artistSlug: 'a', month: '2026-03', earning: 90 }];
+  const out = expandRemittances([{ id: 'r', month: '2026-03', periodStart: '2026-02', totalGross: 120, swiftFee: 30 }, { id: 'x', month: '2026-04', totalGross: 5, swiftFee: 1 }], rev);
+  assert.deepEqual(out.map(g => [g.month, g.totalGross, g.swiftFee]), [['2026-02', 30, 7.5], ['2026-03', 90, 22.5], ['2026-04', 5, 1]]);
+  const none = expandRemittances([{ id: 'r', month: '2026-03', periodStart: '2026-01', totalGross: 10, swiftFee: 3 }], []);
+  assert.deepEqual(none.map(g => g.swiftFee), [0, 0, 3]);
+});

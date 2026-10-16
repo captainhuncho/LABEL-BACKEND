@@ -236,3 +236,20 @@ export function applyThreshold(periodShare, previous, threshold) {
   const below = threshold > 0 && totalDue < threshold;
   return { carriedIn, totalDue, belowThreshold: below, carriedOut: below ? totalDue : 0 };
 }
+
+// k) A payment can cover several statement months (EMPIRE holds balances under
+// its $300 minimum and pays them together). Entered once, as on the remittance
+// sheet, with `periodStart`; the engine works per month, so the payment and its
+// single charge are spread over the covered months by what each month earned.
+export function expandRemittances(masterGross, revenue) {
+  const rev = revByMonth(revenue);
+  return masterGross.flatMap(g => {
+    if (!g.periodStart || g.periodStart >= g.month) return [g];
+    const months = monthRange(g.periodStart, g.month);
+    const total = months.reduce((t, m) => t + (rev[m] || 0), 0);
+    return months.map(m => {
+      const share = total > 0 ? (rev[m] || 0) / total : (m === g.month ? 1 : 0);
+      return { ...g, id: g.id + '_' + m, month: m, totalGross: g.totalGross * share, swiftFee: g.swiftFee * share, remittanceOf: g.id };
+    });
+  });
+}
