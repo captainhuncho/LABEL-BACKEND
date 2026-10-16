@@ -4,7 +4,7 @@ import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEAS
 import { C, MONO_FONT } from '../theme.js';
 import { ArtworkThumb, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToExcel, resizeImageFile } from '../ui.jsx';
 
-export function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '', incomingSubmission = null, clearIncoming, onOpenSubmissions }) {
+export function CatalogSection({ focus = null, catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '', incomingSubmission = null, clearIncoming, onOpenSubmissions }) {
   const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
   const visibleArtistIds = new Set(visibleRoster.map(a => a.id));
   const visibleCatalog = pmScope ? catalog.filter(c => visibleArtistIds.has(c.artistId)) : catalog;
@@ -47,6 +47,7 @@ export function CatalogSection({ catalog, update, roster, artistMap, canEdit = t
     if (updateReleaseSubmissions) updateReleaseSubmissions(releaseSubmissions.map(s => s.id === sub.id ? { ...s, status: 'Rejected', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : s));
   }
   function openEdit(r) { setFromSubmissionId(null); setForm({ ...empty, ...r, collaborators: r.collaborators || [], primaryArtists: r.primaryArtists || [], checklist: r.checklist && r.checklist.length ? r.checklist : makeReleaseChecklist(), distributionDocs: r.distributionDocs && r.distributionDocs.length ? r.distributionDocs : makeDistributionDocs(), credits: r.credits ? { ...emptyCredits(), ...r.credits } : emptyCredits() }); setEditing(r.id); setNewCollab({ name: '', role: 'Feature', splitPercent: '' }); setDistributorEmail(''); setShowForm(true); }
+  useEffect(() => { const r = focus && focus.openId && catalog.find(c => c.id === focus.openId); if (r) openEdit(r); }, [focus]);
   function closeForm() { setShowForm(false); setEditing(null); setNewChecklistLabel(''); if (artworkInputRef.current) artworkInputRef.current.value = ''; }
   function addCollaborator() {
     if (!newCollab.name.trim()) return;
@@ -478,7 +479,7 @@ export function CatalogSection({ catalog, update, roster, artistMap, canEdit = t
             const lic = r.licenseExpiration ? r.license : null;
             const prog = checklistProgress(r.checklist);
             return (
-              <button key={r.id} onClick={() => canEdit && openEdit(r)} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
+              <button key={r.id} data-focus={r.id} onClick={() => canEdit && openEdit(r)} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
                 <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
                   <ArtworkThumb release={r} size="100%" radius={0} />
                   {r.status !== 'Released' && prog.total > 0 && (
@@ -524,7 +525,7 @@ export function CatalogSection({ catalog, update, roster, artistMap, canEdit = t
             <thead><tr><Th></Th><Th>Product</Th><Th>Artist</Th><Th>Type</Th><Th>Market</Th><Th>Release date</Th><Th>Codes</Th><Th>Status</Th><Th>License</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(r => (
-                <tr key={r.id}>
+                <tr key={r.id} data-focus={r.id}>
                   <Td><ArtworkThumb release={r} size={36} /></Td>
                   <Td>{r.title}{r.collaborators && r.collaborators.length > 0 && <div className="text-xs" style={{ color: C.textFaint }}>feat. {r.collaborators.map(c => c.name).join(', ')}</div>}</Td>
                   <Td>{artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown'}</Td>

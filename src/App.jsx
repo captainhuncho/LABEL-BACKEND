@@ -200,19 +200,19 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   roster.forEach(a => {
     if (!a.contractExpiration) return;
     const st = expirationStatus(a.contractExpiration);
-    if (st && st.label !== 'Active') items.push({ id: 'contract-' + a.id, tone: st.tone, text: a.name + "'s contract " + st.label.toLowerCase(), tab: 'roster' });
+    if (st && st.label !== 'Active') items.push({ id: 'contract-' + a.id, tone: st.tone, text: a.name + "'s contract " + st.label.toLowerCase(), tab: 'roster', focus: { artistId: a.id } });
   });
   // License flags go to Admin and Legal, who own contracts and rights.
-  if (isAdmin || role === 'Legal') licenseFlags(roster, catalog, licenseCtx).forEach((f, i) => items.push({ id: 'lic-' + f.kind + '-' + f.artistId + i, tone: f.kind === 'decide' ? 'red' : 'amber', text: f.text, tab: 'roster' }));
+  if (isAdmin || role === 'Legal') licenseFlags(roster, catalog, licenseCtx).forEach((f, i) => items.push({ id: 'lic-' + f.kind + '-' + f.artistId + i, tone: f.kind === 'decide' ? 'red' : 'amber', text: f.text, tab: 'roster', focus: { artistId: f.artistId, section: 'Contract and licenses' } }));
   catalog.forEach(c => {
     if (c.status === 'Released') return;
     const missing = missingRequiredDocs(c.distributionDocs);
-    if (missing > 0) items.push({ id: 'missing-docs-' + c.id, tone: 'amber', text: c.title + ' missing ' + missing + ' required distribution document' + (missing === 1 ? '' : 's'), tab: 'catalog' });
+    if (missing > 0) items.push({ id: 'missing-docs-' + c.id, tone: 'amber', text: c.title + ' missing ' + missing + ' required distribution document' + (missing === 1 ? '' : 's'), tab: 'catalog', focus: { openId: c.id } });
   });
   staff.forEach(s => {
     if ((s.status || 'Active') !== 'Onboarding') return;
     const prog = onboardingProgress(s);
-    items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team' });
+    items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team', focus: { id: s.id } });
   });
   catalog.forEach(c => {
     if (!c.releaseDate || c.status === 'Released') return;
@@ -221,58 +221,58 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
     const prog = checklistProgress(c.checklist);
     const dueText = days === 0 ? 'releases today' : days === 1 ? 'releases tomorrow' : 'releases in ' + days + ' days';
     if (prog.total > 0 && prog.pct < 100 && days <= 7) {
-      items.push({ id: 'release-risk-' + c.id, tone: 'red', text: c.title + ' ' + dueText + ' — checklist only ' + prog.pct + '% done', tab: 'catalog' });
+      items.push({ id: 'release-risk-' + c.id, tone: 'red', text: c.title + ' ' + dueText + ' — checklist only ' + prog.pct + '% done', tab: 'catalog', focus: { openId: c.id } });
     } else {
-      items.push({ id: 'release-' + c.id, tone: days <= 3 ? 'red' : 'amber', text: c.title + ' ' + dueText, tab: 'calendar' });
+      items.push({ id: 'release-' + c.id, tone: days <= 3 ? 'red' : 'amber', text: c.title + ' ' + dueText, tab: 'calendar', focus: { releaseId: c.id, month: c.releaseDate.slice(0, 7) } });
     }
   });
   tasks.forEach(t => {
     if (t.status !== 'Open' || !t.dueDate || t.dueDate >= today) return;
-    items.push({ id: 'task-' + t.id, tone: 'red', text: 'Overdue: "' + t.title + '" (' + t.assignee + ')', tab: 'tasks' });
+    items.push({ id: 'task-' + t.id, tone: 'red', text: 'Overdue: "' + t.title + '" (' + t.assignee + ')', tab: 'tasks', focus: { id: t.id } });
   });
   if (isAdmin) {
     const pendingCount = revenue.filter(x => x.approvalStatus === 'Pending').length;
     if (pendingCount > 0) {
-      items.push({ id: 'pending-earnings', tone: 'amber', text: pendingCount + ' revenue ' + (pendingCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'revenue' });
+      items.push({ id: 'pending-earnings', tone: 'amber', text: pendingCount + ' revenue ' + (pendingCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'revenue', focus: { id: (revenue.find(x => x.approvalStatus === 'Pending') || {}).id } });
     }
     const pendingExpenseCount = ledger.filter(x => x.approvalStatus === 'Pending').length;
     if (pendingExpenseCount > 0) {
-      items.push({ id: 'pending-expenses', tone: 'amber', text: pendingExpenseCount + ' ledger ' + (pendingExpenseCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'ledger' });
+      items.push({ id: 'pending-expenses', tone: 'amber', text: pendingExpenseCount + ' ledger ' + (pendingExpenseCount === 1 ? 'entry' : 'entries') + ' waiting on your approval', tab: 'ledger', focus: { id: (ledger.find(x => x.approvalStatus === 'Pending') || {}).id } });
     }
     const pendingAccess = accessRequests.filter(r => r.status === 'Pending').length;
     if (pendingAccess > 0) {
-      items.push({ id: 'pending-access', tone: 'red', text: pendingAccess + ' access ' + (pendingAccess === 1 ? 'change' : 'changes') + ' from Legal waiting on your approval', tab: 'access-requests' });
+      items.push({ id: 'pending-access', tone: 'red', text: pendingAccess + ' access ' + (pendingAccess === 1 ? 'change' : 'changes') + ' from Legal waiting on your approval', tab: 'access-requests', focus: { id: (accessRequests.find(r => r.status === 'Pending') || {}).id } });
     }
     const pendingProfileCount = profileRequests.filter(r => r.status === 'Pending').length;
     if (pendingProfileCount > 0) {
-      items.push({ id: 'pending-profile', tone: 'amber', text: pendingProfileCount + ' artist profile ' + (pendingProfileCount === 1 ? 'change' : 'changes') + ' waiting on review', tab: 'roster' });
+      items.push({ id: 'pending-profile', tone: 'amber', text: pendingProfileCount + ' artist profile ' + (pendingProfileCount === 1 ? 'change' : 'changes') + ' waiting on review', tab: 'roster', focus: { artistId: (profileRequests.find(r => r.status === 'Pending') || {}).artistId } });
     }
     const openRequestCount = artistRequests.filter(r => r.status === 'Open').length;
     if (openRequestCount > 0) {
-      items.push({ id: 'open-artist-requests', tone: 'amber', text: openRequestCount + ' artist ' + (openRequestCount === 1 ? 'request' : 'requests') + ' waiting on a response', tab: 'artist-requests' });
+      items.push({ id: 'open-artist-requests', tone: 'amber', text: openRequestCount + ' artist ' + (openRequestCount === 1 ? 'request' : 'requests') + ' waiting on a response', tab: 'artist-requests', focus: { id: (artistRequests.find(r => r.status === 'Open') || {}).id } });
     }
   }
   const myPendingSubmissions = releaseSubmissions.filter(s => s.status === 'Pending' && (isAdmin || s.sentTo === sessionName));
   if (myPendingSubmissions.length > 0) {
-    items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'submissions' });
+    items.push({ id: 'pending-submissions', tone: 'amber', text: myPendingSubmissions.length + ' release ' + (myPendingSubmissions.length === 1 ? 'submission' : 'submissions') + ' waiting on review', tab: 'submissions', focus: { id: myPendingSubmissions[0].id } });
   }
   // Statements due within two weeks, or overdue, from each artist's schedule.
   if (canRoyalties) {
-    let overdue = 0, soon = 0;
+    let overdue = 0, soon = 0, firstOverdue = '', firstSoon = '';
     roster.filter(a => (a.status || 'Active') === 'Active').forEach(a => {
       const per = lastClosedPeriod(a, today);
       const done = payouts.some(p => p.artistSlug === slug(a.name) && p.periodStart === per.start && p.periodEnd === per.end && p.status !== 'draft');
       const days = Math.round((Date.parse(per.due) - Date.parse(today)) / 86400000);
-      if (!done && days < 0) overdue++; else if (!done && days <= 14) soon++;
+      if (!done && days < 0) { overdue++; firstOverdue = firstOverdue || a.id; } else if (!done && days <= 14) { soon++; firstSoon = firstSoon || a.id; }
     });
-    if (overdue) items.push({ id: 'statements-overdue', tone: 'red', text: overdue + ' artist ' + (overdue === 1 ? 'statement is' : 'statements are') + ' overdue', tab: 'payouts' });
-    if (soon) items.push({ id: 'statements-soon', tone: 'amber', text: soon + ' artist ' + (soon === 1 ? 'statement is' : 'statements are') + ' due in the next 14 days', tab: 'payouts' });
+    if (overdue) items.push({ id: 'statements-overdue', tone: 'red', text: overdue + ' artist ' + (overdue === 1 ? 'statement is' : 'statements are') + ' overdue', tab: 'payouts', focus: { id: 'due-' + firstOverdue } });
+    if (soon) items.push({ id: 'statements-soon', tone: 'amber', text: soon + ' artist ' + (soon === 1 ? 'statement is' : 'statements are') + ' due in the next 14 days', tab: 'payouts', focus: { id: 'due-' + firstSoon } });
   }
   const dealWaiting = dealChanges.filter(c => c.status === 'Pending').length;
-  if (isAdmin && dealWaiting) items.push({ id: 'deal-approvals', tone: 'amber', text: dealWaiting + ' deal ' + (dealWaiting === 1 ? 'change' : 'changes') + ' waiting on your approval', tab: 'deals' });
+  if (isAdmin && dealWaiting) items.push({ id: 'deal-approvals', tone: 'amber', text: dealWaiting + ' deal ' + (dealWaiting === 1 ? 'change' : 'changes') + ' waiting on your approval', tab: 'deals', focus: { id: (dealChanges.find(c => c.status === 'Pending') || {}).id } });
   const publishWaiting = revenuePublish.filter(e => e.status === 'Awaiting approval').length;
   if (isAdmin && publishWaiting > 0) {
-    items.push({ id: 'publish-approvals', tone: 'amber', text: publishWaiting + ' publish ' + (publishWaiting === 1 ? 'request' : 'requests') + ' to artists waiting on your approval', tab: 'publish' });
+    items.push({ id: 'publish-approvals', tone: 'amber', text: publishWaiting + ' publish ' + (publishWaiting === 1 ? 'request' : 'requests') + ' to artists waiting on your approval', tab: 'publish', focus: { id: (revenuePublish.find(e => e.status === 'Awaiting approval') || {}).id } });
   }
   // Invoices sitting in a queue this person handles (Admins also share PM Approval).
   const me = staff.find(m => m.name === sessionName);
@@ -280,12 +280,12 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   const myInvoices = invoices.filter(i => { const st = invoiceStage(i); return st && me && (invoiceReviewers(i, roster, staff, workflow).some(m => m.id === me.id) || (isAdmin && st.who === 'pm')); });
   if (myInvoices.length > 0) {
     const total = myInvoices.reduce((t, i) => t + (Number(i.amount) || 0), 0);
-    items.push({ id: 'my-invoices', tone: 'amber', text: myInvoices.length + ' ' + (myInvoices.length === 1 ? 'invoice' : 'invoices') + ' waiting on your approval (' + formatCurrency(total) + ')', tab: 'invoices' });
+    items.push({ id: 'my-invoices', tone: 'amber', text: myInvoices.length + ' ' + (myInvoices.length === 1 ? 'invoice' : 'invoices') + ' waiting on your approval (' + formatCurrency(total) + ')', tab: 'invoices', focus: { id: myInvoices[0].id } });
   }
   return items.sort((a, b) => (a.tone === 'red' ? 0 : 1) - (b.tone === 'red' ? 0 : 1));
 }
 
-function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', notifications = [], setActive }) {
+function TopBar({ openItem, roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', notifications = [], setActive }) {
   const [query, setQuery] = useState('');
   const [showNotifs, setShowNotifs] = useState(false);
 
@@ -337,7 +337,7 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
             {notifications.length === 0 ? (
               <div className="p-3 text-sm" style={{ color: C.textDim }}>You're all caught up.</div>
             ) : notifications.map(n => (
-              <button key={n.id} onClick={() => { setActive(n.tab); setShowNotifs(false); }} className="flex items-start gap-2 w-full text-left px-3 py-2 text-sm hover:bg-white/5" style={{ borderBottom: '1px solid ' + C.border }}>
+              <button key={n.id} onClick={() => { openItem(n); setShowNotifs(false); }} className="flex items-start gap-2 w-full text-left px-3 py-2 text-sm hover:bg-white/5" style={{ borderBottom: '1px solid ' + C.border }}>
                 <span style={{ width: 6, height: 6, borderRadius: 9999, marginTop: 6, flexShrink: 0, background: n.tone === 'red' ? C.red : n.tone === 'amber' ? C.amber : C.teal }}></span>
                 {n.text}
               </button>
@@ -376,6 +376,22 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [activityLog, setActivityLog] = useState(SEED_ACTIVITY_LOG);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState('overview');
+  // Clicking something that needs attention opens its screen and the exact item.
+  const [focus, setFocus] = useState(null);
+  function openItem(n) { setActive(n.tab); setFocus(n.focus ? { ...n.focus, tab: n.tab, at: Date.now() } : null); }
+  // Leaving that screen any other way drops the target, so Roster opens on the list again.
+  useEffect(() => { if (focus && focus.tab !== active) setFocus(null); }, [active]);
+  useEffect(() => {
+    if (!focus) return;
+    const t = setTimeout(() => {
+      const el = focus.id ? document.querySelector('[data-focus="' + CSS.escape(String(focus.id)) + '"]')
+        : focus.section ? document.querySelector('section[aria-label="' + focus.section + '"]') : null;
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('imss-flash'); void el.offsetWidth; el.classList.add('imss-flash');
+    }, 350);
+    return () => clearTimeout(t);
+  }, [focus]);
   const [error, setError] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmReseed, setConfirmReseed] = useState(false);
@@ -643,14 +659,14 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
-        <TopBar roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} />
+        <TopBar roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
         {error && (
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
         )}
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
-        {active === 'overview' && <Overview roster={roster} catalog={catalogView} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
+        {active === 'overview' && <Overview roster={roster} catalog={catalogView} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={openItem} />}
         {active === 'import' && <ImportSection roster={roster} catalog={catalogView} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection updateCatalog={updateCatalog} updateTasks={updateTasks} invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'roster' && <RosterSection focus={focus} updateCatalog={updateCatalog} updateTasks={updateTasks} invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
@@ -659,8 +675,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}
           dataVersion={DATA_VERSION}
         />}
-        {active === 'catalog' && <CatalogSection catalog={catalogView} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
-        {active === 'calendar' && <ReleaseCalendarSection catalog={catalogView} roster={roster} artistMap={artistMap} tasks={tasks} />}
+        {active === 'catalog' && <CatalogSection focus={focus} catalog={catalogView} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
+        {active === 'calendar' && <ReleaseCalendarSection focus={focus} catalog={catalogView} roster={roster} artistMap={artistMap} tasks={tasks} />}
         {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} catalog={catalogView} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
         {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalogView} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}

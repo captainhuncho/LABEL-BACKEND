@@ -82,7 +82,7 @@ export function PayoutsSection({ invoices = [], payouts, update, roster, revenue
           <thead><tr><Th>Artist</Th><Th>Schedule</Th><Th>Period</Th><Th>Due by</Th><Th align="right">Due to artist</Th><Th>Status</Th><Th align="right"><span className="sr-only">Actions</span></Th></tr></thead>
           <tbody>
             {dueList.map(r => (
-              <tr key={r.artist.id}>
+              <tr key={r.artist.id} data-focus={'due-' + r.artist.id}>
                 <Td>{r.artist.name}</Td>
                 <Td><span className="text-xs" style={{ color: C.textDim }}>{r.terms.period}, {r.terms.deliveryDays} days{r.terms.threshold ? ', min ' + formatCurrency(r.terms.threshold) : ''}</span></Td>
                 <Td mono>{monthLabel(r.per.start)}{r.per.start !== r.per.end ? ' – ' + monthLabel(r.per.end) : ''}</Td>

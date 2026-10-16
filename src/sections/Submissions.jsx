@@ -77,7 +77,7 @@ export function SubmissionsSection({ releaseSubmissions, update, roster, pmScope
                 const collabs = sub.collaborators || [], artistPct = Math.max(0, 100 - collabs.reduce((t, c) => t + (Number(c.splitPercent) || 0), 0));
                 return (
                   <React.Fragment key={sub.id}>
-                    <tr>
+                    <tr data-focus={sub.id}>
                       <Td mono>{formatDate((sub.submittedAt || '').slice(0, 10))}</Td>
                       <Td>{a.name || 'Unknown artist'}</Td>
                       <Td><span style={{ fontWeight: 600 }}>{sub.title}</span><div className="text-xs" style={{ color: C.textDim }}>{sub.type}{sub.genre ? ' · ' + sub.genre : ''}</div></Td>

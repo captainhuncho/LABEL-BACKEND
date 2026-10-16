@@ -129,7 +129,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
             const gross = (e.items || []).reduce((t, i) => t + (i.gross || 0), 0);
             const drift = (e.items || []).filter(i => liveGrossOf(i.key) !== undefined && Math.abs(liveGrossOf(i.key) - i.gross) >= 0.01);
             return (
-              <div key={e.id} className="px-4 py-3" style={{ borderTop: '1px solid ' + C.border }}>
+              <div key={e.id} data-focus={e.id} className="px-4 py-3" style={{ borderTop: '1px solid ' + C.border }}>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-sm"><b>{e.requestedBy}</b> wants to publish {e.items.length} artist-month{e.items.length === 1 ? '' : 's'} · <span style={{ fontFamily: MONO_FONT }}>{formatCents(gross)}</span> gross <span style={{ color: C.textDim }}>· {formatDate(String(e.requestedAt).slice(0, 10))}</span></div>
                 </div>

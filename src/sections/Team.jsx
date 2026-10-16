@@ -245,7 +245,7 @@ export function TeamSection({ staff, update, sessionRole = 'Admin', sessionName 
             const prog = onboardingProgress(s);
             const status = s.status || 'Active';
             return (
-              <button key={s.id} onClick={() => openEdit(s)} className="text-left rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
+              <button key={s.id} data-focus={s.id} onClick={() => openEdit(s)} className="text-left rounded border p-4" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="flex items-center gap-3 mb-3">
                   <Avatar name={s.name} photoUrl={s.photoUrl} size={48} />
                   <div style={{ minWidth: 0 }}>
@@ -278,7 +278,7 @@ export function TeamSection({ staff, update, sessionRole = 'Admin', sessionName 
                 const prog = onboardingProgress(s);
                 const status = s.status || 'Active';
                 return (
-                  <tr key={s.id}>
+                  <tr key={s.id} data-focus={s.id}>
                     <Td><Avatar name={s.name} photoUrl={s.photoUrl} size={32} /></Td>
                     <Td>{s.name}</Td>
                     <Td><Badge tone={s.role === 'Admin' ? 'amber' : s.role === 'Finance' ? 'teal' : 'default'}>{s.role}</Badge></Td>

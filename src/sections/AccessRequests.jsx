@@ -67,7 +67,7 @@ export function AccessRequestsSection({ accessRequests, update, staff, updateSta
           {pending.map(req => {
             const rows = diffRows(req);
             return (
-              <div key={req.id} className="rounded border p-4" style={{ background: C.panel, borderColor: C.amber }}>
+              <div key={req.id} data-focus={req.id} className="rounded border p-4" style={{ background: C.panel, borderColor: C.amber }}>
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                   <div>
                     <div style={{ fontWeight: 600 }}>{req.staffName}</div>

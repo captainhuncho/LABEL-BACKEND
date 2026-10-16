@@ -1,15 +1,16 @@
 import { Calendar, ChevronLeft, ChevronRight, Disc3, Video } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RELEASE_STATUSES, expirationStatus, formatDate, monthKey, releaseStatusTone, todayStr } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { ArtworkThumb, Badge, EmptyState, Field, KPICard, SectionHeader, Select, Td, Th } from '../ui.jsx';
 
-export function ReleaseCalendarSection({ catalog, roster, artistMap, tasks = [] }) {
+export function ReleaseCalendarSection({ focus = null, catalog, roster, artistMap, tasks = [] }) {
   const today = todayStr();
   const [calMonth, setCalMonth] = useState(todayStr().slice(0, 7));
   const [filterArtist, setFilterArtist] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
+  useEffect(() => { if (focus && focus.releaseId) { setCalMonth(focus.month); setSelectedId(focus.releaseId); } }, [focus]);
 
   function shiftMonth(delta) {
     const [y, m] = calMonth.split('-').map(Number);

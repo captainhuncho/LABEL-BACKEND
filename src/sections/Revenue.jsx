@@ -137,7 +137,7 @@ export function RevenueSection({ revenue, update, roster, catalog = [], canEdit 
             <thead><tr><Th>Month</Th><Th>Artist</Th><Th>Track</Th><Th>Type</Th><Th align="right">Earning</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(r => (
-                <tr key={r.id}>
+                <tr key={r.id} data-focus={r.id}>
                   <Td mono>{r.month}</Td>
                   <Td>{r.artist}</Td>
                   <Td>{r.title}{r.epAlbum ? <span style={{ color: C.textFaint }}> · {r.epAlbum}</span> : ''}</Td>

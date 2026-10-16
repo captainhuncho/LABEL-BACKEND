@@ -74,7 +74,7 @@ export function ArtistRequestsSection({ artistRequests, update, roster, sessionN
             const artist = roster.find(a => a.id === r.artistId);
             const expanded = expandedId === r.id;
             return (
-              <div key={r.id} className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
+              <div key={r.id} data-focus={r.id} className="rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border }}>
                 <button onClick={() => toggleExpand(r)} className="w-full text-left p-4 flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap mb-1">

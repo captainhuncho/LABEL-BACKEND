@@ -195,7 +195,7 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
             <thead><tr>{!artistId && <Th>Artist</Th>}<Th>From</Th><Th>Split (artist / label)</Th><Th>Deal</Th><Th>Note</Th><Th>Status</Th></tr></thead>
             <tbody>
               {shown.map(c => (
-                <tr key={c.id}>
+                <tr key={c.id} data-focus={c.id}>
                   {!artistId && <Td>{c.artist}</Td>}
                   <Td mono>{c.kind ? '—' : monthLabel(c.from)}</Td>
                   <Td mono>{c.kind ? '—' : (c.was && c.was.artistPct != null ? splitText(c.was.artistPct) + ' → ' : '') + splitText(c.artistPct)}</Td>

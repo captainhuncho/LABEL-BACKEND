@@ -175,7 +175,7 @@ export function TasksSection({ tasks, update, staff, roster, catalog }) {
                   {sorted.map(t => {
                     const overdue = t.status === 'Open' && t.dueDate && t.dueDate < todayStr();
                     return (
-                      <tr key={t.id} style={{ opacity: t.status === 'Done' ? 0.55 : 1 }}>
+                      <tr key={t.id} data-focus={t.id} style={{ opacity: t.status === 'Done' ? 0.55 : 1 }}>
                         <Td><input type="checkbox" checked={t.status === 'Done'} onChange={() => toggleDone(t)} /></Td>
                         <Td style={{ textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>{t.title}</Td>
                         <Td>{t.assignee}</Td>

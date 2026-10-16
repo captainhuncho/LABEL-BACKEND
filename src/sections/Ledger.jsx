@@ -161,7 +161,7 @@ export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster
               {sorted.map(x => {
                 const approval = x.approvalStatus || 'Approved';
                 return (
-                  <tr key={x.id}>
+                  <tr key={x.id} data-focus={x.id}>
                     <Td mono>{formatDate(x.date)}</Td>
                     <Td><Badge tone={x.type === 'income' ? 'teal' : 'default'}>{x.type}</Badge></Td>
                     <Td>{x.artist || 'Label Ops'}</Td>

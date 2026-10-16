@@ -189,7 +189,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                 const st = invoiceStatus(inv), stage = invoiceStage(inv), reviewers = reviewersOf(inv), isOpen = openId === inv.id, idx = INVOICE_STAGES.findIndex(x => x.status === st);
                 return (
                   <React.Fragment key={inv.id}>
-                    <tr>
+                    <tr data-focus={inv.id}>
                       <Td mono>{formatDate((inv.submittedAt || '').slice(0, 10))}</Td>
                       <Td>{artistName(inv.artistId)}</Td>
                       <Td>{pmOf(inv) || <span style={{ color: C.amber }}>No PM set</span>}</Td>

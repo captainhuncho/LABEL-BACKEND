@@ -105,7 +105,7 @@ export function Overview({ roster, catalog, revenue, masterGross = [], streams, 
           <ul>
             {attention.map(n => (
               <li key={n.id} style={{ borderTop: '1px solid ' + C.border }}>
-                <button onClick={() => onOpen && onOpen(n.tab)} className="flex items-center gap-3 w-full text-left px-4 py-3 text-sm hover:bg-white/5">
+                <button onClick={() => onOpen && onOpen(n)} className="flex items-center gap-3 w-full text-left px-4 py-3 text-sm hover:bg-white/5">
                   <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 999, flexShrink: 0, background: n.tone === 'red' ? C.red : C.amber }} />
                   <span className="flex-1">{n.text}</span>
                   <ChevronRight size={15} color={C.textDim} aria-hidden="true" />

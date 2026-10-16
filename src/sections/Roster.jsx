@@ -1,5 +1,5 @@
 import { Globe, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ARTIST_STATUSES, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid } from '../constants.js';
 import { DEFAULT_DELIVERY_DAYS } from '../finance.js';
 import { SOCIAL_LINKS } from '../seed.js';
@@ -8,8 +8,9 @@ import { C, HEADING_FONT, MONO_FONT } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { ArtistDetailPanel, SendLinkButton } from './ArtistDetail.jsx';
 
-export function RosterSection({ updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
-  const [detailId, setDetailId] = useState(null);
+export function RosterSection({ focus = null, updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+  const [detailId, setDetailId] = useState(focus && focus.artistId || null);
+  useEffect(() => { if (focus && focus.artistId) setDetailId(focus.artistId); }, [focus]);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
