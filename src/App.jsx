@@ -611,7 +611,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: 'Team' },
     isPrivileged && { id: 'activity', label: 'Activity', icon: History, group: 'Team' },
 
-    isPrivileged && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
+    isAdmin && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
   ].filter(Boolean);
 
   useEffect(() => {
@@ -683,7 +683,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection roster={roster} updateRoster={updateRoster} staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
-        {active === 'backup' && <BackupSection
+        {active === 'backup' && isAdmin && <BackupSection
           allData={{ roster, catalog, revenue, streams, payouts, masterGross, labelSettings, staff, tasks, ledger, accessRequests, invoices }}
           updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}
           dataVersion={DATA_VERSION}
