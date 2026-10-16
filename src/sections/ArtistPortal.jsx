@@ -1,7 +1,7 @@
 import { Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
 import React, { useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, dealLabel, RELEASE_TYPES, checklistProgress, emptyCredits, rightsLine, formatCents, formatDate, formatNumber, makeDistributionDocs, missingRequiredDocs, monthKey, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
+import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, dealLabel, RELEASE_TYPES, checklistProgress, emptyCredits, formatCents, formatDate, formatNumber, makeDistributionDocs, missingRequiredDocs, monthKey, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { artistLifetime, recoupmentForArtist, revenueBreakdown, revenueRowSplit, artistSpend, dealTermsOf, pctAt, lastClosedPeriod, reportingTerms, slug } from '../finance.js';
 import { SOCIAL_LINKS, safeLink, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES } from '../seed.js';
 import { LegalFooter } from '../Legal.jsx';
@@ -13,7 +13,11 @@ import { INVOICE_KINDS, invoiceStatus, artistInvoiceStatus, INVOICE_TONES, Invoi
 import { BREAKDOWN_FIELDS, breakdownLabel, RevenueBreakdownTable, StatementFilesList } from './StatementFiles.jsx';
 import { SUBMISSION_LABELS, SUBMISSION_TONES } from './Submissions.jsx';
 
+import { licenseFor, rightsLine } from '../licenses.js';
+
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
+  // Same published figures the artist sees decide whether a license is held (src/licenses.js).
+  const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
   const [pickedReleases, setPickedReleases] = useState([]);
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
@@ -92,7 +96,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   // Latest approved deal change, shown on the dashboard for 60 days unless dismissed.
   const pctLabel = x => Math.round(Number(x) * 10000) / 100 + '%';
   const monthLong = m => new Date(m + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const latestDeal = [...dealChanges].sort((a, b) => String(b.approvedAt).localeCompare(String(a.approvedAt)))[0] || null;
+  const latestDeal = [...dealChanges.filter(c => !c.kind)].sort((a, b) => String(b.approvedAt).localeCompare(String(a.approvedAt)))[0] || null;
   const dealKey = latestDeal ? 'imss:deal-seen:' + latestDeal.id : '';
   const [dealSeen, setDealSeen] = useState(() => { try { return !!dealKey && localStorage.getItem(dealKey) === '1'; } catch (e) { return false; } });
   const showDealBanner = latestDeal && !dealSeen && Date.now() - Date.parse(latestDeal.approvedAt || 0) < 60 * 86400000;
@@ -890,7 +894,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 r.status,
                 r.primaryMarket || '',
                 r.secondaryMarket || '',
-                rightsLine(r, artist),
+                rightsLine(licenseFor(r, artist, licenseCtx)),
               ];
             })} />
             {artistCatalog.length > 0 && (
@@ -942,6 +946,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         {r.status !== 'Released' && prog.total > 0 && (
                           <div className="text-xs mt-1.5" style={{ color: C.textFaint }}>{prog.done}/{prog.total} production tasks</div>
                         )}
+                        {r.status === 'Released' && <div className="text-xs mt-1.5" style={{ color: C.textDim, lineHeight: 1.4 }}>{rightsLine(licenseFor(r, artist, licenseCtx))}</div>}
                         {(r.isrc || r.upc) && (
                           <div className="text-xs mt-2" style={{ color: C.textFaint, lineHeight: 1.5 }}>
                             {r.isrc && <div>ISRC {r.isrc}</div>}

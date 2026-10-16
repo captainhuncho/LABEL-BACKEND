@@ -8,11 +8,12 @@ import { DEAL_TYPES, FUNDING_TIERS, dealLabel, formatDate, monthLabel, todayStr,
 import { C } from '../theme.js';
 import { logActivity } from '../audit.js';
 import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
+import { ArtistLicenses, applyLicenseChange, describeLicenseChange } from './Licenses.jsx';
 
 const pctText = p => Math.round(Number(p) * 10000) / 100 + '%';
 const splitText = p => pctText(p) + ' / ' + pctText(1 - Number(p));
 
-export default function DealChanges({ roster, updateRoster, changes = [], updateChanges, publishedRevenue = [], session = {}, artistId = null, canEdit = true }) {
+export default function DealChanges({ roster, updateRoster, changes = [], updateChanges, publishedRevenue = [], session = {}, artistId = null, canEdit = true, catalog = [], updateCatalog, tasks = [], updateTasks, ledger = [], invoices = [] }) {
   const isAdmin = session.role === 'Admin';
   const canRecord = canEdit && (isAdmin || session.role === 'Legal');
   const empty = { artistId: artistId || '', from: todayStr().slice(0, 7), pct: '', fundingTier: '', dealType: '', reason: '', agreement: '', agreementName: '' };
@@ -36,6 +37,25 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     const terms = [...dealTermsOf(a).filter(t => t.from !== entry.from), { from: entry.from, artistPct: entry.artistPct, fundingTier: entry.fundingTier, dealType: entry.dealType, changeId: entry.id }];
     const now = termsAt({ ...a, dealTerms: terms }, todayStr().slice(0, 7));
     updateRoster(roster.map(x => x.id !== a.id ? x : { ...x, dealTerms: terms, artistPct: now.artistPct, royaltyRate: Math.round(now.artistPct * 10000) / 100, fundingTier: now.fundingTier, dealType: now.dealType }));
+  }
+  // License and contract changes (see Licenses.jsx). Admin entries, and rights returns by Legal or Admin, apply at once.
+  function applyKind(entry) {
+    const r = applyLicenseChange(entry, { roster, catalog, tasks });
+    if (r.roster !== roster) updateRoster(r.roster);
+    if (r.catalog !== catalog && updateCatalog) updateCatalog(r.catalog);
+    if (r.tasks !== tasks && updateTasks) updateTasks(r.tasks);
+  }
+  function recordKind(change, done) {
+    const a = roster.find(x => x.id === artistId);
+    if (!a) return done('Choose the artist.');
+    const direct = isAdmin || change.kind === 'rightsReturned';
+    if (change.kind === 'recouped' && !isAdmin) return done('Only an Admin confirms recoupment.');
+    const stamp = new Date().toISOString();
+    const entry = { id: uid(), artistId: a.id, artist: a.name, ...change, requestedBy: session.name, requestedAt: stamp, ...(direct ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }) };
+    updateChanges([entry, ...changes]);
+    logActivity(direct ? 'recorded and applied a license change' : 'recorded a license change', a.name + ': ' + describeLicenseChange(entry, catalog), a.id);
+    if (direct) applyKind(entry);
+    done();
   }
   function startRecord() {
     const a = roster.find(x => x.id === artistId);
@@ -77,6 +97,12 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     setForm(null); setError('');
   }
   function approve(entry) {
+    if (entry.kind) {
+      applyKind(entry);
+      logActivity('approved a license change', entry.artist + ': ' + describeLicenseChange(entry, catalog), entry.artistId);
+      updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }));
+      setError(''); return;
+    }
     const a = roster.find(x => x.id === entry.artistId);
     const p = problem(a, entry.from);
     if (p) { setError(p + ' Decline this change and record it again with a later month.'); return; }
@@ -117,6 +143,7 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
           <div className="mt-2" style={{ color: C.textDim, fontSize: 13 }}>Split shown as artist / label.</div>
         </section>
       )}
+      {artist && <ArtistLicenses artist={artist} catalog={catalog} ctx={{ ledger, invoices, publishedRevenue }} session={session} canEdit={canEdit} onRecord={recordKind} />}
 
       {form && (
         <form onSubmit={submit} className="rounded p-5 mb-6 imss-form-grid gap-3" style={{ background: C.panel }}>
@@ -163,11 +190,11 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
               {shown.map(c => (
                 <tr key={c.id}>
                   {!artistId && <Td>{c.artist}</Td>}
-                  <Td mono>{monthLabel(c.from)}</Td>
-                  <Td mono>{c.was && c.was.artistPct != null ? splitText(c.was.artistPct) + ' → ' : ''}{splitText(c.artistPct)}</Td>
-                  <Td>{c.was ? dealLabel(c.was) + ' → ' : ''}{dealLabel(c)}</Td>
+                  <Td mono>{c.kind ? '—' : monthLabel(c.from)}</Td>
+                  <Td mono>{c.kind ? '—' : (c.was && c.was.artistPct != null ? splitText(c.was.artistPct) + ' → ' : '') + splitText(c.artistPct)}</Td>
+                  <Td>{c.kind ? '—' : (c.was ? dealLabel(c.was) + ' → ' : '') + dealLabel(c)}</Td>
                   <Td>
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{c.reason}</div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{c.kind ? describeLicenseChange(c, catalog) : c.reason}</div>
                     {c.agreement && <a href={c.agreement} download={c.agreementName || 'agreement'} style={{ color: C.amber, fontSize: 13 }}>Signed agreement</a>}
                     <div style={{ color: C.textDim, fontSize: 12 }}>Recorded by {c.requestedBy} · {formatDate(String(c.requestedAt).slice(0, 10))}</div>
                   </Td>

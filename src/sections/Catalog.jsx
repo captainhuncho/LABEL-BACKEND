@@ -1,6 +1,6 @@
 import { ChevronRight, Disc3, FileSpreadsheet, Globe, Pencil, Plus, Trash2, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, licenseOf, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
+import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { ArtworkThumb, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToExcel, resizeImageFile } from '../ui.jsx';
 
@@ -190,8 +190,13 @@ export function CatalogSection({ catalog, update, roster, artistMap, canEdit = t
               <option value="Active">Active</option>
               <option value="Expiring soon">Expiring soon</option>
               <option value="Held until recouped">Held until recouped</option>
-              <option value="Expired">Expired (rights returned)</option>
-              <option value="none">No release date</option>
+              <option value="Ended: confirm return">Ended: confirm return</option>
+              <option value="Past license period: Legal to decide">Past license period</option>
+              <option value="Terminated: Legal to decide">Terminated</option>
+              <option value="Rights returned">Rights returned</option>
+              <option value="License details missing">License details missing</option>
+              <option value="Release date missing">Release date missing</option>
+              <option value="Contract type missing">Contract type missing</option>
             </Select>
           </Field>
           <Field label="Market">
@@ -251,7 +256,7 @@ export function CatalogSection({ catalog, update, roster, artistMap, canEdit = t
           <Field label="ISRC (recording code)"><Input value={form.isrc} onChange={e => setForm({ ...form, isrc: e.target.value })} placeholder="US-XXX-YY-NNNNN" /></Field>
           <Field label="UPC (release code)"><Input value={form.upc} onChange={e => setForm({ ...form, upc: e.target.value })} placeholder="e.g. 198004512367" /></Field>
           <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
-          <Field label="License expiration (from release date + artist's license period)"><Input type="date" value={licenseOf(form, roster.find(a => a.id === form.artistId)).expires} disabled /></Field>
+          <Field label="License (set by Legal or Admin on the artist’s page)"><Input value={form.availableFrom && form.licenseYears ? form.licenseYears + ' yr from ' + form.availableFrom : 'Not set yet'} disabled /></Field>
           <Field label="Primary market">
             <Select value={form.primaryMarket} onChange={e => setForm({ ...form, primaryMarket: e.target.value })}>
               <option value="">— none —</option>

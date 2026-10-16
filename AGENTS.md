@@ -53,7 +53,8 @@ handles HTTPS.
 |---|---|---|
 | `src/App.jsx` | Root `RecordLabelDashboard`, `Sidebar`, `TopBar`, `IdentityGate`, `teamAttention` | ~700 lines |
 | `src/sections/*.jsx` | One file per screen (Roster, Catalog, Payouts, Invoices, ArtistPortal, …) | 30–1,600 lines |
-| `src/finance.js` | The finance engine — all money math | ~120 lines |
+| `src/finance.js` | The finance engine — all money math | ~360 lines |
+| `src/licenses.js` | Song license and rights rules per contract type (computed, never stored) | ~130 lines |
 | `src/seed.js` | Seed data (real roster, catalog, revenue, master gross) | ~820 lines |
 | `src/constants.js` | Domain constants, roles/permissions, formatters | ~425 lines |
 | `src/ui.jsx` | Shared primitives: `Btn`, `Field`, `Input`, `Th`/`Td`, `KPICard`, `ExportBar` | ~190 lines |
@@ -108,6 +109,25 @@ change is wrong unless you meant it:
 | Label earnings | $2,404.05 |
 | Charge carried by artists | $610.81 |
 | Untracked gap | $3,444.30 |
+
+## Licenses and rights
+
+`src/licenses.js` decides each song's license status; `src/sections/Licenses.jsx`
+is the panel on an artist's page. Every artist has a `contractType`:
+
+- **`2026`** (2026 Distribution Agreement, clause 7.1): each song runs its own
+  `licenseYears` from `availableFrom` (first available through IMSS). If the
+  artist's **published** recoupment balance is above $0 on that end date, the
+  song is held until the quarter-end an Admin confirms as recouped
+  (`recoupConfirmations`).
+- **`earlier`** (older agreements, clauses 1b/8a/8b): `licenseYears` from the
+  artist's `effectiveDate`; termination notices (`terminations`) start the
+  Retention Period. The system shows the dates; Legal or Admin decides.
+
+Contract terms, song license details and termination notices are Deal changes
+with a `kind` (Legal records, Admin approves). Admin alone confirms recoupment;
+Legal or Admin records `rightsReturned`, which emails the artist and gives the
+PM a takedown task. Nothing is guessed: missing data is flagged.
 
 ## Access control
 

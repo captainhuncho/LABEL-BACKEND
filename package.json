@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/finance.test.js test/empire.test.js"
+    "test": "node --test test/finance.test.js test/empire.test.js test/licenses.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

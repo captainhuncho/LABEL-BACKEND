@@ -183,28 +183,6 @@ export function expirationStatus(dateStr) {
   return { label: 'Active', tone: 'teal' };
 }
 
-// Every song is licensed to IMSS Records for the artist's license period (default 5 years)
-// from its release date. After that the label keeps the license until the artist's
-// account is marked recouped (artist.recoupedOn). Flag 6 months ahead.
-export const LICENSE_YEARS = Array.from({ length: 15 }, (_, i) => i + 1);
-export function licenseOf(release, artist) {
-  if (!release || !release.releaseDate) return { expires: '', status: null };
-  const years = Number(artist && artist.licenseYears) || 5;
-  const expires = (Number(release.releaseDate.slice(0, 4)) + years) + release.releaseDate.slice(4, 10);
-  const days = (new Date(expires) - new Date(todayStr())) / 86400000;
-  if (days > 182) return { expires, status: { label: 'Active', tone: 'teal' } };
-  if (days >= 0) return { expires, status: { label: 'Expiring soon', tone: 'amber' } };
-  if (!(artist && artist.recoupedOn)) return { expires, status: { label: 'Held until recouped', tone: 'amber' } };
-  return { expires, status: { label: 'Expired', tone: 'red' } };
-}
-export function rightsLine(release, artist) {
-  const { expires, status } = licenseOf(release, artist);
-  if (!status) return 'Licensed to IMSS Records (release date not set)';
-  if (status.label === 'Held until recouped') return 'Licensed to IMSS Records until the account is recouped (license period ended ' + expires + ')';
-  if (status.label === 'Expired') return 'Rights returned to artist (license ended ' + expires + ', account recouped ' + artist.recoupedOn + ')';
-  return 'Licensed to IMSS Records until ' + expires;
-}
-
 export function normalizeStr(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 export function normalizeIsrc(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 export function releaseCode(release) { return release ? (release.isrc || release.upc || '') : ''; }

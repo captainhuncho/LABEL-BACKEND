@@ -1,7 +1,8 @@
 import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet } from 'lucide-react';
 import { logActivity, logSignIn } from './audit.js';
 import { useEffect, useMemo, useState } from 'react';
-import { checklistProgress, expirationStatus, licenseOf, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
+import { licenseFor, licenseFlags } from './licenses.js';
+import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
 import { DATA_VERSION, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
 import { supabase } from './storage.js';
@@ -193,7 +194,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
 }
 
 // Everything waiting on this team member: shown on the Overview and in Alerts.
-function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], dealChanges = [], payouts = [], canRoyalties = false, isAdmin = false, sessionName = '' }) {
+function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledger = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], invoices = [], labelSettings = {}, revenuePublish = [], dealChanges = [], payouts = [], canRoyalties = false, isAdmin = false, sessionName = '', role = '', licenseCtx = {} }) {
   const items = [];
   const today = todayStr();
   roster.forEach(a => {
@@ -201,11 +202,8 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
     const st = expirationStatus(a.contractExpiration);
     if (st && st.label !== 'Active') items.push({ id: 'contract-' + a.id, tone: st.tone, text: a.name + "'s contract " + st.label.toLowerCase(), tab: 'roster' });
   });
-  catalog.forEach(c => {
-    if (!c.licenseExpiration) return;
-    const st = c.license;
-    if (st && st.label === 'Expiring soon') items.push({ id: 'license-' + c.id, tone: st.tone, text: c.title + ' license ' + st.label.toLowerCase(), tab: 'catalog' });
-  });
+  // License flags go to Admin and Legal, who own contracts and rights.
+  if (isAdmin || role === 'Legal') licenseFlags(roster, catalog, licenseCtx).forEach((f, i) => items.push({ id: 'lic-' + f.kind + '-' + f.artistId + i, tone: f.kind === 'decide' ? 'red' : 'amber', text: f.text, tab: 'roster' }));
   catalog.forEach(c => {
     if (c.status === 'Released') return;
     const missing = missingRequiredDocs(c.distributionDocs);
@@ -529,8 +527,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }
 
   const artistMap = useMemo(() => Object.fromEntries(roster.map(a => [a.id, a])), [roster]);
-  // License expiry is computed from release date + the artist's license period, never stored.
-  const catalogView = useMemo(() => catalog.map(c => { const l = licenseOf(c, artistMap[c.artistId]); return { ...c, licenseExpiration: l.expires, license: l.status }; }), [catalog, artistMap]);
+  // Song licenses are computed on read (src/licenses.js), never stored.
+  const licenseCtx = useMemo(() => ({ ledger: ledger.filter(x => (x.approvalStatus || 'Approved') === 'Approved'), invoices, publishedRevenue }), [ledger, invoices, publishedRevenue]);
+  const catalogView = useMemo(() => catalog.map(c => { const l = licenseFor(c, artistMap[c.artistId], licenseCtx); return { ...c, licenseExpiration: l.endsOn || l.end || '', license: l.status }; }), [catalog, artistMap, licenseCtx]);
   const releaseMap = useMemo(() => Object.fromEntries(catalog.map(r => [r.id, r])), [catalog]);
   const approvedRevenue = useMemo(() => revenue.filter(e => (e.approvalStatus || 'Approved') === 'Approved'), [revenue]);
   // Payments entered over several carried-forward months, spread per month for all the money math.
@@ -547,8 +546,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const canEdit = !!perms.edits;
   const pmScope = session && session.mode === 'team' && session.role === 'Product Manager' ? session.name : null;
   const attention = useMemo(() => (session && session.mode === 'team'
-    ? teamAttention({ roster, catalog: catalogView, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name })
-    : []), [session, roster, catalogView, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, perms.royalties, isAdmin]);
+    ? teamAttention({ roster, catalog: catalogView, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, canRoyalties: !!perms.royalties, isAdmin, sessionName: session.name, role: session.role, licenseCtx })
+    : []), [session, roster, catalogView, staff, tasks, revenue, ledger, profileRequests, artistRequests, releaseSubmissions, accessRequests, invoices, labelSettings, revenuePublish, dealChanges, payouts, perms.royalties, isAdmin, licenseCtx]);
 
   // Anyone assigned to an invoice queue sees Invoices, even without the spend permission.
   const sessionStaff = session && session.mode === 'team' ? staff.find(m => m.name === session.name) : null;
@@ -651,7 +650,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
         {active === 'overview' && <Overview roster={roster} catalog={catalogView} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streams} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={setActive} />}
         {active === 'import' && <ImportSection roster={roster} catalog={catalogView} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
-        {active === 'roster' && <RosterSection invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
+        {active === 'roster' && <RosterSection updateCatalog={updateCatalog} updateTasks={updateTasks} invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streams} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
@@ -667,7 +666,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
-        {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} />}
+        {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={approvedLedger} invoices={invoices} />}
         {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection invoices={invoices} payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}

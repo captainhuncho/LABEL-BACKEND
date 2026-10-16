@@ -1,6 +1,6 @@
 import { Globe, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { ARTIST_STATUSES, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, LICENSE_YEARS, formatDate, todayStr, uid } from '../constants.js';
+import { ARTIST_STATUSES, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid } from '../constants.js';
 import { DEFAULT_DELIVERY_DAYS } from '../finance.js';
 import { SOCIAL_LINKS } from '../seed.js';
 import DealChanges from './DealChanges.jsx';
@@ -8,9 +8,9 @@ import { C, HEADING_FONT, MONO_FONT } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { ArtistDetailPanel, SendLinkButton } from './ArtistDetail.jsx';
 
-export function RosterSection({ invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+export function RosterSection({ updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(null);
-  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '', licenseYears: 5, recoupedOn: '' };
+  const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
@@ -76,7 +76,7 @@ export function RosterSection({ invoices = [], dealChanges = [], updateDealChang
       {detailId && roster.find(a => a.id === detailId) ? (
         <ArtistDetailPanel
           invoices={invoices}
-          dealSection={(session.role === 'Admin' || session.role === 'Legal' || canViewRoyalties) && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} />}
+          dealSection={(session.role === 'Admin' || session.role === 'Legal' || canViewRoyalties) && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={ledger} invoices={invoices} />}
           statementFiles={statementFiles}
           artist={roster.find(a => a.id === detailId)}
           roster={roster} catalog={catalog} revenue={revenue} streams={streams} masterGross={masterGross}
@@ -163,7 +163,7 @@ export function RosterSection({ invoices = [], dealChanges = [], updateDealChang
           </Field>
           <Field label="Artist share (%)"><Input type="number" min="0" max="100" disabled={!!editing} value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>
           <Field label="Reporting period">
-            <Select value={form.reportingPeriod || 'quarterly'} onChange={e => setForm({ ...form, reportingPeriod: e.target.value })}>
+            <Select disabled={!!editing} value={form.reportingPeriod || 'quarterly'} onChange={e => setForm({ ...form, reportingPeriod: e.target.value })}>
               <option value="monthly">Monthly (cutoff end of each month)</option>
               <option value="quarterly">Quarterly (cutoff 31 Mar, 30 Jun, 30 Sep, 31 Dec)</option>
               <option value="half-yearly">Half-yearly (cutoff 30 Jun, 31 Dec)</option>
@@ -172,13 +172,7 @@ export function RosterSection({ invoices = [], dealChanges = [], updateDealChang
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
           <div className="text-xs" style={{ gridColumn: '1 / -1', color: C.textFaint, marginTop: 6 }}>Socials and streaming (full links)</div>
           {SOCIAL_LINKS.map(l => <Field key={l.key} label={l.label}><Input type="url" value={form[l.key] || ''} onChange={e => setForm(f => ({ ...f, [l.key]: e.target.value }))} placeholder="https://" /></Field>)}
-          <Field label="License period (from each song's release date)">
-            <Select value={String(form.licenseYears || 5)} onChange={e => setForm({ ...form, licenseYears: Number(e.target.value) })}>
-              {LICENSE_YEARS.map(y => <option key={y} value={y}>{y} {y === 1 ? 'year' : 'years'}</option>)}
-            </Select>
-          </Field>
-          <Field label="Account marked recouped on (licenses past their period end then)"><Input type="date" value={form.recoupedOn || ''} onChange={e => setForm({ ...form, recoupedOn: e.target.value })} /></Field>
-          <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
+          <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input disabled={!!editing} type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
           <Field label="Funding tier">
             <Select disabled={!!editing} value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value, dealType: (DEAL_TYPES[e.target.value] || [])[0] || '' })}>
               {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
