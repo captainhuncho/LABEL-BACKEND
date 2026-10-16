@@ -281,24 +281,25 @@ async function warnExpiringLicenses() {
   const catalog = await section('catalog');
   const today = new Date().toISOString().slice(0, 10);
   const plusYears = (d: string, y: number) => (Number(d.slice(0, 4)) + y) + d.slice(4, 10);
-  const byArtist: Record<string, { title: string; end: string }[]> = {};
+  const byArtist: Record<string, { title: string; end: string; fixed: boolean }[]> = {};
   const next = catalog.map(s => {
     const a = roster.find(r => r.id === s.artistId);
     if (!a || !a.email) return s;
     if ((a.rightsReturned || []).some((r: Item) => r.releaseId === s.id || !r.releaseId)) return s;
     const start = a.contractType === '2026' ? s.availableFrom : a.contractType === 'earlier' ? a.effectiveDate : '';
     const years = Number(a.contractType === '2026' ? s.licenseYears : a.licenseYears);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(start || '')) || !(years > 0)) return s;
-    const end = plusYears(start, years);
+    const ov = s.licenseOverride && /^\d{4}-\d{2}-\d{2}$/.test(String(s.licenseOverride.endDate || '')) ? s.licenseOverride.endDate : '';
+    if (!ov && (!/^\d{4}-\d{2}-\d{2}$/.test(String(start || '')) || !(years > 0))) return s;
+    const end = ov || plusYears(start, years);
     const days = (Date.parse(end) - Date.parse(today)) / 86400000;
     if (days < 0 || days > 182 || s.licenseWarnedFor === end) return s;
-    (byArtist[a.id] = byArtist[a.id] || []).push({ title: s.title, end });
+    (byArtist[a.id] = byArtist[a.id] || []).push({ title: s.title, end, fixed: !!ov });
     return { ...s, licenseWarnedFor: end };
   });
   let sent = 0;
   for (const [id, songs] of Object.entries(byArtist)) {
     const a = roster.find(r => r.id === id)!;
-    const held = a.contractType === '2026' && !a.noExtension ? ' If your account isn’t recouped by then, the license continues until the end of the quarter in which it recoups.' : '';
+    const held = a.contractType === '2026' && !a.noExtension && !songs.some(x => x.fixed) ? ' If your account isn’t recouped by then, the license continues until the end of the quarter in which it recoups.' : '';
     await send([a.email], `Your IMSS Records license for ${songs.length === 1 ? songs[0].title : songs.length + ' songs'} ends soon`,
       page('A license is ending soon', [`Hi ${esc(a.name)},`, ...songs.map(x => `<b>${esc(x.title)}</b>: licensed to IMSS Records until <b>${esc(x.end)}</b>.`), `This is a 6-month notice.${held} Your Product Manager can answer any questions.`],
         { label: 'Open your portal', url: `${APP_URL}/` }));

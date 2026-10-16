@@ -38,7 +38,7 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     const now = termsAt({ ...a, dealTerms: terms }, todayStr().slice(0, 7));
     updateRoster(roster.map(x => x.id !== a.id ? x : { ...x, dealTerms: terms, artistPct: now.artistPct, royaltyRate: Math.round(now.artistPct * 10000) / 100, fundingTier: now.fundingTier, dealType: now.dealType }));
   }
-  // License and contract changes (see Licenses.jsx). Admin entries, and rights returns by Legal or Admin, apply at once.
+  // License and contract changes (see Licenses.jsx).
   function applyKind(entry) {
     const r = applyLicenseChange(entry, { roster, catalog, tasks });
     if (r.roster !== roster) updateRoster(r.roster);
@@ -48,8 +48,8 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
   function recordKind(change, done) {
     const a = roster.find(x => x.id === artistId);
     if (!a) return done('Choose the artist.');
-    const direct = isAdmin || change.kind === 'rightsReturned';
-    if (change.kind === 'recouped' && !isAdmin) return done('Only an Admin confirms recoupment.');
+    // Admin and Legal have the final say on contracts and licenses: their entries apply at once.
+    const direct = canRecord;
     const stamp = new Date().toISOString();
     const entry = { id: uid(), artistId: a.id, artist: a.name, ...change, requestedBy: session.name, requestedAt: stamp, ...(direct ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }) };
     updateChanges([entry, ...changes]);

@@ -60,6 +60,13 @@ export function licenseFor(song, artist, ctx = {}, today = new Date().toISOStrin
   if (ret) return { ...base, returned: ret, status: st('Rights returned', 'red') };
   if (!CONTRACT_TYPES[artist.contractType]) return { ...base, missing: ['contract type'], status: st('Contract type missing', 'amber') };
 
+  // Admin or Legal override: their end date wins over every rule below.
+  const ov = song.licenseOverride && isDate(song.licenseOverride.endDate) ? song.licenseOverride : null;
+  if (ov) {
+    const end = ov.endDate, out = { ...base, start: songStart(song) || artist.effectiveDate || '', years: Number(song.licenseYears || artist.licenseYears) || '', end, override: ov };
+    if (today < end) return { ...out, status: daysBetween(today, end) <= WARN_DAYS ? st('Expiring soon', 'amber') : st('Active', 'teal') };
+    return { ...out, endsOn: end, status: st('Ended: confirm return', 'red') };
+  }
   if (artist.contractType === '2026') {
     const start = songStart(song), years = Number(song.licenseYears);
     const missing = [!isDate(start) && 'first available through IMSS date', !(years > 0) && 'license years'].filter(Boolean);

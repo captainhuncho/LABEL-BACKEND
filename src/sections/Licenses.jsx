@@ -1,7 +1,7 @@
-// Contract and song licenses on an artist's page. Every change is a Deal change:
-// Legal or Admin records it and an Admin approves it (an Admin's own entry
-// applies at once). Exceptions: Admin confirms recoupment; Legal or Admin
-// decides when rights return. See src/licenses.js for the rules.
+// Contract and song licenses on an artist's page. Admin and Legal have the final
+// say: every change they make applies at once and is kept as a Deal change in
+// the audit trail. They can override any song's end date and undo a rights
+// return, a recoupment confirmation or a termination. Rules: src/licenses.js.
 import { useState } from 'react';
 import { CheckCircle2, Plus } from 'lucide-react';
 import { formatDate, todayStr } from '../constants.js';
@@ -22,6 +22,8 @@ export function describeLicenseChange(c, catalog = []) {
   if (c.kind === 'termination') return 'Termination notice ' + c.noticeDate + ': ' + (c.releaseId ? title(c.releaseId) : 'whole agreement');
   if (c.kind === 'recouped') return 'Account recouped in the quarter ending ' + c.quarterEnd;
   if (c.kind === 'rightsReturned') return 'Rights returned on ' + c.date + ': ' + (c.releaseIds || []).map(title).join(', ');
+  if (c.kind === 'licenseOverride') return (c.endDate ? 'End date overridden to ' + c.endDate : 'End date override removed') + ' for ' + title(c.releaseId) + ': ' + c.note;
+  if (c.kind === 'undo') return 'Undid: ' + c.what + '. ' + c.note;
   return '';
 }
 
@@ -40,6 +42,11 @@ export function applyLicenseChange(c, { roster, catalog, tasks }) {
     const ids = c.releaseIds || [];
     const newTasks = ids.map(id => ({ id: c.id + '-' + id, title: 'Transfer or take down “' + ((catalog.find(s => s.id === id) || {}).title || 'song') + '” (rights returned to ' + a.name + ')', assignee: a.productManager || '', dueDate: c.takedownBy || c.date, status: 'Open', notes: 'Rights returned on ' + c.date + ' by ' + c.requestedBy + '.', artistId: a.id, releaseId: id }));
     return { roster: setArtist({ rightsReturned: [...(a.rightsReturned || []), ...ids.map(id => ({ releaseId: id, date: c.date, by: c.requestedBy, changeId: c.id }))] }), catalog, tasks: [...newTasks, ...tasks] };
+  }
+  if (c.kind === 'licenseOverride') return { roster, tasks, catalog: catalog.map(s => s.id !== c.releaseId ? s : { ...s, licenseOverride: c.endDate ? { endDate: c.endDate, note: c.note, by: c.requestedBy, changeId: c.id } : null }) };
+  if (c.kind === 'undo') {
+    const drop = list => (list || []).filter(x => x.changeId !== c.targetId);
+    return { roster: setArtist({ rightsReturned: drop(a.rightsReturned), recoupConfirmations: drop(a.recoupConfirmations), terminations: drop(a.terminations) }), catalog, tasks };
   }
   return { roster, catalog, tasks };
 }
@@ -88,6 +95,14 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
       if (f.quarterEnd !== quarterEndOf(f.quarterEnd)) return setError('Pick a quarter end: 31 Mar, 30 Jun, 30 Sep or 31 Dec.');
       return onRecord({ kind: 'recouped', quarterEnd: f.quarterEnd }, done);
     }
+    if (f.kind === 'licenseOverride') {
+      if (!f.note.trim()) return setError('Say why the date is overridden (e.g. side letter signed 3 June).');
+      return onRecord({ kind: 'licenseOverride', releaseId: f.releaseId, endDate: f.endDate || '', note: f.note.trim() }, done);
+    }
+    if (f.kind === 'undo') {
+      if (!f.note.trim()) return setError('Say why this is undone.');
+      return onRecord({ kind: 'undo', targetId: f.targetId, what: f.what, note: f.note.trim() }, done);
+    }
     if (f.kind === 'rightsReturned') {
       if (!f.releaseIds.length) return setError('Tick the songs whose rights return.');
       const takedown = rows.filter(r => f.releaseIds.includes(r.s.id)).map(r => r.l.dates && r.l.dates.takedownBy).filter(Boolean).sort()[0] || '';
@@ -96,6 +111,12 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
   }
   function done(err) { if (err) setError(err); else { setForm(null); setError(''); } }
   const set = patch => setForm(f => ({ ...f, ...patch }));
+  const title = id => (songs.find(s => s.id === id) || {}).title || 'a song';
+  const undoable = [
+    ...(artist.rightsReturned || []).map(r => ({ changeId: r.changeId, what: 'Rights returned on ' + r.date + ': ' + (r.releaseId ? title(r.releaseId) : 'all songs') })),
+    ...(artist.recoupConfirmations || []).map(r => ({ changeId: r.changeId, what: 'Recouped in the quarter ending ' + r.quarterEnd })),
+    ...(artist.terminations || []).map(r => ({ changeId: r.changeId, what: 'Termination notice ' + r.noticeDate + ': ' + (r.releaseId ? title(r.releaseId) : 'whole agreement') })),
+  ].filter((u, i, all) => u.changeId && all.findIndex(x => x.changeId === u.changeId) === i);
   const ready = rows.some(r => r.l.heldUntilRecouped) && balance <= 0.005;
   const decisions = rows.filter(r => r.l.decide || r.l.status.label === 'Ended: confirm return').length;
   const missing = rows.filter(r => r.l.missing && r.l.missing.length && r.l.type === '2026').length;
@@ -109,7 +130,7 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
             <Btn variant="ghost" onClick={() => open('contract')}>Contract terms</Btn>
             {missing > 0 && <Btn variant="ghost" onClick={() => open('songLicense')}>Set missing song details ({missing})</Btn>}
             {artist.contractType === 'earlier' && <Btn variant="ghost" onClick={() => open('termination')}>Termination notice</Btn>}
-            {isAdmin && <Btn variant={ready ? 'primary' : 'ghost'} onClick={() => open('recouped')}>Confirm recouped</Btn>}
+            <Btn variant={ready ? 'primary' : 'ghost'} onClick={() => open('recouped')}>Confirm recouped</Btn>
             {decisions > 0 && <Btn variant="primary" onClick={() => open('rightsReturned')}>Return rights ({decisions})</Btn>}
           </div>
         )}
@@ -123,7 +144,13 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
         {(artist.recoupConfirmations || []).length > 0 && <div><div style={{ color: C.textDim, fontSize: 12 }}>Confirmed recouped</div>{artist.recoupConfirmations.map(c => d(c.quarterEnd)).join(', ')}</div>}
         {artist.noExtension && <div><Badge>No unrecouped extension</Badge></div>}
       </div>
-      {ready && <div className="mb-3" style={{ color: C.amber, fontSize: 14 }}>The published balance is $0 and songs are held until recouped. {isAdmin ? 'Confirm the quarter it recouped in.' : 'An Admin confirms the quarter.'}</div>}
+      {ready && <div className="mb-3" style={{ color: C.amber, fontSize: 14 }}>The published balance is $0 and songs are held until recouped. Confirm the quarter it recouped in.</div>}
+      {undoable.length > 0 && canRecord && !form && (
+        <div className="rounded p-4 mb-3 flex flex-col gap-1.5" style={{ background: C.panel, fontSize: 14 }}>
+          <div style={{ color: C.textDim, fontSize: 12 }}>Recorded decisions (Admin or Legal can undo)</div>
+          {undoable.map(u => <div key={u.changeId} className="flex items-center justify-between gap-3"><span>{u.what}</span><button onClick={() => setForm({ kind: 'undo', targetId: u.changeId, what: u.what, note: '' })} style={{ color: C.amber, fontSize: 13 }}>Undo</button></div>)}
+        </div>
+      )}
 
       {form && (
         <form onSubmit={submit} className="rounded p-5 mb-4 imss-form-grid gap-3" style={{ background: C.panel }}>
@@ -164,9 +191,18 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
               <div style={{ color: C.textDim, fontSize: 13 }}>The artist is emailed, the PM gets a task to transfer or take down each song, and it’s logged.</div>
             </div>
           </>}
+          {form.kind === 'licenseOverride' && <>
+            <div className="imss-span-2" style={{ fontSize: 14 }}>Override the license end for <b>{title(form.releaseId)}</b>. It replaces every calculated date and the recoupment hold. Leave the date empty to remove an override.</div>
+            <Field label="License ends on"><Input type="date" value={form.endDate} onChange={e => set({ endDate: e.target.value })} /></Field>
+            <Field label="Reason" full><Input value={form.note} onChange={e => set({ note: e.target.value })} placeholder="e.g. Side letter signed 3 June extends to 2031" /></Field>
+          </>}
+          {form.kind === 'undo' && <>
+            <div className="imss-span-2" style={{ fontSize: 14 }}>Undo: <b>{form.what}</b>. Tasks already sent to the PM stay; close them in Tasks if no longer needed.</div>
+            <Field label="Reason" full><Input value={form.note} onChange={e => set({ note: e.target.value })} placeholder="e.g. Recorded on the wrong artist" /></Field>
+          </>}
           {error && <div className="imss-span-2" role="alert" style={{ color: C.red, fontSize: 14 }}>{error}</div>}
           <div className="imss-span-2 flex gap-2 flex-wrap">
-            <Btn variant="primary" type="submit"><CheckCircle2 size={15} /> {form.kind === 'rightsReturned' || form.kind === 'recouped' || isAdmin ? 'Save' : 'Send to an Admin to approve'}</Btn>
+            <Btn variant="primary" type="submit"><CheckCircle2 size={15} /> Save</Btn>
             <Btn variant="ghost" onClick={() => { setForm(null); setError(''); }}>Cancel</Btn>
           </div>
         </form>
@@ -185,11 +221,15 @@ export function ArtistLicenses({ artist, catalog = [], ctx, session = {}, canEdi
                 <Td>
                   <Badge tone={l.status.tone}>{l.status.label}</Badge>
                   {l.missing && l.missing.length > 0 && <div style={{ color: C.textDim, fontSize: 12, marginTop: 4 }}>Needs {l.missing.join(' and ')}</div>}
+                  {l.override && <div style={{ color: C.textDim, fontSize: 12, marginTop: 4 }}>Overridden by {l.override.by}: {l.override.note}</div>}
                   {l.balanceAtEnd > 0.005 && <div style={{ color: C.textDim, fontSize: 12, marginTop: 4 }}>{money(l.balanceAtEnd)} unrecouped on {d(l.end)}</div>}
                   {l.dates && <div style={{ color: C.textDim, fontSize: 12, marginTop: 4, lineHeight: 1.5 }}>Notice {d(l.dates.notice)} · Term ends {d(l.dates.termEnds)}<br />1 yr retention to {d(l.dates.retentionYearEnds)} · wind-down to {d(l.dates.windDownEnds)} · takedown by {d(l.dates.takedownBy)}</div>}
                   {l.decide && !l.dates && <div style={{ color: C.textDim, fontSize: 12, marginTop: 4 }}>License period ended {d(l.end)}. Retention depends on recoupment; Legal or Admin decides.</div>}
                 </Td>
-                {canRecord && <Td align="right">{artist.contractType === '2026' && l.status.label !== 'Rights returned' && <button onClick={() => editSong({ s })} style={{ color: C.amber, fontSize: 13 }}>Change</button>}</Td>}
+                {canRecord && <Td align="right">{l.status.label !== 'Rights returned' && <span className="inline-flex gap-3">
+                  {artist.contractType === '2026' && <button onClick={() => editSong({ s })} style={{ color: C.amber, fontSize: 13 }}>Change</button>}
+                  <button onClick={() => { setError(''); setForm({ kind: 'licenseOverride', releaseId: s.id, endDate: (s.licenseOverride && s.licenseOverride.endDate) || l.endsOn || l.end || '', note: '' }); }} style={{ color: C.amber, fontSize: 13 }}>Override</button>
+                </span>}</Td>}
               </tr>
             ))}</tbody>
           </table>

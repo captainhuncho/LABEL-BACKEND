@@ -62,3 +62,14 @@ test('rights returned wins and reads plainly', () => {
   assert.equal(l.status.label, 'Rights returned');
   assert.equal(rightsLine(l), 'Rights returned to artist on 2026-04-01');
 });
+
+test('Admin or Legal override wins over every rule', () => {
+  const ctx = { ledger: spend(100), publishedRevenue: [] };
+  const o = { ...song, licenseOverride: { endDate: '2027-06-30', note: 'side letter', by: 'Legal' } };
+  assert.equal(licenseFor(song, A, ctx, '2026-05-01').status.label, 'Held until recouped');
+  assert.equal(licenseFor(o, A, ctx, '2026-05-01').status.label, 'Active');
+  assert.equal(licenseFor(o, A, ctx, '2027-02-01').status.label, 'Expiring soon');
+  assert.equal(licenseFor(o, A, ctx, '2027-07-01').status.label, 'Ended: confirm return');
+  const E = { ...A, contractType: 'earlier', effectiveDate: '2020-01-01', licenseYears: 1 };
+  assert.equal(licenseFor(o, E, {}, '2026-05-01').status.label, 'Active');
+});
