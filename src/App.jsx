@@ -5477,7 +5477,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const dashTopSongs = useMemo(() => {
     const map = {};
     dashRevenue.forEach(r => { (map[r.title] = map[r.title] || []).push(r); });
-    return Object.entries(map).map(([title, rows]) => ({ title, ...sumSplits(rows) })).sort((x, y) => y.gross - x.gross).slice(0, 5);
+    return Object.entries(map).map(([title, rows]) => ({ title, units: rows.reduce((t, r) => t + (Number(r.quantity) || 0), 0), ...sumSplits(rows) })).sort((x, y) => y.gross - x.gross).slice(0, 5);
   }, [dashRevenue, revenue, masterGross, myPct]);
 
   const dashRetailers = useMemo(() => {
@@ -5891,8 +5891,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   <div className="px-4 pb-5 text-sm" style={{ color: C.textDim }}>No revenue in this period. Try a wider range.</div>
                 ) : (
                   <table className="w-full imss-dash-songs" style={{ tableLayout: 'fixed' }}>
-                    <colgroup><col className="imss-dash-rank" style={{ width: 44 }} /><col /><col style={{ width: '24%' }} /><col style={{ width: '26%' }} /></colgroup>
-                    <thead><tr><Th align="right">#</Th><Th>Song</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
+                    <colgroup><col className="imss-dash-rank" style={{ width: 44 }} /><col /><col style={{ width: '20%' }} /><col style={{ width: '18%' }} /><col style={{ width: '20%' }} /></colgroup>
+                    <thead><tr><Th align="right">#</Th><Th>Song</Th><Th align="right">Streams &amp; sales</Th><Th align="right">Gross</Th><Th align="right">Your earnings</Th></tr></thead>
                     <tbody>
                       {dashTopSongs.map((t, i) => { const c = creditLine(t.title); return (
                         <tr key={t.title} className="imss-dash-song" onClick={() => openReleaseRevenue(t.title)}>
@@ -5901,6 +5901,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                             <button type="button" onClick={e => { e.stopPropagation(); openReleaseRevenue(t.title); }} className="imss-dash-songbtn">{t.title}</button>
                             <div className="text-xs mt-0.5" style={{ color: C.textDim, overflowWrap: 'anywhere' }}>{c.primaries}{c.feats.length > 0 && <span style={{ color: C.text }}> feat. {c.feats.join(', ')}</span>}</div>
                           </Td>
+                          <Td align="right" mono>{t.units > 0 ? Math.round(t.units).toLocaleString('en-US') : '—'}</Td>
                           <Td align="right" mono>{formatCents(t.gross)}</Td>
                           <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(t.artistShare)}</span></Td>
                         </tr>

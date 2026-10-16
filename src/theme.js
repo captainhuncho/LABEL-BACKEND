@@ -170,7 +170,8 @@ export const GLOBAL_STYLES = `
   .imss-dash-presets { grid-column: 1 / -1; margin-left: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .imss-dash-preset { width: 100%; }
   .imss-dash-songs .imss-dash-rank { width: 30px !important; }
-  .imss-dash-songs th, .imss-dash-songs td { padding-left: 8px !important; padding-right: 8px !important; }
+  .imss-dash-songs th, .imss-dash-songs td { padding-left: 6px !important; padding-right: 6px !important; }
+  .imss-dash-songs td[style*="right"] { font-size: 12px; }
   .imss-dash-songs th { white-space: normal !important; vertical-align: bottom; }
   .imss-dash-retail li { grid-template-columns: minmax(0, 1fr) 92px; }
   .imss-dash-retail .imss-ledger-bar { display: none; }
