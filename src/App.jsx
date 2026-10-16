@@ -5947,6 +5947,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <li><span>Net</span><b>{formatCents(lifetime.gross - lifetime.swift)}</b></li>
                 <li className="imss-sum-key"><span>Your earnings ({rateLabel(revenue)})</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
                 {recoupment.recouped > 0 && <li><span>Recouped expenses</span><b>−{formatCents(recoupment.recouped)}</b></li>}
+                {artistSpend(artist, ledger, invoices).repaidCash > 0 && <li><span>Repaid in cash <span style={{ color: C.textDim }}>· at the label’s request, not from your earnings</span></span><b style={{ color: C.textDim }}>{formatCents(artistSpend(artist, ledger, invoices).repaidCash)}</b></li>}
                 <li><span>Paid to you</span><b>{paid > 0 ? '−' : ''}{formatCents(paid)}</b></li>
                 <li className="imss-sum-total"><span>{balance > 0 ? 'You’re owed' : 'Balance'}</span><b style={{ color: balance > 0 ? C.amber : C.text }}>{formatCents(Math.max(0, balance))}</b></li>
               </ol>
