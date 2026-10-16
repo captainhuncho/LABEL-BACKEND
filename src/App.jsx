@@ -5757,7 +5757,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <ol className="imss-sum" aria-label="How your balance is worked out">
                 <li><span>Gross</span><b>{formatCents(lifetime.gross)}</b></li>
                 <li><span>Inbound Banking Charge</span><b>−{formatCents(lifetime.swift)}</b></li>
-                <li className="imss-sum-key"><span>Your earnings</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
+                <li><span>Net</span><b>{formatCents(lifetime.gross - lifetime.swift)}</b></li>
+                <li className="imss-sum-key"><span>Your earnings ({Math.round(myPct * 100)}% of net)</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
                 {recoupment.recouped > 0 && <li><span>Recouped expenses</span><b>−{formatCents(recoupment.recouped)}</b></li>}
                 <li><span>Paid to you</span><b>{paid > 0 ? '−' : ''}{formatCents(paid)}</b></li>
                 <li className="imss-sum-total"><span>{balance > 0 ? 'You’re owed' : 'Balance'}</span><b style={{ color: balance > 0 ? C.amber : C.text }}>{formatCents(Math.max(0, balance))}</b></li>
@@ -6339,7 +6340,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div className="flex flex-wrap gap-3 mb-6">
               <KPICard icon={DollarSign} label={revFiltersActive ? 'Gross in this period' : 'Total gross'} value={formatCents(filteredRevTotals.gross)} />
               <KPICard icon={Wallet} label="Inbound Banking Charge" value={formatCents(filteredRevTotals.charge)} />
-              <KPICard icon={DollarSign} label="Your earnings" value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
+              <KPICard icon={DollarSign} label={'Your earnings (' + Math.round(myPct * 100) + '% of net)'} value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
               <KPICard icon={ClipboardList} label="Entries" value={filteredMyRevenue.length} />
             </div>
 
