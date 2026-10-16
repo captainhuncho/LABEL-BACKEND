@@ -29,7 +29,7 @@ export default function UpdateBanner() {
   if (!stale) return null;
   return (
     <div role="alert" style={{ position: 'fixed', left: 16, right: 16, bottom: 16, zIndex: 1000, background: C.panel, border: '1px solid ' + C.amber, borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', color: C.text, fontSize: 14 }}>
-      <span><b>A new version of IMSS Records is out.</b> Reload to use it; publishing is paused until you do.</span>
+      <span><b>A new version of IMSS Records is out.</b> Reload to keep working; saving is paused until you do.</span>
       <button onClick={() => window.location.reload()} style={{ background: C.amberFill, color: C.onAmber, fontWeight: 600, borderRadius: 980, padding: '8px 16px' }}>Reload now</button>
     </div>
   );

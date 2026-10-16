@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
 import { streamsFromRevenue } from './streams.js';
 import { PasskeySettings } from './Passkeys.jsx';
+import { isStale } from './UpdateBanner.jsx';
 import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
 import { DATA_VERSION, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
@@ -484,6 +485,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }, [loading]);
 
   async function persist(key, value) {
+    // A tab left open on an older version never saves: it could write back
+    // figures that have since been changed or cleared.
+    if (isStale()) { setError('This page is out of date. Reload to keep working; that change wasn’t saved.'); return; }
     try {
       await window.storage.set(key, JSON.stringify(value), false);
     } catch (e) {
