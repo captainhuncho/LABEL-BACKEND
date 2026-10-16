@@ -3141,15 +3141,10 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
             <EmptyState icon={DollarSign} title="No earnings in that period"
               description="Nothing was logged for the months you picked. Try a wider range, or choose all periods." />
           ) : (
-            monthRows.map(({ month, tracks, gross, swift, artistShare }) => (
+            monthRows.map(({ month, tracks }) => (
               <div key={month} className="rounded border p-4 mb-5" style={{ background: C.panel, borderColor: C.border }}>
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                   <div style={{ fontWeight: 600 }}>{monthLabel(month)}</div>
-                  <div className="text-sm" style={{ color: C.textFaint }}>
-                    Gross <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCents(gross)}</span>
-                    {' · '}Inbound Banking Charge share <span style={{ color: C.text, fontFamily: MONO_FONT }}>{formatCents(swift)}</span>
-                    {' · '}Your share <span style={{ color: C.teal, fontWeight: 600, fontFamily: MONO_FONT }}>{formatCents(artistShare)}</span>
-                  </div>
                 </div>
                 <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.bg }}>
                   <table className="w-full" style={{ minWidth: 320 }}>
