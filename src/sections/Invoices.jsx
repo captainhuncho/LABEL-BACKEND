@@ -3,7 +3,7 @@ import { logActivity } from '../audit.js';
 import React, { useState } from 'react';
 import { formatCents, formatCurrency, formatDate } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, EmptyState, Field, KPICard, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
+import { Badge, Btn, EmptyState, Field, KPICard, SectionHeader, Select, Td, TextArea, Th, DocLink } from '../ui.jsx';
 
 export const INVOICE_KINDS = { expense: 'Expense claim', service: 'Services / fee' };
 // Invoice approval pipeline: Submitted → PM Approval → Finance Queue → LH Queue →
@@ -224,7 +224,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                               <dt>Invoice no.</dt><dd>{inv.invoiceNumber || '—'}</dd>
                               <dt>Pay to</dt><dd>{inv.payTo || '—'}</dd>
                               <dt>Details</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{inv.details || '—'}</dd>
-                              <dt>File</dt><dd>{inv.attachment ? <a href={inv.attachment} download={inv.attachmentName || 'invoice'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download {inv.attachmentName || 'file'}</a> : '—'}</dd>
+                              <dt>File</dt><dd>{inv.attachment ? <DocLink value={inv.attachment} name={inv.attachmentName || 'invoice'}>Download {inv.attachmentName || 'file'}</DocLink> : '—'}</dd>
                             </dl>
                           </section>
                           <section>

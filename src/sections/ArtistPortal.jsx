@@ -1,4 +1,5 @@
 import { Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
+import { DOC_MAX_BYTES, uploadDocument } from '../storage.js';
 import React, { useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, dealLabel, RELEASE_TYPES, checklistProgress, emptyCredits, formatCents, formatDate, formatNumber, makeDistributionDocs, missingRequiredDocs, monthKey, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
@@ -198,10 +199,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   function handleInvoiceFile(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setInvoiceError('That file is over 2 MB. Attach a smaller PDF or photo.'); e.target.value = ''; return; }
-    const reader = new FileReader();
-    reader.onload = () => setInvoiceForm(f => ({ ...f, attachment: reader.result, attachmentName: file.name }));
-    reader.readAsDataURL(file);
+    if (file.size > DOC_MAX_BYTES) { setInvoiceError('That file is over ' + DOC_MAX_BYTES / 1048576 + ' MB. Attach a smaller PDF or photo.'); e.target.value = ''; return; }
+    uploadDocument(artist.id, file).then(value => setInvoiceForm(f => ({ ...f, attachment: value, attachmentName: file.name })), err => { setInvoiceError('Could not upload the file: ' + (err.message || err)); e.target.value = ''; });
   }
   function submitInvoice(e) {
     e.preventDefault();
@@ -298,10 +297,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   function handleSplitSheet(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setSubmitError('That split sheet is over 2 MB. Upload a smaller PDF or photo.'); e.target.value = ''; return; }
-    const reader = new FileReader();
-    reader.onload = () => { setSubmitForm(f => ({ ...f, splitSheet: reader.result, splitSheetName: file.name })); setSubmitError(''); };
-    reader.readAsDataURL(file);
+    if (file.size > DOC_MAX_BYTES) { setSubmitError('That split sheet is over ' + DOC_MAX_BYTES / 1048576 + ' MB. Upload a smaller PDF or photo.'); e.target.value = ''; return; }
+    uploadDocument(artist.id, file).then(value => { setSubmitForm(f => ({ ...f, splitSheet: value, splitSheetName: file.name })); setSubmitError(''); }, err => { setSubmitError('Could not upload the split sheet: ' + (err.message || err)); e.target.value = ''; });
   }
   const [newSubmitCollab, setNewSubmitCollab] = useState({ name: '', role: 'Feature', splitPercent: '' });
   const [newSubmitPrimaryArtist, setNewSubmitPrimaryArtist] = useState('');
@@ -737,7 +734,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   {collabError && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{collabError}</div>}
 
                   <div className="imss-form-grid gap-3 mt-4">
-                    <Field label="Signed split sheet (PDF or photo, up to 2 MB) *" full>
+                    <Field label="Signed split sheet (PDF or photo, up to 10 MB) *" full>
                       <input ref={splitSheetRef} type="file" accept="application/pdf,image/*" onChange={handleSplitSheet} className="text-sm" style={{ color: C.textDim }} />
                       {submitForm.splitSheetName && <span className="text-xs" style={{ color: C.teal }}>Attached: {submitForm.splitSheetName}</span>}
                     </Field>
@@ -1530,7 +1527,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <Field label="Invoice number (optional)"><Input value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="e.g. AC-2026-004" /></Field>
                 <Field label="Pay to (name on the account)"><Input value={invoiceForm.payTo} onChange={e => setInvoiceForm(f => ({ ...f, payTo: e.target.value }))} placeholder="Your name or company" /></Field>
                 <Field label="Details (optional)" full><TextArea rows={3} value={invoiceForm.details} onChange={e => setInvoiceForm(f => ({ ...f, details: e.target.value }))} placeholder="Anything the label needs to know: who agreed it, what it covers." /></Field>
-                <Field label={invoiceForm.kind === 'expense' ? 'Receipt (PDF or photo, up to 2 MB)' : 'Invoice file (PDF or photo, up to 2 MB, optional)'} full>
+                <Field label={invoiceForm.kind === 'expense' ? 'Receipt (PDF or photo, up to 10 MB)' : 'Invoice file (PDF or photo, up to 10 MB, optional)'} full>
                   <input ref={invoiceFileRef} type="file" accept="application/pdf,image/*" onChange={handleInvoiceFile} className="text-sm" style={{ color: C.textDim }} />
                 </Field>
               </div>

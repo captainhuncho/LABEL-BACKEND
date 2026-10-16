@@ -2,7 +2,7 @@ import { ChevronRight, Disc3, FileSpreadsheet, Globe, Pencil, Plus, Trash2, Vide
 import { useEffect, useRef, useState } from 'react';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { ArtworkThumb, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToExcel, resizeImageFile } from '../ui.jsx';
+import { ArtworkThumb, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToExcel, resizeImageFile, DocLink } from '../ui.jsx';
 
 export function CatalogSection({ focus = null, catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '', incomingSubmission = null, clearIncoming, onOpenSubmissions }) {
   const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
@@ -283,7 +283,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
           </Field>
           <div className="imss-span-2">
             <div className="text-xs mb-2" style={{ color: C.textFaint }}>Collaborators &amp; splits — {roster.find(a => a.id === form.artistId) ? roster.find(a => a.id === form.artistId).name : 'Primary artist'} keeps the remainder ({Math.max(0, 100 - form.collaborators.reduce((s, c) => s + c.splitPercent, 0))}%)</div>
-            {form.splitSheet && <div className="text-xs mb-2"><a href={form.splitSheet} download={form.splitSheetName || 'split-sheet'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download signed split sheet{form.splitSheetName ? ' (' + form.splitSheetName + ')' : ''}</a></div>}
+            {form.splitSheet && <div className="text-xs mb-2"><DocLink value={form.splitSheet} name={form.splitSheetName || 'split-sheet'}>Download signed split sheet{form.splitSheetName ? ' (' + form.splitSheetName + ')' : ''}</DocLink></div>}
             <div className="rounded border p-3 mb-1" style={{ borderColor: C.border, background: C.bg }}>
               {form.collaborators.length > 0 && (
                 <div className="flex flex-col gap-2 mb-3">

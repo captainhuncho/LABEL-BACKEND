@@ -7,7 +7,7 @@ import { formatCents, formatDate, monthLabel } from '../constants.js';
 import { slug } from '../finance.js';
 import { statementFileUrl } from '../storage.js';
 import { C } from '../theme.js';
-import { Td, Th, exportRowsToCsv } from '../ui.jsx';
+import { DocLink, Td, Th, exportRowsToCsv } from '../ui.jsx';
 
 // Royalty breakdowns (EMPIRE detail on each revenue row).
 export const BREAKDOWN_FIELDS = { stores: 'Platform', countries: 'Country', types: 'Format', models: 'Model', salesMonths: 'Month earned' };
@@ -92,7 +92,9 @@ export function csvByTrack(name, lines) {
 // `rows` are this artist's revenue rows; `splitOf(row)` gives charge and earnings.
 export function StatementFilesList({ files = [], title = 'Statement files', empty = 'Royalty statement files uploaded by the label are kept here.', sourceLabel = '', rows = [], splitOf = null, artistName = '' }) {
   const [error, setError] = useState('');
-  const sorted = [...files].sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
+  // The label's PDF statements are team-only.
+  const isArtist = !!sourceLabel;
+  const sorted = [...files].filter(f => !(isArtist && f.kind === 'pdf')).sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
   const fileName = (f, kind) => ((artistName || 'artist') + ' ' + (f.months || []).join(' ') + ' ' + kind).trim().replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
   async function original(f) {
     setError('');
@@ -112,13 +114,12 @@ export function StatementFilesList({ files = [], title = 'Statement files', empt
     } catch (err) { setError('Could not build that statement. Try again in a moment.'); }
   }
   // The release a file is for: EMPIRE names files "<Release> royalties_detailed_<stamp>.csv".
-  const releaseOf = f => String(f.name || '').replace(/\.csv$/i, '').replace(/\s*royalties_detailed.*$/i, '').trim() || (f.songs || [])[0] || 'Statement';
+  const releaseOf = f => String(f.name || '').replace(/\.(csv|pdf)$/i, '').replace(/\s*royalties_detailed.*$/i, '').trim() || (f.songs || [])[0] || 'Statement';
   const songsLine = f => { const list = f.songs || []; if (!list.length) return ''; const shown = list.slice(0, 3).join(', '); return list.length + (list.length === 1 ? ' song' : ' songs') + ': ' + shown + (list.length > 3 ? ' and ' + (list.length - 3) + ' more' : ''); };
-  const isArtist = !!sourceLabel;
   const pill = { background: C.fill, color: C.text, borderRadius: 980, padding: '7px 14px', fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' };
   return (
     <section aria-label={title} className="rounded" style={{ background: C.panel }}>
-      <div className="imss-dash-ph"><h2>{title}</h2><span style={{ color: C.textDim, fontSize: 13 }}>{files.length} {files.length === 1 ? 'file' : 'files'}</span></div>
+      <div className="imss-dash-ph"><h2>{title}</h2><span style={{ color: C.textDim, fontSize: 13 }}>{sorted.length} {sorted.length === 1 ? 'file' : 'files'}</span></div>
       {sorted.length === 0 ? <div className="px-4 pb-4" style={{ color: C.textDim, fontSize: 15 }}>{empty}</div> : (
         <ul style={{ borderTop: '1px solid ' + C.border }}>
           {sorted.map((f, i) => (
@@ -131,6 +132,7 @@ export function StatementFilesList({ files = [], title = 'Statement files', empt
                 <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>{isArtist ? 'Added ' : 'Uploaded '}{formatDate(String(f.uploadedAt || '').slice(0, 10))}{!isArtist && f.uploadedBy ? ' by ' + f.uploadedBy : ''}{!isArtist && f.source ? ' · ' + f.source : ''}</div>
               </div>
               <div className="flex items-center gap-3 flex-wrap justify-end">
+                {f.kind === 'pdf' ? <DocLink value={f.doc} name={f.name} style={{ ...pill, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Download size={14} aria-hidden="true" /> PDF</DocLink> : <>
                 <div style={{ textAlign: 'right', minWidth: 90 }}>
                   <div style={{ fontWeight: 600, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{formatCents(f.gross)}</div>
                   <div style={{ color: C.textDim, fontSize: 12 }}>gross</div>
@@ -138,6 +140,7 @@ export function StatementFilesList({ files = [], title = 'Statement files', empt
                 {splitOf && <button onClick={() => download(f, 'track')} className="inline-flex items-center gap-1.5" style={pill}><Download size={14} aria-hidden="true" /> By track</button>}
                 {splitOf && (!isArtist || ARTIST_DETAILED_EXPORTS) && <button onClick={() => download(f, 'detailed')} className="inline-flex items-center gap-1.5" style={pill}><Download size={14} aria-hidden="true" /> Detailed</button>}
                 {(!isArtist || ARTIST_DETAILED_EXPORTS) && <button onClick={() => original(f)} className="inline-flex items-center gap-1.5" style={pill}><Download size={14} aria-hidden="true" /> Partner copy</button>}
+                </>}
               </div>
             </li>
           ))}

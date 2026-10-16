@@ -62,3 +62,23 @@ export async function statementFileUrl(record) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+// Documents (invoice attachments, split sheets, signed agreements, PDF
+// statements). With Supabase they live in the private `documents` bucket under
+// <artistId>/ and the record keeps "doc:<path>"; locally (and for older
+// records) the value is a data URL.
+export const DOC_MAX_BYTES = supabase ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
+export async function uploadDocument(artistId, file) {
+  if (!supabase) return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+  const safe = String(file.name || 'file').replace(/[^A-Za-z0-9._-]+/g, '-').slice(-80);
+  const path = (artistId || 'label') + '/' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '-' + safe;
+  const { error } = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (error) throw error;
+  return 'doc:' + path;
+}
+export async function documentUrl(value, name) {
+  if (!String(value || '').startsWith('doc:')) return value;
+  const { data, error } = await supabase.storage.from('documents').createSignedUrl(value.slice(4), 120, { download: name || true });
+  if (error) throw error;
+  return data.signedUrl;
+}

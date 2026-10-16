@@ -1,13 +1,14 @@
 // Deal changes: an artist's split (and funding / deal) changing from a month.
 // Admin or Legal records one; it applies when an Admin approves (an Admin's own
 // entry applies at once). Earlier months always keep the terms they had.
+import { DOC_MAX_BYTES, uploadDocument } from '../storage.js';
 import { useState } from 'react';
 import { CheckCircle2, FileText, Plus } from 'lucide-react';
 import { dealTermsOf, slug, termsAt } from '../finance.js';
 import { DEAL_TYPES, FUNDING_TIERS, dealLabel, formatDate, monthLabel, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
 import { logActivity } from '../audit.js';
-import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
+import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th, DocLink } from '../ui.jsx';
 import { ArtistLicenses, applyLicenseChange, describeLicenseChange } from './Licenses.jsx';
 
 const pctText = p => Math.round(Number(p) * 10000) / 100 + '%';
@@ -67,13 +68,12 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     const a = roster.find(x => x.id === id);
     setForm(f => ({ ...f, artistId: id, pct: a ? String(Math.round(a.artistPct * 10000) / 100) : '', fundingTier: a ? a.fundingTier || 'Non-Funded' : 'Non-Funded', dealType: a ? a.dealType || '' : '' }));
   }
-  function onFile(e) {
+  async function onFile(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setError('The agreement must be 2 MB or smaller.'); e.target.value = ''; return; }
-    const r = new FileReader();
-    r.onload = () => setForm(f => ({ ...f, agreement: r.result, agreementName: file.name }));
-    r.readAsDataURL(file);
+    if (file.size > DOC_MAX_BYTES) { setError('The agreement must be ' + DOC_MAX_BYTES / 1048576 + ' MB or smaller.'); e.target.value = ''; return; }
+    try { const value = await uploadDocument(form.artistId, file); setForm(f => ({ ...f, agreement: value, agreementName: file.name })); }
+    catch (err) { setError('Could not upload the agreement: ' + (err.message || err)); e.target.value = ''; }
   }
   function submit(e) {
     e.preventDefault();
@@ -177,7 +177,7 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
             </Select>
           </Field>
           <Field label="Note: what changed and why" full><TextArea rows={2} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} placeholder="e.g. Upgraded from Distro+ to Recordings+ after the first album; signed 3 June." /></Field>
-          <Field label="Signed agreement (optional, PDF or image, up to 2 MB)" full><input type="file" accept="application/pdf,image/*" onChange={onFile} style={{ color: C.textDim, fontSize: 14 }} /></Field>
+          <Field label="Signed agreement (optional, PDF or image)" full><input type="file" accept="application/pdf,image/*" onChange={onFile} style={{ color: C.textDim, fontSize: 14 }} /></Field>
           {error && <div className="imss-span-2" role="alert" style={{ color: C.red, fontSize: 14 }}>{error}</div>}
           <div className="imss-span-2 flex gap-2 flex-wrap">
             <Btn variant="primary" type="submit"><CheckCircle2 size={15} /> {isAdmin ? 'Save deal change' : 'Send to an Admin to approve'}</Btn>
@@ -202,7 +202,7 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
                   <Td>{c.kind ? '—' : (c.was ? dealLabel(c.was) + ' → ' : '') + dealLabel(c)}</Td>
                   <Td>
                     <div style={{ whiteSpace: 'pre-wrap' }}>{c.kind ? describeLicenseChange(c, catalog) : c.reason}</div>
-                    {c.agreement && <a href={c.agreement} download={c.agreementName || 'agreement'} style={{ color: C.amber, fontSize: 13 }}>Signed agreement</a>}
+                    {c.agreement && <DocLink value={c.agreement} name={c.agreementName || 'agreement'} style={{ fontSize: 13 }}>Signed agreement</DocLink>}
                     <div style={{ color: C.textDim, fontSize: 12 }}>Recorded by {c.requestedBy} · {formatDate(String(c.requestedAt).slice(0, 10))}</div>
                   </Td>
                   <Td>

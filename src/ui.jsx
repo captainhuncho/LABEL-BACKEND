@@ -1,6 +1,7 @@
 // Shared UI primitives — buttons, fields, tables, cards, export bars.
 import { Download, FileSpreadsheet, Printer, X } from 'lucide-react';
 import { useState } from 'react';
+import { documentUrl } from './storage.js';
 import { artworkColor, artworkInitials } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
 import { logActivity } from './audit.js';
@@ -247,4 +248,19 @@ export function DropZone({ onFiles, accept = '', children, className = '', style
       {over && <div className="text-xs mt-2" style={{ color: C.amber, fontWeight: 600 }}>Drop to upload</div>}
     </div>
   );
+}
+
+// A stored file (data URL or "doc:" path in the documents bucket): opens a short-lived link.
+export function DocLink({ value, name, children, style }) {
+  const [err, setErr] = useState('');
+  if (!value) return null;
+  async function open(e) {
+    e.preventDefault(); setErr('');
+    try {
+      const url = await documentUrl(value, name);
+      const a = document.createElement('a'); a.href = url; a.download = name || 'file'; a.rel = 'noopener'; a.target = '_blank';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (x) { setErr('Could not open the file.'); }
+  }
+  return <><a href="#" onClick={open} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3, ...style }}>{children || name || 'Open file'}</a>{err && <span role="alert" style={{ color: C.red, fontSize: 12, marginLeft: 6 }}>{err}</span>}</>;
 }

@@ -4,12 +4,13 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { PLATFORM_COLORS, artistStatusTone, expirationStatus, formatCurrency, formatDate, formatNumber, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { artistLifetime, recoupmentForArtist, revenueRowSplit, artistSpend, pctAt, slug } from '../finance.js';
 import { SOCIAL_LINKS, safeLink, PROFILE_EDITABLE_FIELDS } from '../seed.js';
-import { supabase } from '../storage.js';
+import { DOC_MAX_BYTES, supabase, uploadDocument } from '../storage.js';
+import { logActivity } from '../audit.js';
 import { C } from '../theme.js';
 import { ArtworkThumb, Avatar, Badge, Btn, KPICard, Td, TextArea, Th } from '../ui.jsx';
 import { StatementFilesList } from './StatementFiles.jsx';
 
-export function ArtistDetailPanel({ invoices = [], dealSection = null, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSection = null, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
   const aSlug = useMemo(() => slug(artist.name), [artist.name]);
@@ -353,6 +354,7 @@ export function ArtistDetailPanel({ invoices = [], dealSection = null, statement
           </div>
           )}
           {dealSection && <div className="rounded p-5 mb-4" style={{ background: C.panel }}>{dealSection}</div>}
+          {canViewRoyalties && updateStatementFiles && <PdfStatementUpload artist={artist} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} />}
           {canViewRoyalties && <div className="mb-4"><StatementFilesList files={statementFiles.filter(f => f.artistId === artist.id)} rows={myRevenue} splitOf={r => revenueRowSplit(r, revenue, masterGross, pctAt(artist, r.month))} artistName={artist.name} empty="No statement files yet. Import an EMPIRE detailed report and it’s kept here." /></div>}
           {canViewRoyalties && (
           <div className="rounded border" style={{ background: C.panel, borderColor: C.border }}>
@@ -407,5 +409,39 @@ export function SendLinkButton({ email, labeled = false }) {
       style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textDim }}>
       {state === 'sent' ? <CheckCircle2 size={14} /> : <Mail size={14} />}
     </button>
+  );
+}
+
+// PDF statements from the distributor (royalty statements, Label Access extracts).
+// Kept with the artist's statement files for the team; artists don't see them.
+function PdfStatementUpload({ artist, statementFiles, updateStatementFiles, sessionName = '' }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function onFile(e) {
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!files.length) return;
+    setErr(''); setBusy(true);
+    const added = [];
+    for (const file of files) {
+      if (!/\.pdf$/i.test(file.name)) { setErr(file.name + ' is not a PDF.'); continue; }
+      if (file.size > DOC_MAX_BYTES) { setErr(file.name + ' is over ' + DOC_MAX_BYTES / 1048576 + ' MB.'); continue; }
+      try {
+        const doc = await uploadDocument(artist.id + '/label', file);
+        added.push({ id: uid(), artistId: artist.id, kind: 'pdf', name: file.name, doc, source: 'PDF', months: [], songs: [], gross: null, uploadedBy: sessionName, uploadedAt: new Date().toISOString() });
+      } catch (x) { setErr('Could not upload ' + file.name + ': ' + (x.message || x)); }
+    }
+    if (added.length) { updateStatementFiles([...added, ...statementFiles]); logActivity('uploaded PDF statements', added.map(f => f.name).join(', '), artist.id); }
+    setBusy(false);
+  }
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap mb-2" style={{ fontSize: 14 }}>
+      <span style={{ color: C.textDim }}>Keep the distributor’s PDF statements here too. Only the team sees them.</span>
+      <label className="inline-flex items-center gap-1.5" style={{ position: 'relative', background: C.fill, color: C.text, borderRadius: 980, padding: '7px 14px', cursor: 'pointer' }}>
+        {busy ? 'Uploading…' : 'Add PDF statements'}
+        <input type="file" accept="application/pdf" multiple onChange={onFile} disabled={busy} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+      </label>
+      {err && <div role="alert" style={{ color: C.red, width: '100%' }}>{err}</div>}
+    </div>
   );
 }

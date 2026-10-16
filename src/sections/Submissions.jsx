@@ -2,7 +2,7 @@ import { CheckCircle2, Disc3, Mail, MessageSquare } from 'lucide-react';
 import React, { useState } from 'react';
 import { SPLIT_REQUIRED_ROLES, formatDate, missingRequiredDocs } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, EmptyState, Field, SectionHeader, Td, TextArea, Th } from '../ui.jsx';
+import { Badge, Btn, EmptyState, Field, SectionHeader, Td, TextArea, Th, DocLink } from '../ui.jsx';
 
 // What a release submission needs before it can go to Catalog.
 export function submissionChecks(sub) {
@@ -106,7 +106,7 @@ export function SubmissionsSection({ releaseSubmissions, update, roster, pmScope
                                 <tr><Td><span style={{ fontWeight: 600 }}>{a.name || 'Artist'}</span></Td><Td>Primary artist</Td><Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{artistPct}%</span></Td></tr>
                               </tbody>
                             </table>
-                            <div className="text-sm mt-3">{sub.splitSheet ? <a href={sub.splitSheet} download={sub.splitSheetName || 'split-sheet'} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Download signed split sheet{sub.splitSheetName ? ' (' + sub.splitSheetName + ')' : ''}</a> : <span style={{ color: C.red }}>No split sheet uploaded</span>}</div>
+                            <div className="text-sm mt-3">{sub.splitSheet ? <DocLink value={sub.splitSheet} name={sub.splitSheetName || 'split-sheet'}>Download signed split sheet{sub.splitSheetName ? ' (' + sub.splitSheetName + ')' : ''}</DocLink> : <span style={{ color: C.red }}>No split sheet uploaded</span>}</div>
                             <h3 className="imss-sub-h mt-5">Credits</h3>
                             <dl className="imss-sub-dl">
                               {[['Performed by', 'performedBy'], ['Written by', 'writtenBy'], ['Produced by', 'producedBy'], ['Recording', 'recordingEngineer'], ['Mixing', 'mixingEngineer'], ['Mastering', 'masteringEngineer'], ['Dolby', 'dolbyEngineer']].map(([l, k]) => (

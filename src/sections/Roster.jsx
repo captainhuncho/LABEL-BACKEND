@@ -8,7 +8,7 @@ import { C, HEADING_FONT, MONO_FONT } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { ArtistDetailPanel, SendLinkButton } from './ArtistDetail.jsx';
 
-export function RosterSection({ focus = null, updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+export function RosterSection({ updateStatementFiles, focus = null, updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(focus && focus.artistId || null);
   useEffect(() => { if (focus && focus.artistId) setDetailId(focus.artistId); }, [focus]);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
@@ -79,6 +79,7 @@ export function RosterSection({ focus = null, updateCatalog, updateTasks, invoic
           invoices={invoices}
           dealSection={(session.role === 'Admin' || session.role === 'Legal' || canViewRoyalties) && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={ledger} invoices={invoices} />}
           statementFiles={statementFiles}
+          updateStatementFiles={updateStatementFiles}
           artist={roster.find(a => a.id === detailId)}
           roster={roster} catalog={catalog} revenue={revenue} streams={streams} masterGross={masterGross}
           payouts={payouts} ledger={ledger} labelSettings={labelSettings} staff={staff}
