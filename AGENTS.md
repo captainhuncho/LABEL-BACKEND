@@ -43,7 +43,7 @@ handles HTTPS.
 - Sign-in is invite only, enforced in the database: `private.is_invited(email)`
   (Team list or a Roster entry). A trigger on `auth.users` refuses to create
   any other account, so nothing is stored and no email is sent; taking someone
-  off Team/Roster deletes their sign-in account (a save that would remove more
+  off Team/Roster or archiving them deletes their sign-in account; their records stay (a save that would remove more
   than 2 at once removes none and logs a warning). Add the email first.
 - `section()`, `my_artist()` and `js_slug()` are internal: API roles must not
   have EXECUTE on them. New functions get no API access unless granted.

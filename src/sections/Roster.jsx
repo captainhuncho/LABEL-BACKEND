@@ -1,4 +1,4 @@
-import { Globe, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Globe, Pencil, Plus, Search, Trash2, Users, Archive } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ARTIST_STATUSES, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid } from '../constants.js';
 import { DEFAULT_DELIVERY_DAYS } from '../finance.js';
@@ -39,7 +39,9 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
     else update([...roster, { ...payload, id: uid() }]);
     closeForm();
   }
-  function remove(id) { update(roster.filter(a => a.id !== id)); setConfirmId(null); }
+  // Artists are never deleted: archiving keeps their history and removes their sign-in.
+  function remove(id) { update(roster.map(a => a.id !== id ? a : { ...a, status: 'Archived', archivedFrom: a.status, archivedAt: new Date().toISOString(), archivedBy: sessionName })); setConfirmId(null); }
+  function restore(id) { update(roster.map(a => a.id !== id ? a : { ...a, status: a.archivedFrom && a.archivedFrom !== 'Archived' ? a.archivedFrom : 'Active', archivedAt: null, archivedBy: null })); }
   function handlePhotoUpload(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -51,7 +53,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
   const marketsInUse = Array.from(new Set(visibleRoster.flatMap(a => [a.primaryMarket, a.secondaryMarket]).filter(Boolean))).sort();
 
   const filtered = visibleRoster.filter(a => {
-    if (filterStatus !== 'all' && a.status !== filterStatus) return false;
+    if (filterStatus === 'all' ? a.status === 'Archived' : a.status !== filterStatus) return false;
     if (filterGenre !== 'all' && a.genre !== filterGenre) return false;
     if (filterMarket !== 'all' && a.primaryMarket !== filterMarket && a.secondaryMarket !== filterMarket) return false;
     const q = query.trim().toLowerCase();
@@ -322,12 +324,12 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
                     <Td><Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge></Td>
                     <Td align="right">
                       {confirmId === a.id ? (
-                        <ConfirmInline onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
+                        <ConfirmInline label="Archive? They lose sign-in; their history stays." onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
                       ) : canEdit ? (
                         <span className="inline-flex gap-3 justify-end">
                           {isAdmin && <SendLinkButton email={a.email} />}
                           <button onClick={() => openEdit(a)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmId(a.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                          {a.status === 'Archived' ? <button onClick={() => restore(a.id)} style={{ color: C.amber, fontSize: 13 }}>Restore</button> : <button onClick={() => setConfirmId(a.id)} aria-label={'Archive ' + a.name} title="Archive" style={{ color: C.textDim }}><Archive size={14} /></button>}
                         </span>
                       ) : <span style={{ color: C.textFaint }}>—</span>}
                     </Td>

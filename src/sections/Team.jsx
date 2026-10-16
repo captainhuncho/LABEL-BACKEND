@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2, UserCog, Users } from 'lucide-react';
+import { Pencil, Plus, Trash2, UserCog, Users, Archive } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
@@ -104,10 +104,12 @@ export function TeamSection({ staff, update, sessionRole = 'Admin', sessionName 
     }
     closeForm();
   }
-  function remove(id) { update(staff.filter(s => s.id !== id)); setConfirmId(null); }
+  // Team members are never deleted: archiving keeps their work on record and removes their sign-in.
+  function remove(id) { update(staff.map(s => s.id !== id ? s : { ...s, status: 'Archived', archivedFrom: s.status, archivedAt: new Date().toISOString() })); setConfirmId(null); }
+  function restore(id) { update(staff.map(s => s.id !== id ? s : { ...s, status: s.archivedFrom && s.archivedFrom !== 'Archived' ? s.archivedFrom : 'Active', archivedAt: null })); }
 
   const filtered = staff.filter(s => {
-    if (filterStatus !== 'all' && (s.status || 'Active') !== filterStatus) return false;
+    if (filterStatus === 'all' ? s.status === 'Archived' : (s.status || 'Active') !== filterStatus) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return s.name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q) || (s.email && s.email.toLowerCase().includes(q));
@@ -286,11 +288,11 @@ export function TeamSection({ staff, update, sessionRole = 'Admin', sessionName 
                     <Td mono>{prog.total > 0 ? prog.done + '/' + prog.total : '—'}</Td>
                     <Td>{s.email || '—'}</Td>
                     <Td align="right">
-                      {confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : (
+                      {confirmId === s.id ? <ConfirmInline label="Archive? They lose sign-in; their work stays." onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : (
                         <span className="inline-flex gap-3 justify-end">
                           {isTopRole(sessionRole) && <SendLinkButton email={s.email} />}
                           <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                          {s.status === 'Archived' ? <button onClick={() => restore(s.id)} style={{ color: C.amber, fontSize: 13 }}>Restore</button> : !isTopRole(s.role) && <button onClick={() => setConfirmId(s.id)} aria-label={'Archive ' + s.name} title="Archive" style={{ color: C.textDim }}><Archive size={14} /></button>}
                         </span>
                       )}
                     </Td>

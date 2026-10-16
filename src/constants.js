@@ -27,7 +27,8 @@ export function releaseStatusTone(status) {
   if (status === 'Processing') return 'default';
   return 'amber';
 }
-export const ARTIST_STATUSES = ['Active', 'On Hiatus', 'Former'];
+// Archived: kept with all their history, but no sign-in (see private.is_invited).
+export const ARTIST_STATUSES = ['Active', 'On Hiatus', 'Former', 'Archived'];
 export const FUNDING_TIERS = ['Non-Funded', 'Funded'];
 // Deal categories under each funding tier. Add new categories here.
 export const DEAL_TYPES = { Funded: ['Core', 'Recordings+'], 'Non-Funded': ['Distro', 'Distro+'] };
@@ -96,7 +97,7 @@ export function onboardingProgress(member) {
   const done = list.filter(t => t.done).length;
   return { done, total: list.length, pct: Math.round((done / list.length) * 100) };
 }
-export const STAFF_STATUSES = ['Onboarding', 'Active', 'Inactive'];
+export const STAFF_STATUSES = ['Onboarding', 'Active', 'Inactive', 'Archived'];
 
 export function checklistProgress(list) {
   if (!list || !list.length) return { done: 0, total: 0, pct: 0 };
