@@ -187,7 +187,7 @@ export function expirationStatus(dateStr) {
 // Every song is licensed to IMSS Records for the artist's license period (default 5 years)
 // from its release date. After that the label keeps the license until the artist's
 // account is marked recouped (artist.recoupedOn). Flag 6 months ahead.
-export const LICENSE_YEARS = [1, 2, 3, 4, 5];
+export const LICENSE_YEARS = Array.from({ length: 15 }, (_, i) => i + 1);
 export function licenseOf(release, artist) {
   if (!release || !release.releaseDate) return { expires: '', status: null };
   const years = Number(artist && artist.licenseYears) || 5;
