@@ -204,7 +204,23 @@ async function sendDueStatements() {
     return p;
   });
   if (changed) await saveSection('payouts', next);
-  return { sent: changed };
+
+  // Scheduled publishes to artists: swap in the rows saved when it was scheduled.
+  // Marking it Published fires the trigger that emails the artists.
+  const log = await section('revenuePublish');
+  const due = log.filter(e => e.status === 'Scheduled' && e.scheduledFor && Date.parse(e.scheduledFor) <= now);
+  if (due.length) {
+    const at = new Date().toISOString();
+    let published = await section('publishedRevenue');
+    for (const e of due) {
+      const keys = new Set((e.items || []).map((i: Item) => i.key));
+      published = [...published.filter(r => !keys.has(r.artistSlug + '|' + r.month)), ...(e.rows || []).map((r: Item) => ({ ...r, publishedAt: at }))];
+    }
+    await saveSection('publishedRevenue', published);
+    const ids = new Set(due.map(e => e.id));
+    await saveSection('revenuePublish', log.map(e => ids.has(e.id) ? { ...e, status: 'Published', approvedAt: e.approvedAt || at, publishedAt: at, rows: undefined } : e));
+  }
+  return { sent: changed, published: due.length };
 }
 
 // ---------- incoming ----------

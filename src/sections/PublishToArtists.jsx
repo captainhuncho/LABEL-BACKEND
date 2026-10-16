@@ -6,7 +6,7 @@ import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
 import { applyPublish, publishDiff, slug } from '../finance.js';
 import { formatCents, formatDate, monthLabel, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, EmptyState, Field, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
+import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
 
 const STATE_TONE = { New: 'amber', Changed: 'amber', Removed: 'red', 'Awaiting approval': 'default' };
 const STATE_LABEL = { New: 'Not published yet', Changed: 'Changed since publish', Removed: 'Removed from the books' };
@@ -19,9 +19,13 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
   const [note, setNote] = useState('');
   const [declineNote, setDeclineNote] = useState({});
   const [done, setDone] = useState('');
+  const [publishAt, setPublishAt] = useState('');
+  const [error, setError] = useState('');
 
   const pending = log.filter(e => e.status === 'Awaiting approval');
-  const requestedKeys = new Set(pending.flatMap(e => (e.items || []).map(i => i.key)));
+  const scheduled = log.filter(e => e.status === 'Scheduled').sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
+  const requestedKeys = new Set([...pending, ...scheduled].flatMap(e => (e.items || []).map(i => i.key)));
+  const scheduledFor = key => (scheduled.find(e => (e.items || []).some(i => i.key === key)) || {}).scheduledFor;
   const diff = useMemo(() => publishDiff(approvedRevenue, published).filter(d => d.state !== 'Published'), [approvedRevenue, published]);
   const shown = diff.filter(d => !artistFilter || d.artistSlug === artistFilter);
   const artistsInDiff = [...new Map(diff.map(d => [d.artistSlug, d.artist])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
@@ -34,30 +38,53 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
   const itemsFor = keys => diff.filter(d => keys.includes(d.key)).map(d => ({ key: d.key, artistSlug: d.artistSlug, artistId: artistIdOf(d.artistSlug), artist: d.artist, month: d.month, gross: d.liveGross, state: d.state }));
   const stamp = () => new Date().toISOString();
 
-  function publishNow(keys, scope) {
-    const items = itemsFor(keys);
-    if (!items.length) return;
+  const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  // A future publish keeps the rows as they are now; a timed job swaps them in at that time.
+  const snapshotRows = keys => applyPublish([], keys, approvedRevenue, masterGross);
+  function release(keys, items, extra) {
+    const when = extra.scheduledFor;
+    if (when && Date.parse(when) > Date.now()) return { ...extra, status: 'Scheduled', rows: snapshotRows(keys) };
     updatePublished(applyPublish(published, keys, approvedRevenue, masterGross));
-    updateLog([{ id: uid(), status: 'Published', scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), approvedBy: session.name, approvedAt: stamp() }, ...log]);
-    finish(items, 'Published');
+    return { ...extra, status: 'Published', scheduledFor: '' };
+  }
+  function scheduleTime() {
+    if (!publishAt) return '';
+    const t = Date.parse(publishAt);
+    if (isNaN(t) || t <= Date.now()) { setError('Pick a publish time in the future, or clear it to publish now.'); return null; }
+    return new Date(t).toISOString();
+  }
+  function publishNow(keys, scope) {
+    const items = itemsFor(keys).filter(i => !requestedKeys.has(i.key));
+    if (!items.length) return;
+    const when = scheduleTime(); if (when === null) return;
+    const entry = release(items.map(i => i.key), items, { id: uid(), scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), approvedBy: session.name, approvedAt: stamp(), scheduledFor: when });
+    updateLog([entry, ...log]);
+    finish(items, entry.status === 'Scheduled' ? 'Scheduled for ' + fmtWhen(when) : 'Published');
   }
   function requestApproval(keys, scope) {
     const items = itemsFor(keys).filter(i => !requestedKeys.has(i.key));
     if (!items.length) return;
-    updateLog([{ id: uid(), status: 'Awaiting approval', scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp() }, ...log]);
-    finish(items, 'Sent to an Admin for approval');
+    const when = scheduleTime(); if (when === null) return;
+    updateLog([{ id: uid(), status: 'Awaiting approval', scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), scheduledFor: when }, ...log]);
+    finish(items, 'Sent to an Admin for approval' + (when ? ', to publish ' + fmtWhen(when) : ''));
+  }
+  function cancelScheduled(entry) { updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Cancelled', cancelledBy: session.name, cancelledAt: stamp() })); }
+  function publishScheduledNow(entry) {
+    const keys = new Set((entry.items || []).map(i => i.key));
+    updatePublished([...published.filter(r => !keys.has(r.artistSlug + '|' + r.month)), ...(entry.rows || []).map(r => ({ ...r, publishedAt: stamp() }))]);
+    updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Published', publishedEarlyBy: session.name, approvedAt: stamp(), rows: undefined }));
   }
   function finish(items, what) {
     const artists = new Set(items.map(i => i.artistSlug)).size;
     setDone(what + ': ' + items.length + ' artist-month' + (items.length === 1 ? '' : 's') + ' across ' + artists + ' artist' + (artists === 1 ? '' : 's') + '.');
-    setSelected(new Set()); setNote('');
+    setSelected(new Set()); setNote(''); setPublishAt(''); setError('');
   }
   function go(keys, scope) { (direct ? publishNow : requestApproval)(keys, scope); }
 
   function approve(entry) {
     const keys = (entry.items || []).map(i => i.key);
-    updatePublished(applyPublish(published, keys, approvedRevenue, masterGross));
-    updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Published', approvedBy: session.name, approvedAt: stamp() }));
+    const next = release(keys, entry.items, { ...entry, approvedBy: session.name, approvedAt: stamp() });
+    updateLog(log.map(e => e.id !== entry.id ? e : next));
   }
   function decline(entry) {
     const text = (declineNote[entry.id] || '').trim();
@@ -92,6 +119,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                 </div>
                 <div className="text-xs mt-1" style={{ color: C.textDim }}>{e.items.map(i => i.artist + ' ' + monthLabel(i.month)).join(' · ')}</div>
                 {e.note && <div className="text-sm mt-1" style={{ color: C.textDim }}>“{e.note}”</div>}
+                {e.scheduledFor && <div className="text-xs mt-1" style={{ color: C.textDim }}>Requested for {fmtWhen(e.scheduledFor)}{Date.parse(e.scheduledFor) <= Date.now() ? ' (that time has passed, so approving publishes now)' : ''}</div>}
                 {drift.length > 0 && <div className="text-xs mt-1" style={{ color: C.amber }}>{drift.length} of these changed after it was requested. Approving publishes the books as they are now.</div>}
                 {isAdmin && canEdit && (
                   <div className="flex gap-2 flex-wrap items-end mt-3">
@@ -106,6 +134,24 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
               </div>
             );
           })}
+        </section>
+      )}
+
+      {scheduled.length > 0 && (
+        <section aria-labelledby="pub-sched-h" className="rounded border mb-6" style={{ borderColor: C.border, background: C.panel }}>
+          <h2 id="pub-sched-h" className="px-4 pt-4 pb-2" style={{ fontWeight: 600, fontSize: 15 }}>Scheduled</h2>
+          {scheduled.map(e => (
+            <div key={e.id} className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: '1px solid ' + C.border }}>
+              <div className="text-sm"><b>{fmtWhen(e.scheduledFor)}</b> · {e.items.length} artist-month{e.items.length === 1 ? '' : 's'} · <span style={{ color: C.textDim }}>{[...new Set(e.items.map(i => i.artist))].join(', ')}</span>
+                <div className="text-xs" style={{ color: C.textDim }}>Publishes the figures as they were when scheduled. Changes since then need another publish.</div></div>
+              {canEdit && (isAdmin || e.requestedBy === session.name) && (
+                <div className="flex gap-2">
+                  <Btn variant="ghost" onClick={() => publishScheduledNow(e)}>Publish now</Btn>
+                  <Btn variant="danger" onClick={() => cancelScheduled(e)}>Cancel</Btn>
+                </div>
+              )}
+            </div>
+          ))}
         </section>
       )}
 
@@ -141,7 +187,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                       <Td><input type="checkbox" checked={selected.has(d.key)} onChange={() => toggle(d.key)} aria-label={'Select ' + d.artist + ' ' + monthLabel(d.month)} style={{ accentColor: C.amber }} /></Td>
                       <Td>{d.artist}</Td>
                       <Td mono>{monthLabel(d.month)}</Td>
-                      <Td><Badge tone={waiting ? 'default' : STATE_TONE[d.state]}>{waiting ? 'Awaiting approval' : STATE_LABEL[d.state]}</Badge></Td>
+                      <Td><Badge tone={waiting ? 'default' : STATE_TONE[d.state]}>{scheduledFor(d.key) ? 'Scheduled ' + fmtWhen(scheduledFor(d.key)) : waiting ? 'Awaiting approval' : STATE_LABEL[d.state]}</Badge></Td>
                       <Td align="right" mono>{d.state === 'New' ? '—' : formatCents(d.publishedGross)}</Td>
                       <Td align="right" mono>{d.state === 'Removed' ? '—' : formatCents(d.liveGross)}</Td>
                     </tr>
@@ -156,9 +202,15 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
               <Field label="Note (optional, shown in the history)">
                 <TextArea rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. October EMPIRE statement" />
               </Field>
+              <div className="mt-3" style={{ maxWidth: 280 }}>
+                <Field label="Publish at (optional, leave empty for now)">
+                  <Input type="datetime-local" value={publishAt} onChange={e => { setPublishAt(e.target.value); setError(''); }} style={{ colorScheme: 'dark' }} />
+                </Field>
+              </div>
+              {error && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{error}</div>}
               <div className="flex gap-2 flex-wrap mt-3">
-                <Btn variant="primary" onClick={() => go(selectedKeys, 'selected')} disabled={!selectedKeys.length}><Send size={14} /> {direct ? 'Publish selected' : 'Send selected for approval'}{selectedKeys.length ? ' (' + selectedKeys.length + ')' : ''}</Btn>
-                <Btn variant="ghost" onClick={() => go(diff.map(d => d.key), 'all')}><Send size={14} /> {direct ? 'Publish all' : 'Send all for approval'} ({diff.length})</Btn>
+                <Btn variant="primary" onClick={() => go(selectedKeys, 'selected')} disabled={!selectedKeys.length}><Send size={14} /> {direct ? (publishAt ? 'Schedule selected' : 'Publish selected') : 'Send selected for approval'}{selectedKeys.length ? ' (' + selectedKeys.length + ')' : ''}</Btn>
+                <Btn variant="ghost" onClick={() => go(diff.map(d => d.key), 'all')}><Send size={14} /> {direct ? (publishAt ? 'Schedule all' : 'Publish all') : 'Send all for approval'} ({diff.length})</Btn>
               </div>
               <div className="text-xs mt-2" style={{ color: C.textDim }}>{direct ? 'Artists see it straight away and get an email.' : 'An Admin approves it before artists see it. Artists get an email once it’s published.'}</div>
             </div>
@@ -176,7 +228,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                 {log.slice(0, 50).map(e => (
                   <tr key={e.id}>
                     <Td mono>{formatDate(String(e.approvedAt || e.requestedAt).slice(0, 10))}</Td>
-                    <Td><Badge tone={e.status === 'Published' ? 'teal' : e.status === 'Declined' ? 'red' : 'amber'}>{e.status}</Badge></Td>
+                    <Td><Badge tone={e.status === 'Published' ? 'teal' : e.status === 'Declined' || e.status === 'Cancelled' ? 'red' : 'amber'}>{e.status}</Badge></Td>
                     <Td>{e.items && e.items.length ? e.items.length + ' artist-month' + (e.items.length === 1 ? '' : 's') + ' · ' + [...new Set(e.items.map(i => i.artist))].slice(0, 3).join(', ') + (new Set(e.items.map(i => i.artist)).size > 3 ? '…' : '') : (e.note || '—')}{e.declineNote && <div className="text-xs" style={{ color: C.red }}>Declined: {e.declineNote}</div>}{e.note && e.items && e.items.length > 0 && <div className="text-xs" style={{ color: C.textDim }}>{e.note}</div>}</Td>
                     <Td>{e.requestedBy}</Td>
                     <Td>{e.approvedBy || '—'}</Td>

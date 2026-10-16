@@ -7184,8 +7184,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     const artist = roster.find(a => a.id === session.artistId);
     if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
     const view = artistPublishedView(publishedRevenue, slug(artist.name));
+    // Same rules as artist_portal(): only sent statements, expenses up to the latest published month.
+    const lastPub = view.revenue.reduce((m, r) => r.month > m ? r.month : m, '');
+    const shownPayouts = payouts.filter(p => p.artistSlug === slug(artist.name) && p.sentAt);
+    const shownLedger = approvedLedger.filter(l => lastPub && String(l.date || '').slice(0, 7) <= lastPub);
     const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={payouts} ledger={approvedLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (

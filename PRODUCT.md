@@ -475,6 +475,15 @@ copies the live rows into `publishedRevenue` and logs it in `revenuePublish`;
 artists get an email naming their months. Existing data was published as-is
 when this was introduced.
 
+A publish can be scheduled ("Publish at"): it saves the rows as they are then,
+and the 10-minute job in the notify function swaps them in at that time and
+emails the artists. Scheduled publishes can be published early or cancelled.
+Finance can request a time; the Admin's approval keeps it.
+
+Artists see only published or sent accounting: revenue and statement files
+from the published snapshot, payout statements once sent (paid or not), and
+approved expenses dated up to their latest published month.
+
 ## 6c. Reporting schedule and payout threshold
 
 Each Roster entry has `reportingPeriod` (monthly, quarterly, half-yearly;
