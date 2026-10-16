@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronRight, Disc3, DollarSign, FileText, Globe, Radio, Users } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Disc3, DollarSign, FileText, Globe, Radio, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PLATFORM_COLORS, formatCurrency, formatDate, formatNumber, monthLabel } from '../constants.js';
@@ -6,7 +6,13 @@ import { companyFinanceTotals, slug } from '../finance.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Badge, Btn, Field, Input, KPICard, SectionHeader, Td, Th } from '../ui.jsx';
 
+// Folded or open, remembered on this device only.
+const ATTN_KEY = 'imss:attn-folded';
+const readFolded = () => { try { return localStorage.getItem(ATTN_KEY) === '1'; } catch (e) { return false; } };
+
 export function Overview({ roster, catalog, revenue, masterGross = [], streams, artistMap, releaseMap, notices = [], staff = [], sessionName = '', canViewRoyalties = true, attention = [], onOpen }) {
+  const [attnFolded, setAttnFolded] = useState(readFolded);
+  const toggleAttn = () => setAttnFolded(f => { try { localStorage.setItem(ATTN_KEY, f ? '0' : '1'); } catch (e) { /* storage blocked */ } return !f; });
   const [filters, setFilters] = useState({ startDate: '', endDate: '' });
   // The range only takes effect on Generate — until then the dashboard shows
   // all time, so landing here is never a blank screen.
@@ -95,14 +101,17 @@ export function Overview({ roster, catalog, revenue, masterGross = [], streams, 
       <SectionHeader title="Overview" description="Label performance at a glance — roster health, release activity, revenue, and stream volume." />
 
       <section aria-labelledby="attn-h" className="rounded border mb-6" style={{ background: C.panel, borderColor: attention.length ? C.amber : C.border }}>
-        <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+        <button type="button" onClick={toggleAttn} aria-expanded={!attnFolded} aria-controls="attn-list" className="flex items-center justify-between gap-2 w-full text-left px-4 pt-4" style={{ paddingBottom: attnFolded ? 16 : 8 }}>
           <h2 id="attn-h" style={{ fontWeight: 600, fontSize: 15 }}>Needs your attention</h2>
-          {attention.length > 0 && <Badge tone="amber">{attention.length}</Badge>}
-        </div>
-        {attention.length === 0 ? (
+          <span className="flex items-center gap-2">
+            {attention.length > 0 && <Badge tone="amber">{attention.length}</Badge>}
+            <ChevronDown size={16} color={C.textDim} aria-hidden="true" style={{ transform: attnFolded ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+          </span>
+        </button>
+        {attnFolded ? null : attention.length === 0 ? (
           <div className="flex items-center gap-2 px-4 pb-4 text-sm" style={{ color: C.textDim }}><CheckCircle2 size={15} color={C.teal} /> You’re all caught up. Nothing is waiting on you.</div>
         ) : (
-          <ul>
+          <ul id="attn-list">
             {attention.map(n => (
               <li key={n.id} style={{ borderTop: '1px solid ' + C.border }}>
                 <button onClick={() => onOpen && onOpen(n)} className="flex items-center gap-3 w-full text-left px-4 py-3 text-sm hover:bg-white/5">
