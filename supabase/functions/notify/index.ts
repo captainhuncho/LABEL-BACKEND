@@ -18,7 +18,7 @@ const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -124,6 +124,22 @@ async function handleEvent(ev: Event) {
           { label: 'See your earnings', url: `${APP_URL}/` })));
     }
     return results;
+  }
+
+  // A deal change approved: tell the artist what changes and from when.
+  if (ev.type === 'deal') {
+    const a = roster.find(r => r.id === item.artistId);
+    const email = String(a?.email || '').trim();
+    if (!email) return { skipped: 'no email for ' + item.artistId };
+    const pct = (x: unknown) => Math.round(Number(x) * 10000) / 100 + '%';
+    const month = new Date(item.from + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const deal = (item.fundingTier || 'Non-Funded') + (item.dealType ? ' · ' + item.dealType : '');
+    const was = item.was && item.was.artistPct != null ? ` (previously ${pct(item.was.artistPct)})` : '';
+    return send([email], `Your IMSS Records deal has been updated from ${month}`,
+      page('Your deal has been updated', [`Hi ${esc(a.name)},`, `Your deal with IMSS Records changes from your <b>${esc(month)}</b> earnings.`,
+        `Your share of net earnings: <b>${pct(item.artistPct)}</b>${was}.`, `Deal: <b>${esc(deal)}</b>.`,
+        `Earnings before ${esc(month)} stay at your previous terms. If you have questions, reply to your Product Manager or the label.`],
+        { label: 'See your deal', url: `${APP_URL}/` }));
   }
 
   const artist = ev.key === 'payouts'

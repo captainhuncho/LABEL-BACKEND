@@ -5402,7 +5402,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
   );
 }
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
   const [tab, setTab] = useState('overview');
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
@@ -5476,6 +5476,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   }, [sortedMyRevenue, revGenerated]);
   const revFiltersActive = !!(revGenerated && (revGenerated.startDate || revGenerated.endDate || revGenerated.type !== 'all' || revGenerated.product !== 'all'));
   const myPct = artist.artistPct != null ? artist.artistPct : 0;
+  // Latest approved deal change, shown on the dashboard for 60 days unless dismissed.
+  const pctLabel = x => Math.round(Number(x) * 10000) / 100 + '%';
+  const monthLong = m => new Date(m + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const latestDeal = [...dealChanges].sort((a, b) => String(b.approvedAt).localeCompare(String(a.approvedAt)))[0] || null;
+  const dealKey = latestDeal ? 'imss:deal-seen:' + latestDeal.id : '';
+  const [dealSeen, setDealSeen] = useState(() => { try { return !!dealKey && localStorage.getItem(dealKey) === '1'; } catch (e) { return false; } });
+  const showDealBanner = latestDeal && !dealSeen && Date.now() - Date.parse(latestDeal.approvedAt || 0) < 60 * 86400000;
+  // The rate actually used for a set of rows (published rows carry their own); "your deal rates" when it varies.
+  const rateLabel = rows => { const rates = [...new Set(rows.map(r => Math.round((r.final ? r.artistPct : pctAt(artist, r.month)) * 10000)))]; return rates.length === 1 ? rates[0] / 100 + '% of net' : 'at your deal rates'; };
+  function dismissDeal() { try { localStorage.setItem(dealKey, '1'); } catch (e) { /* private mode: hide for this visit */ } setDealSeen(true); }
   const splitOf = (r) => revenueRowSplit(r, revenue, masterGross, myPct);
   const sumSplits = (rows) => rows.map(splitOf).reduce((t, x) => ({ gross: t.gross + x.gross, charge: t.charge + x.charge, labelShare: t.labelShare + x.labelShare, artistShare: t.artistShare + x.artistShare }), { gross: 0, charge: 0, labelShare: 0, artistShare: 0 });
   const filteredRevTotals = useMemo(() => sumSplits(filteredMyRevenue), [filteredMyRevenue, revenue, masterGross, myPct]);
@@ -5842,6 +5852,24 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
             </div>
 
+            {showDealBanner && (
+              <section aria-label="Your deal has been updated" className="rounded mb-6" style={{ background: C.amberSoft, padding: '18px 20px' }}>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.02em' }}>Your deal has been updated</div>
+                    <p className="mt-1" style={{ fontSize: 15, lineHeight: 1.5 }}>
+                      From your <b>{monthLong(latestDeal.from)}</b> earnings, your share of net earnings is <b>{pctLabel(latestDeal.artistPct)}</b>{latestDeal.was && latestDeal.was.artistPct != null ? <> (previously {pctLabel(latestDeal.was.artistPct)})</> : null}. Deal: <b>{dealLabel(latestDeal)}</b>.
+                    </p>
+                    <p style={{ fontSize: 14, color: C.textDim }}>Earnings before {monthLong(latestDeal.from)} stay at your previous terms. Your full deal history is on your Profile.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Btn variant="ghost" onClick={() => setTab('profile')}>See deal history</Btn>
+                    <Btn variant="ghost" onClick={dismissDeal}>Got it</Btn>
+                  </div>
+                </div>
+              </section>
+            )}
+
             <section aria-label="What you are owed" className="rounded border mb-6 imss-owed-card" style={{ background: C.panel, borderColor: C.border }}>
               <div className="imss-owed-head">
                 <div>
@@ -5857,7 +5885,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <li><span>Gross</span><b>{formatCents(lifetime.gross)}</b></li>
                 <li><span>Inbound Banking Charge</span><b>−{formatCents(lifetime.swift)}</b></li>
                 <li><span>Net</span><b>{formatCents(lifetime.gross - lifetime.swift)}</b></li>
-                <li className="imss-sum-key"><span>Your earnings ({Math.round(myPct * 100)}% of net)</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
+                <li className="imss-sum-key"><span>Your earnings ({rateLabel(revenue)})</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
                 {recoupment.recouped > 0 && <li><span>Recouped expenses</span><b>−{formatCents(recoupment.recouped)}</b></li>}
                 <li><span>Paid to you</span><b>{paid > 0 ? '−' : ''}{formatCents(paid)}</b></li>
                 <li className="imss-sum-total"><span>{balance > 0 ? 'You’re owed' : 'Balance'}</span><b style={{ color: balance > 0 ? C.amber : C.text }}>{formatCents(Math.max(0, balance))}</b></li>
@@ -6277,6 +6305,18 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'profile' && (
           <div>
+            <section aria-label="Your deal" className="rounded p-5 mb-6" style={{ background: C.panel }}>
+              <h2 style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>Your deal</h2>
+              <p className="mt-1 mb-3" style={{ color: C.textDim, fontSize: 14 }}>Your share of net earnings and your deal over time. Each month is paid at the terms in force that month.</p>
+              <ol className="imss-steps" aria-label="Deal history">
+                {dealTermsOf(artist).map((t, i, list) => (
+                  <li key={i} className={i === list.length - 1 ? 'is-current' : 'is-done'}>
+                    <span className="imss-step-dot" aria-hidden="true">{i + 1}</span>
+                    <span>{t.from ? 'From ' + monthLong(t.from) : 'Start'} · {pctLabel(t.artistPct)} to you · {dealLabel(t)}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
             <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
               <div className="text-sm" style={{ color: C.textDim }}>
                 You can update your photo, bio, and contact email here. Changes are reviewed by your Product Manager or Admin before they go live — everything else on your profile (royalty rate, contract terms, team assignments) is managed by the label directly.
@@ -6440,7 +6480,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div className="flex flex-wrap gap-3 mb-6">
               <KPICard icon={DollarSign} label={revFiltersActive ? 'Gross in this period' : 'Total gross'} value={formatCents(filteredRevTotals.gross)} />
               <KPICard icon={Wallet} label="Inbound Banking Charge" value={formatCents(filteredRevTotals.charge)} />
-              <KPICard icon={DollarSign} label={'Your earnings (' + Math.round(myPct * 100) + '% of net)'} value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
+              <KPICard icon={DollarSign} label={'Your earnings (' + rateLabel(filteredMyRevenue) + ')'} value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
               <KPICard icon={ClipboardList} label="Entries" value={filteredMyRevenue.length} />
             </div>
 
@@ -7292,7 +7332,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     const shownPayouts = payouts.filter(p => p.artistSlug === slug(artist.name) && p.sentAt);
     const shownLedger = approvedLedger.filter(l => lastPub && String(l.date || '').slice(0, 7) <= lastPub);
     const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalog} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (
