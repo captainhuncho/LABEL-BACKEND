@@ -14,9 +14,9 @@ installStorage();
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <UpdateBanner />
-    {/* Legal pages are public: no sign-in needed. */}
+    {/* Legal pages are for people signed in to the platform only. */}
     {LEGAL_PATHS.includes(window.location.pathname.replace(/\/$/, ''))
-      ? <LegalPage page={window.location.pathname.replace(/\/$/, '').slice(1)} />
+      ? <AuthGate>{() => <LegalPage page={window.location.pathname.replace(/\/$/, '').slice(1)} />}</AuthGate>
       : <AuthGate>{auth => <Suspense fallback={null}>{auth.access === 'artist' ? <ArtistApp signOut={auth.signOut} /> : <RecordLabelDashboard {...auth} />}</Suspense>}</AuthGate>}
   </React.StrictMode>
 );

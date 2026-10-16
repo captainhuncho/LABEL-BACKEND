@@ -1,5 +1,5 @@
 // Privacy Policy, Terms of Use, Confidentiality and Copyright pages, plus the
-// footer that links them. Public: readable without signing in.
+// footer that links them. Shown only to people signed in to the platform.
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 
 const CONTACT = 'Legal@imullar.com';
@@ -115,7 +115,7 @@ export function LegalPage({ page }) {
     <div style={{ height: '100dvh', background: CANVAS_GRADIENT, color: C.text, fontFamily: HEADING_FONT, overflowY: 'auto' }}>
       <style>{GLOBAL_STYLES}</style>
       <main className="imss-legal" style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 24px' }}>
-        <a href="/" aria-label="IMSS Records, back to sign in" style={{ display: 'inline-block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 32, width: 'auto', display: 'block', filter: 'var(--logo-filter)' }} /></a>
+        <a href="/" aria-label="IMSS Records, back to the dashboard" style={{ display: 'inline-block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 32, width: 'auto', display: 'block', filter: 'var(--logo-filter)' }} /></a>
         <h1 style={{ fontFamily: HEADING_FONT, fontSize: 28, fontWeight: 700, margin: '16px 0 4px' }}>{p.title}</h1>
         <p style={{ color: C.textDim, fontSize: 13, marginBottom: 24 }}>Effective {EFFECTIVE}</p>
         <div className="imss-legal-body">{p.body}</div>

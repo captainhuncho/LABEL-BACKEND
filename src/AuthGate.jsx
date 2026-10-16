@@ -81,7 +81,7 @@ export default function AuthGate({ children }) {
       <style>{GLOBAL_STYLES}</style>
       <main style={{ width: '100%', maxWidth: 360, margin: 'auto 0', textAlign: 'center' }}>
         <a href="/" aria-label="IMSS Records" style={{ display: 'inline-block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 76, width: 'auto', display: 'block', filter: 'var(--logo-filter)' }} /></a>
-        <div style={{ height: 1, background: C.border, margin: '36px 0 44px' }} />
+        <div style={{ height: 1, width: 280, maxWidth: '100%', background: C.border, margin: '36px auto 44px' }} />
         {sent ? (
           <div role="status">
             <p style={{ fontSize: 17, lineHeight: 1.5 }}>Check <b>{email.trim()}</b> for your sign-in link.</p>
@@ -90,7 +90,7 @@ export default function AuthGate({ children }) {
         ) : emailMode ? (
           <form onSubmit={sendLink} noValidate style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <input aria-label="Email" type="email" required autoFocus autoComplete="email" inputMode="email" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} placeholder="Email address"
-              style={{ ...btn, width: 280, background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', fontWeight: 400, textAlign: 'left', cursor: 'text', opacity: 1 }} />
+              style={{ ...btn, width: 280, background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', fontWeight: 400, textAlign: 'center', cursor: 'text', opacity: 1 }} />
             <button type="submit" disabled={busy} style={{ ...btn, width: 280, background: C.text, color: C.bg }}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
             <button type="button" onClick={() => { setEmailMode(false); setError(''); }} style={{ color: C.textDim, fontSize: 14, marginTop: 6 }}>Back</button>
           </form>
