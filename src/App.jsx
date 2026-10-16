@@ -943,7 +943,7 @@ function RosterSection({ statementFiles = [], roster, update, catalog, staff, ca
             </Select>
           </Field>
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
-          <Field label="Payout threshold (USD, smaller balances carry forward)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
+          <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
           <Field label="Funding tier">
             <Select value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value })}>
               {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -6740,7 +6740,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div className="rounded border p-4 mb-6 text-sm" style={{ borderColor: C.border, background: C.panel }}>
               <div style={{ fontWeight: 600 }}>Your reporting schedule</div>
               <p className="mt-1" style={{ color: C.textDim }}>{t.period.charAt(0).toUpperCase() + t.period.slice(1)} statements. Accounts close on {cut}, and each statement arrives within {t.deliveryDays} days. Your latest period closed {formatDate(next.cutoff)}; its statement is due by {formatDate(next.due)}.</p>
-              {t.threshold > 0 && <p className="mt-1" style={{ color: C.textDim }}>Payments are made once your balance reaches <b style={{ color: C.text }}>{formatCurrency(t.threshold)}</b>. Smaller balances still get a statement and carry forward to the next one.</p>}
+              {t.threshold > 0 && <p className="mt-1" style={{ color: C.textDim }}>Payments are made once your balance reaches <b style={{ color: C.text }}>{formatCurrency(t.threshold)}</b>, counted on your share after the label’s percentage and the Inbound Banking Charge. Smaller balances still get a statement and carry forward to the next one.</p>}
             </div>
           );
         })()}
