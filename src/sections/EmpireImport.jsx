@@ -21,34 +21,52 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
   const [done, setDone] = useState(null);
   const inputRef = useRef(null);
 
-  function handleFile(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    setError(''); setDone(null);
-    Papa.parse(file, {
-      skipEmptyLines: false,
-      complete: ({ data }) => {
-        try {
-          if (!isEmpireDetailed(data)) throw new Error('This doesn’t look like an EMPIRE detailed royalty report. For other distributors, use “Import a distributor CSV”.');
-          const { lines, totals } = parseEmpireDetailed(data);
-          if (!lines.length) throw new Error('The report has no royalty lines.');
-          const code = v => lower(v).replace(/[^a-z0-9]/g, '');
-          const groups = aggregateEmpire(lines).map(g => {
-            // Match the song by ISRC, then UPC, then artist + title; a code match also finds the artist.
-            const byCode = (g.isrc && catalog.find(c => code(c.isrc) === code(g.isrc))) || (g.upc && catalog.find(c => code(c.upc) === code(g.upc) && lower(cleanTitle(c.title)) === lower(g.title))) || null;
-            const artist = (byCode && roster.find(a => a.id === byCode.artistId)) || roster.find(a => lower(a.name) === lower(g.artist));
-            const release = byCode || (artist && catalog.find(c => c.artistId === artist.id && lower(cleanTitle(c.title)) === lower(g.title)));
-            const title = release ? release.title : g.title;
-            const id = artist ? slug(artist.name) + '_' + slug(title) + '_' + g.month : null;
-            return { ...g, artistRec: artist, release, bookedTitle: title, id, existing: id ? revenue.find(r => r.id === id) : null };
-          });
-          const parsed = lines.reduce((t, l) => t + l.gross, 0);
-          setPreview({ file, name: file.name, groups, totals, parsed, lineCount: lines.length });
-        } catch (err) {
-          setPreview(null); setError(err.message);
-        }
-      },
-      error: err => setError('Could not read that file: ' + err.message),
+  // Read every dropped/chosen file; a file that's empty, not EMPIRE, or a
+  // repeat is listed as skipped instead of stopping the rest.
+  const readCsv = file => new Promise(resolve => Papa.parse(file, { skipEmptyLines: false, complete: ({ data }) => resolve(data), error: err => resolve({ error: err.message }) }));
+  async function handleFile(e) {
+    const picked = [...((e.target && e.target.files) || [])];
+    if (!picked.length) return;
+    setError(''); setDone(null); setBusy(true);
+    const files = [], lines = [], seen = new Set();
+    for (const file of picked) {
+      const entry = { file, name: file.name, lines: 0, parsed: 0, totals: null, skipped: '' };
+      files.push(entry);
+      const sig = file.name + '|' + file.size;
+      if (seen.has(sig)) { entry.skipped = 'Same file added twice'; continue; }
+      seen.add(sig);
+      const data = await readCsv(file);
+      if (data.error) { entry.skipped = 'Could not read it: ' + data.error; continue; }
+      if (!isEmpireDetailed(data)) { entry.skipped = 'Not an EMPIRE detailed royalty report'; continue; }
+      let parsed;
+      try { parsed = parseEmpireDetailed(data); } catch (err) { entry.skipped = err.message; continue; }
+      if (!parsed.lines.length) { entry.skipped = 'No royalty lines in this report'; continue; }
+      entry.lines = parsed.lines.length; entry.totals = parsed.totals;
+      entry.parsed = parsed.lines.reduce((t, l) => t + l.gross, 0);
+      entry.index = files.length - 1;
+      parsed.lines.forEach(l => lines.push({ ...l, fileIndex: entry.index }));
+    }
+    setBusy(false);
+    if (inputRef.current) inputRef.current.value = '';
+    const usable = files.filter(f => !f.skipped);
+    if (!usable.length) { setPreview(null); setError('None of these files could be imported: ' + files.map(f => f.name + ' (' + f.skipped + ')').join('; ')); return; }
+    setPreview({ files, groups: matchGroups(aggregateEmpire(lines), lines) });
+  }
+
+  const code = v => lower(v).replace(/[^a-z0-9]/g, '');
+  function matchGroups(groups, lines) {
+    return groups.map(g => {
+      // Match the song by ISRC, then UPC, then artist + title; a code match also finds the artist.
+      const byCode = (g.isrc && catalog.find(c => code(c.isrc) === code(g.isrc))) || (g.upc && catalog.find(c => code(c.upc) === code(g.upc) && lower(cleanTitle(c.title)) === lower(g.title))) || null;
+      const artist = (byCode && roster.find(a => a.id === byCode.artistId)) || roster.find(a => lower(a.name) === lower(g.artist));
+      const release = byCode || (artist && catalog.find(c => c.artistId === artist.id && lower(cleanTitle(c.title)) === lower(g.title)));
+      const title = release ? release.title : g.title;
+      const id = artist ? slug(artist.name) + '_' + slug(title) + '_' + g.month : null;
+      // Which files this song-month came from, so each file is kept on the right artist.
+      const key = l => [l.trackArtist.toLowerCase(), (l.trackTitle || l.productTitle).toLowerCase(), l.statementMonth].join('|');
+      const gKey = [g.artist.toLowerCase(), g.title.toLowerCase(), g.month].join('|');
+      const fileIndexes = [...new Set(lines.filter(l => key(l) === gKey).map(l => l.fileIndex))];
+      return { ...g, artistRec: artist, release, bookedTitle: title, id, fileIndexes, existing: id ? revenue.find(r => r.id === id) : null };
     });
   }
 
@@ -57,22 +75,24 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
     if (!matched.length) return;
     setBusy(true); setError('');
     try {
-      // Keep the original file on each artist named in it.
-      const byArtist = {};
-      matched.forEach(g => { (byArtist[g.artistRec.id] = byArtist[g.artistRec.id] || []).push(g); });
+      // Keep each original file on every artist named in it.
       const records = [];
-      for (const [artistId, gs] of Object.entries(byArtist)) {
-        const id = uid();
-        const stored = await saveStatementFile(artistId, id, preview.file);
-        records.push({
-          id, artistId, name: preview.name, source: 'EMPIRE', ...stored,
-          months: [...new Set(gs.map(g => g.month))].sort(),
-          gross: gs.reduce((t, g) => t + g.gross, 0),
-          songs: [...new Set(gs.map(g => g.bookedTitle))],
-          uploadedBy: sessionName, uploadedAt: new Date().toISOString(),
-        });
+      for (const f of preview.files.filter(f => !f.skipped)) {
+        const byArtist = {};
+        matched.filter(g => g.fileIndexes.includes(f.index)).forEach(g => { (byArtist[g.artistRec.id] = byArtist[g.artistRec.id] || []).push(g); });
+        for (const [artistId, gs] of Object.entries(byArtist)) {
+          const id = uid();
+          const stored = await saveStatementFile(artistId, id, f.file);
+          records.push({
+            id, artistId, fileIndex: f.index, name: f.name, source: 'EMPIRE', ...stored,
+            months: [...new Set(gs.map(g => g.month))].sort(),
+            gross: gs.reduce((t, g) => t + g.gross, 0),
+            songs: [...new Set(gs.map(g => g.bookedTitle))],
+            uploadedBy: sessionName, uploadedAt: new Date().toISOString(),
+          });
+        }
       }
-      const fileFor = artistId => records.find(r => r.artistId === artistId).id;
+      const fileFor = g => (records.find(r => r.artistId === g.artistRec.id && g.fileIndexes.includes(r.fileIndex)) || {}).id || null;
       const rows = matched.map(g => ({
         id: g.id, artist: g.artistRec.name, artistSlug: slug(g.artistRec.name), title: g.bookedTitle, month: g.month,
         earning: g.gross, quantity: g.quantity, isrc: g.isrc, upc: g.upc,
@@ -81,14 +101,13 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
         epAlbum: (g.existing && g.existing.epAlbum) || null,
         releaseDate: (g.release && g.release.releaseDate) || (g.existing && g.existing.releaseDate) || null,
         approvalStatus: 'Approved', approvedBy: 'EMPIRE import', approvedAt: todayStr(),
-        source: 'EMPIRE', statementFileId: fileFor(g.artistRec.id),
+        source: 'EMPIRE', statementFileId: fileFor(g),
       }));
       const ids = new Set(rows.map(r => r.id));
       updateRevenue([...revenue.filter(r => !ids.has(r.id)), ...rows]);
-      updateStatementFiles([...records, ...statementFiles]);
-      setDone({ rows: rows.length, replaced: matched.filter(g => g.existing).length, gross: rows.reduce((t, r) => t + r.earning, 0), artists: records.length, skipped: preview.groups.length - matched.length });
+      updateStatementFiles([...records.map(({ fileIndex, ...r }) => r), ...statementFiles]);
+      setDone({ rows: rows.length, replaced: matched.filter(g => g.existing).length, gross: rows.reduce((t, r) => t + r.earning, 0), artists: new Set(records.map(r => r.artistId)).size, files: preview.files.filter(f => !f.skipped).length, skipped: preview.groups.length - matched.length });
       setPreview(null);
-      if (inputRef.current) inputRef.current.value = '';
     } catch (err) {
       setError('Import failed: ' + (err.message || err) + '. Nothing was booked.');
     } finally {
@@ -99,10 +118,10 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
   if (done) {
     return (
       <div className="rounded border p-5" style={{ background: C.panel, borderColor: C.border }} role="status">
-        <div className="flex items-center gap-2 mb-2" style={{ fontWeight: 600 }}><CheckCircle2 size={18} color={C.teal} /> Statement imported</div>
+        <div className="flex items-center gap-2 mb-2" style={{ fontWeight: 600 }}><CheckCircle2 size={18} color={C.teal} /> {done.files === 1 ? 'Statement' : done.files + ' statements'} imported</div>
         <p className="text-sm" style={{ color: C.textDim }}>
           Booked {done.rows} song-month{done.rows === 1 ? '' : 's'} totalling <span style={{ fontFamily: MONO_FONT, color: C.text }}>{formatCents(done.gross)}</span> gross
-          {done.replaced > 0 ? ' (' + done.replaced + ' replaced figures already in the app)' : ''}. The file is saved on {done.artists} artist profile{done.artists === 1 ? '' : 's'}.
+          {done.replaced > 0 ? ' (' + done.replaced + ' replaced figures already in the app)' : ''}. The {done.files === 1 ? 'file is' : 'files are'} saved on {done.artists} artist profile{done.artists === 1 ? '' : 's'}.
           {done.skipped > 0 ? ' ' + done.skipped + ' line group' + (done.skipped === 1 ? ' was' : 's were') + ' skipped (artist not on the Roster).' : ''}
         </p>
         <div className="flex gap-2 mt-4">
@@ -115,8 +134,9 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
 
   const matched = preview ? preview.groups.filter(g => g.artistRec) : [];
   const unmatched = preview ? preview.groups.filter(g => !g.artistRec) : [];
-  const fileTotal = preview && preview.totals ? preview.totals.gross : null;
-  const totalsOk = fileTotal === null || (preview && Math.abs(fileTotal - preview.parsed) < 0.01);
+  const usable = preview ? preview.files.filter(f => !f.skipped) : [];
+  const fileOk = f => !f.totals || Math.abs(f.totals.gross - f.parsed) < 0.01;
+  const totalsOk = usable.every(fileOk);
   const monthsInFile = preview ? [...new Set(preview.groups.map(g => g.month))].sort() : [];
 
   return (
@@ -128,8 +148,8 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
         </p>
         <DropZone onFiles={handleFile} accept=".csv,text/csv" className="rounded border p-6 text-center" style={{ borderColor: C.borderLight, borderStyle: 'dashed' }}>
           <Upload size={20} style={{ color: C.textFaint, margin: '0 auto 8px' }} aria-hidden="true" />
-          <div className="text-sm mb-3" style={{ fontWeight: 600 }}>Drop the EMPIRE CSV here, or choose a file</div>
-          <input ref={inputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="text-sm mx-auto block" style={{ color: C.textDim, maxWidth: 280 }} aria-label="EMPIRE detailed royalty report CSV" />
+          <div className="text-sm mb-3" style={{ fontWeight: 600 }}>{busy ? 'Reading files…' : 'Drop EMPIRE CSVs here (as many as you like), or choose files'}</div>
+          <input ref={inputRef} type="file" multiple accept=".csv,text/csv" onChange={handleFile} className="text-sm mx-auto block" style={{ color: C.textDim, maxWidth: 280 }} aria-label="EMPIRE detailed royalty report CSV" />
         </DropZone>
         {error && <div className="text-sm mt-3" role="alert" style={{ color: C.red }}>{error}</div>}
       </div>
@@ -139,8 +159,12 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
           <section aria-label="Checks" className="rounded border p-4" style={{ background: C.panel, borderColor: totalsOk ? C.border : C.amber }}>
             <h3 className="imss-sub-h">Checks</h3>
             <ul className="imss-checks">
-              <li className={totalsOk ? 'is-ok' : 'is-miss'}>{totalsOk ? <CheckCircle2 size={15} aria-hidden="true" /> : <span className="imss-check-miss" aria-hidden="true" />}
-                <span>{fileTotal === null ? 'No totals row in the file to check against' : 'File total ' + formatCents(fileTotal) + ' · read ' + formatCents(preview.parsed) + (totalsOk ? '' : ': these don’t match, check the file before importing')} ({preview.lineCount} lines)</span></li>
+              {preview.files.map((f, i) => f.skipped ? (
+                <li key={i} className="is-miss"><span className="imss-check-miss" aria-hidden="true" /><span><b>{f.name}</b>: skipped, {f.skipped.charAt(0).toLowerCase() + f.skipped.slice(1)}.</span></li>
+              ) : (
+                <li key={i} className={fileOk(f) ? 'is-ok' : 'is-miss'}>{fileOk(f) ? <CheckCircle2 size={15} aria-hidden="true" /> : <span className="imss-check-miss" aria-hidden="true" />}
+                  <span><b>{f.name}</b>: {f.totals ? 'file total ' + formatCents(f.totals.gross) + ' · read ' + formatCents(f.parsed) + (fileOk(f) ? '' : ', these don’t match, check the file before importing') : 'read ' + formatCents(f.parsed) + ' (no totals row to check against)'} ({f.lines} lines)</span></li>
+              ))}
               {monthsInFile.map(m => {
                 const mg = masterGross.find(g => g.month === m);
                 const statement = preview.groups.filter(g => g.month === m).reduce((t, g) => t + g.gross, 0);
