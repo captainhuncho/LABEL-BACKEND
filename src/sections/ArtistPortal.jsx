@@ -461,13 +461,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
             <NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
+            <button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
           </div>
         </div>
 
         {tab !== 'overview' && (
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>
-            <span className="imss-desktop-only"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /></span>
+            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
           </div>
         )}
 
@@ -477,7 +478,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <h1 className="imss-portal-title">Dashboard</h1>
               <div className="flex items-center gap-2">
                 <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
-                <span className="imss-desktop-only"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /></span>
+                <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
               </div>
             </div>
 

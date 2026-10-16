@@ -292,7 +292,7 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   return items.sort((a, b) => (a.tone === 'red' ? 0 : 1) - (b.tone === 'red' ? 0 : 1));
 }
 
-function TopBar({ openItem, roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', notifications = [], setActive }) {
+function TopBar({ onLogout, openItem, roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', notifications = [], setActive }) {
   const [query, setQuery] = useState('');
   const [showNotifs, setShowNotifs] = useState(false);
 
@@ -353,6 +353,7 @@ function TopBar({ openItem, roster, catalog, staff, tasks = [], revenue = [], le
           </div>
         )}
       </div>
+      {onLogout && <button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>}
       </div>
     </div>
   );
@@ -672,7 +673,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
-        <TopBar roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
+        <TopBar onLogout={logout} roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
         {error && (
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
         )}
