@@ -6462,22 +6462,42 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
             )}
 
-            <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
-              <div className="text-xs mb-3" style={{ color: C.textFaint }}>Propose changes</div>
-              <div className="flex items-center gap-3 mb-4">
-                <Avatar name={artist.name} photoUrl={profileForm.photoUrl} size={64} />
-                <div className="flex flex-col gap-1">
-                  <input ref={profileInputRef} type="file" accept="image/*" onChange={handleProfilePhoto} className="text-xs" style={{ color: C.textDim, maxWidth: 220 }} />
-                  {profileForm.photoUrl && <button type="button" onClick={() => setProfileForm(f => ({ ...f, photoUrl: '' }))} className="text-xs text-left" style={{ color: C.textFaint }}>Remove photo</button>}
+            <div className="rounded p-6 mb-6" style={{ background: C.panel }}>
+              <h2 style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>Edit your profile</h2>
+              <p className="mt-1 mb-5" style={{ color: C.textDim, fontSize: 14 }}>Changes go to the label for review before they show.</p>
+
+              <section aria-label="Photo" className="flex items-center gap-4 mb-6">
+                <Avatar name={artist.name} photoUrl={profileForm.photoUrl} size={72} />
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="inline-flex items-center gap-1.5" style={{ position: 'relative', background: C.fill, color: C.text, borderRadius: 980, padding: '8px 16px', fontSize: 14, cursor: 'pointer' }}>
+                    <Upload size={14} /> {profileForm.photoUrl ? 'Change photo' : 'Upload photo'}
+                    <input ref={profileInputRef} type="file" accept="image/*" onChange={handleProfilePhoto} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+                  </label>
+                  {profileForm.photoUrl && <button type="button" onClick={() => setProfileForm(f => ({ ...f, photoUrl: '' }))} style={{ color: C.textDim, fontSize: 14 }}>Remove</button>}
                 </div>
+              </section>
+
+              <section aria-label="About you" className="mb-6">
+                <h3 className="mb-3" style={{ fontWeight: 600, fontSize: 15 }}>About you</h3>
+                <div className="imss-form-grid gap-3">
+                  <Field label="Contact email" full><Input type="email" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></Field>
+                  <Field label="Bio" full><TextArea rows={4} value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="A short bio the label can use for press and pitches." /></Field>
+                </div>
+              </section>
+
+              {[['streaming', 'Streaming profiles'], ['social', 'Socials']].map(([g, title]) => (
+                <section key={g} aria-label={title} className="mb-6">
+                  <h3 style={{ fontWeight: 600, fontSize: 15 }}>{title}</h3>
+                  <p className="mt-0.5 mb-3" style={{ color: C.textDim, fontSize: 13 }}>Paste the full link to each page you have. Leave the rest empty.</p>
+                  <div className="gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                    {SOCIAL_LINKS.filter(l => l.group === g).map(l => <Field key={l.key} label={l.label}><Input type="url" value={profileForm[l.key] || ''} onChange={e => setProfileForm(f => ({ ...f, [l.key]: e.target.value }))} placeholder={l.hint} /></Field>)}
+                  </div>
+                </section>
+              ))}
+
+              <div className="flex items-center justify-end gap-3 pt-4" style={{ borderTop: '1px solid ' + C.border }}>
+                <Btn variant="primary" onClick={submitProfileRequest}>Submit for review</Btn>
               </div>
-              <div className="imss-form-grid gap-3">
-                <Field label="Contact email" full><Input type="email" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></Field>
-                <Field label="Bio" full><TextArea rows={4} value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="A short bio the label can use for press and pitches." /></Field>
-                <div className="text-xs" style={{ gridColumn: '1 / -1', color: C.textFaint, marginTop: 6 }}>Your socials and streaming profiles. Paste the full link to each page.</div>
-                {SOCIAL_LINKS.map(l => <Field key={l.key} label={l.label}><Input type="url" value={profileForm[l.key] || ''} onChange={e => setProfileForm(f => ({ ...f, [l.key]: e.target.value }))} placeholder="https://" /></Field>)}
-              </div>
-              <Btn variant="primary" onClick={submitProfileRequest}>Submit for review</Btn>
             </div>
 
             {myProfileRequests.length > 0 && (

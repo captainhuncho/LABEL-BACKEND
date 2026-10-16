@@ -783,17 +783,17 @@ export const SEED_PROFILE_REQUESTS = [];
 export const SEED_ACCESS_REQUESTS = [];
 // Socials and streaming profiles. Artists propose them from Profile; the team sees them on the artist page.
 export const SOCIAL_LINKS = [
-  { key: 'spotify', label: 'Spotify', link: true },
-  { key: 'appleMusic', label: 'Apple Music', link: true },
-  { key: 'audiomack', label: 'Audiomack', link: true },
-  { key: 'boomplay', label: 'Boomplay', link: true },
-  { key: 'youtube', label: 'YouTube', link: true },
-  { key: 'soundcloud', label: 'SoundCloud', link: true },
-  { key: 'instagram', label: 'Instagram', link: true },
-  { key: 'tiktok', label: 'TikTok', link: true },
-  { key: 'x', label: 'X (Twitter)', link: true },
-  { key: 'facebook', label: 'Facebook', link: true },
-  { key: 'website', label: 'Website', link: true },
+  { key: 'spotify', group: 'streaming', hint: 'https://open.spotify.com/artist/…', label: 'Spotify', link: true },
+  { key: 'appleMusic', group: 'streaming', hint: 'https://music.apple.com/artist/…', label: 'Apple Music', link: true },
+  { key: 'audiomack', group: 'streaming', hint: 'https://audiomack.com/…', label: 'Audiomack', link: true },
+  { key: 'boomplay', group: 'streaming', hint: 'https://boomplay.com/artists/…', label: 'Boomplay', link: true },
+  { key: 'youtube', group: 'streaming', hint: 'https://youtube.com/@…', label: 'YouTube', link: true },
+  { key: 'soundcloud', group: 'streaming', hint: 'https://soundcloud.com/…', label: 'SoundCloud', link: true },
+  { key: 'instagram', group: 'social', hint: 'https://instagram.com/…', label: 'Instagram', link: true },
+  { key: 'tiktok', group: 'social', hint: 'https://tiktok.com/@…', label: 'TikTok', link: true },
+  { key: 'x', group: 'social', hint: 'https://x.com/…', label: 'X (Twitter)', link: true },
+  { key: 'facebook', group: 'social', hint: 'https://facebook.com/…', label: 'Facebook', link: true },
+  { key: 'website', group: 'social', hint: 'https://yourname.com', label: 'Website', link: true },
 ];
 export const safeLink = u => /^https:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
 
