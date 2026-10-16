@@ -84,9 +84,25 @@ ${quote ? `<div class="q" style="margin:18px 0;padding:14px 16px;background:#f5f
 </td></tr></table></body></html>`;
 }
 
+// Every email is also an in-app notification. The topic lets each side open the right screen.
+function topicOf(subject: string) {
+  const s = subject.toLowerCase();
+  return s.includes('deal') ? 'deal' : s.includes('earnings') ? 'earnings' : s.includes('statement') ? 'statement'
+    : s.includes('invoice') || s.includes('claim') ? 'invoice' : s.includes('submission') || s.includes('release') ? 'submission' : s.includes('request') ? 'request' : '';
+}
+async function notifyInApp(recipients: string[], subject: string) {
+  const { error } = await db.from('notifications').insert(recipients.map(r => ({ recipient_email: r, title: subject, tab: topicOf(subject) })));
+  return error ? String(error.message) : null;
+}
+async function audit(action: string, detail: string, artistId: string | null = null) {
+  await db.from('audit_log').insert({ actor_email: 'system', actor_name: 'Scheduler', actor_kind: 'system', action, detail, artist_id: artistId });
+}
+
 async function send(to: string[], subject: string, html: string, replyKey?: string) {
-  const recipients = [...new Set(to.filter(e => e && e.includes('@')))];
-  if (!recipients.length || !RESEND_KEY) return { skipped: !RESEND_KEY ? 'no RESEND_API_KEY' : 'no recipients' };
+  const recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
+  if (!recipients.length) return { skipped: 'no recipients' };
+  const inApp = await notifyInApp(recipients, subject);
+  if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp };
   // Only emails with a reply address (submissions, requests, invoices) say replies work.
   const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
   const note = replyable ? '<p class="t2" style="margin:20px 0 0;font-size:14px;color:#6e6e73">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
@@ -226,7 +242,7 @@ async function sendDueStatements() {
     if (!p.sentAt && p.scheduledFor && Date.parse(p.scheduledFor) <= now) { changed++; return { ...p, sentAt: new Date().toISOString() }; }
     return p;
   });
-  if (changed) await saveSection('payouts', next);
+  if (changed) { await saveSection('payouts', next); await audit('sent statements (scheduled)', changed + ' statement' + (changed === 1 ? '' : 's') + ' reached their send time'); }
 
   // Scheduled publishes to artists: swap in the rows saved when it was scheduled.
   // Marking it Published fires the trigger that emails the artists.
@@ -242,6 +258,7 @@ async function sendDueStatements() {
     await saveSection('publishedRevenue', published);
     const ids = new Set(due.map(e => e.id));
     await saveSection('revenuePublish', log.map(e => ids.has(e.id) ? { ...e, status: 'Published', approvedAt: e.approvedAt || at, publishedAt: at, rows: undefined } : e));
+    for (const e of due) await audit('published to artists (scheduled)', (e.items || []).map((i: Item) => i.artist + ' ' + i.month).join(', '));
   }
   return { sent: changed, published: due.length };
 }

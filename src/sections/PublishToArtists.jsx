@@ -7,6 +7,7 @@ import { applyPublish, pctAt, publishChecks, publishDiff, revenueRowSplit, slug 
 import { formatCents, formatDate, monthLabel, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { isStale } from '../UpdateBanner.jsx';
+import { logActivity } from '../audit.js';
 import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
 
 const STATE_TONE = { New: 'amber', Changed: 'amber', Removed: 'red', 'Awaiting approval': 'default' };
@@ -65,6 +66,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
     const when = scheduleTime(); if (when === null) return;
     const entry = release(items.map(i => i.key), items, { id: uid(), scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), approvedBy: session.name, approvedAt: stamp(), scheduledFor: when });
     updateLog([entry, ...log]);
+    logActivity(entry.status === 'Scheduled' ? 'scheduled publish to artists' : 'published to artists', items.map(i => i.artist + ' ' + i.month).join(', ') + (when ? ' at ' + when : ''));
     finish(items, entry.status === 'Scheduled' ? 'Scheduled for ' + fmtWhen(when) : 'Published');
   }
   function requestApproval(keys, scope) {
@@ -72,6 +74,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
     if (!items.length) return;
     const when = scheduleTime(); if (when === null) return;
     updateLog([{ id: uid(), status: 'Awaiting approval', scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), scheduledFor: when }, ...log]);
+    logActivity('requested publish approval', items.map(i => i.artist + ' ' + i.month).join(', '));
     finish(items, 'Sent to an Admin for approval' + (when ? ', to publish ' + fmtWhen(when) : ''));
   }
   function cancelScheduled(entry) { updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Cancelled', cancelledBy: session.name, cancelledAt: stamp() })); }
@@ -94,10 +97,12 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
     if (blocked(keys)) return;
     const next = release(keys, entry.items, { ...entry, approvedBy: session.name, approvedAt: stamp() });
     updateLog(log.map(e => e.id !== entry.id ? e : next));
+    logActivity('approved publish to artists', (entry.items || []).map(i => i.artist + ' ' + i.month).join(', '));
   }
   function decline(entry) {
     const text = (declineNote[entry.id] || '').trim();
     if (!text) { setDeclineNote(d => ({ ...d, ['err_' + entry.id]: 'Say why, so Finance knows what to fix.' })); return; }
+    logActivity('declined publish request', text);
     updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Declined', approvedBy: session.name, approvedAt: stamp(), declineNote: text }));
   }
 

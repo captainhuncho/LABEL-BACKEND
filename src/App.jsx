@@ -1,6 +1,7 @@
 import { ArrowLeft, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Download, Eye, FileDown, FileSpreadsheet, FileText, Globe, Send, History, LayoutDashboard, LogOut, Mail, MessageSquare, Pencil, Plus, Printer, Radio, Search, ShieldCheck, Trash2, TrendingUp, Upload, UserCog, Users, Video, Wallet } from 'lucide-react';
 import Papa from 'papaparse';
 import { parseEmpireDetailed } from './empire.js';
+import { logActivity, logSignIn } from './audit.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -12,6 +13,7 @@ import EmpireImport from './sections/EmpireImport.jsx';
 import { LegalFooter } from './Legal.jsx';
 import PublishToArtists from './sections/PublishToArtists.jsx';
 import DealChanges from './sections/DealChanges.jsx';
+import { AuditSection, NotificationBell } from './sections/Notifications.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from './theme.js';
 import { inputStyle, ArtworkThumb, Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, DropZone, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToCsv, exportRowsToExcel, resizeImageFile } from './ui.jsx';
 
@@ -3088,6 +3090,7 @@ function ArtistStatementView({ artist, revenue, masterGross, ledger, payouts, re
     const files = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).some(m => months.includes(m)));
     if (!files.length) { setExportError('There’s no Label Partner Copy for this period.'); return; }
     try {
+      logActivity('downloaded Label Partner Copy', periodLabel(), artist.id);
       for (const f of files) {
         const a = document.createElement('a'); a.href = await statementFileUrl(f); a.download = f.name || 'statement.csv'; a.rel = 'noopener';
         document.body.appendChild(a); a.click(); a.remove();
@@ -3424,6 +3427,7 @@ function StatementFilesList({ files = [], title = 'Statement files', empty = 'Ro
       const url = await statementFileUrl(f);
       const a = document.createElement('a'); a.href = url; a.download = f.name || 'statement.csv'; a.rel = 'noopener';
       document.body.appendChild(a); a.click(); a.remove();
+      logActivity('downloaded Label Partner Copy', (f.months || []).join(', ') + ' · ' + (f.name || ''), f.artistId);
     } catch (err) { setError('Could not download that file. Try again in a moment.'); }
   }
   async function download(f, kind) {
@@ -3720,6 +3724,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
     const to = action === 'approve' ? (INVOICE_STAGES[idx + 1] ? INVOICE_STAGES[idx + 1].status : 'Paid') : action === 'back' ? INVOICE_STAGES[idx - 1].status : 'Rejected';
     const stamp = new Date().toISOString();
     const entry = { at: stamp, by: session.name, action: action === 'approve' ? (to === 'Paid' ? 'paid' : 'approved') : action === 'back' ? 'sent back' : 'rejected', from, to, note: text };
+    logActivity('invoice ' + entry.action, inv.title + ' · ' + from + ' → ' + to, inv.artistId);
     update(invoices.map(i => i.id !== inv.id ? i : {
       ...i, status: to, history: [...(i.history || []), entry],
       reviewedBy: session.name, reviewedAt: stamp,
@@ -3735,6 +3740,7 @@ function InvoicesSection({ invoices, update, roster, staff = [], labelSettings =
     if (!moveTo || moveTo === from) return;
     const stamp = new Date().toISOString();
     const entry = { at: stamp, by: session.name, action: 'moved by Admin', from, to: moveTo, note: note.trim() };
+    logActivity('invoice moved by Admin', inv.title + ' · ' + from + ' → ' + moveTo, inv.artistId);
     update(invoices.map(i => i.id !== inv.id ? i : {
       ...i, status: moveTo, history: [...(i.history || []), entry], reviewedBy: session.name, reviewedAt: stamp,
       ...(moveTo === 'Paid' ? { paidAt: stamp } : {}),
@@ -4628,16 +4634,17 @@ function PayoutsSection({ payouts, update, roster, revenue, masterGross, ledger,
     update([...payouts, stmt]);
     setForm({ ...empty, artistId: form.artistId });
   }
-  function markPaid(id) { update(payouts.map(p => p.id === id ? { ...p, status: 'paid' } : p)); }
+  function markPaid(id) { logActivity('marked statement paid', (payouts.find(p => p.id === id) || {}).artist || ''); update(payouts.map(p => p.id === id ? { ...p, status: 'paid' } : p)); }
   // Sending publishes the statement to the artist's portal and emails them;
   // a scheduled one goes out within 10 minutes of its time.
   const [scheduleId, setScheduleId] = useState(null);
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleError, setScheduleError] = useState('');
-  function sendNow(id) { update(payouts.map(p => p.id === id ? { ...p, sentAt: new Date().toISOString(), scheduledFor: '' } : p)); }
+  function sendNow(id) { const p0 = payouts.find(p => p.id === id); logActivity('sent statement to artist', p0 ? p0.artist + ' ' + p0.periodStart + '–' + p0.periodEnd : ''); update(payouts.map(p => p.id === id ? { ...p, sentAt: new Date().toISOString(), scheduledFor: '' } : p)); }
   function schedule(id) {
     const when = Date.parse(scheduleAt);
     if (!scheduleAt || isNaN(when) || when <= Date.now()) { setScheduleError('Pick a date and time in the future.'); return; }
+    logActivity('scheduled statement', new Date(when).toISOString());
     update(payouts.map(p => p.id === id ? { ...p, scheduledFor: new Date(when).toISOString() } : p));
     setScheduleId(null); setScheduleAt(''); setScheduleError('');
   }
@@ -5777,11 +5784,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 24, width: 'auto' }} />
           <div className="flex items-center gap-3 mt-5">
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={40} />
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{artist.name}</div>
               <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
           </div>
+          <div className="mt-3"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /></div>
           {(artist.productManager || artist.anr) && (
             <dl className="mt-4 pt-4 flex flex-col gap-2.5" style={{ borderTop: '1px solid ' + C.border }}>
               {[['Product Manager', artist.productManager], ['A&R', artist.anr]].filter(([, name]) => name).map(([role, name]) => (
@@ -5836,10 +5844,11 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         <div className="imss-mobile-only mb-5">
           <div className="flex items-center gap-3">
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={36} />
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{artist.name}</div>
               <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
+            <NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
           </div>
         </div>
 
@@ -7035,6 +7044,8 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
           </div>
         )}
       </div>
+      <div className="flex items-center gap-2">
+      <NotificationBell routes={{ deal: 'deals', earnings: 'publish', statement: 'payouts', invoice: 'invoices', submission: 'submissions', request: 'artist-requests' }} onOpen={setActive} />
       <div style={{ position: 'relative' }}>
         <button onClick={() => setShowNotifs(s => !s)} aria-label="Alerts" className="imss-alerts inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 14px', fontSize: 14 }}>
           <Bell size={15} /> <span className="imss-alerts-label">Alerts</span>
@@ -7052,6 +7063,7 @@ function TopBar({ roster, catalog, staff, tasks = [], revenue = [], ledger = [],
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -7087,6 +7099,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmReseed, setConfirmReseed] = useState(false);
   const [session, setSession] = useState(null);
+  useEffect(() => { if (session && session.mode === 'team') logSignIn('team', session.name); else if (session && session.mode === 'artist') { const a = roster.find(x => x.id === session.artistId); if (a) logSignIn('artist', a.name); } }, [session && session.mode, session && session.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -7187,6 +7200,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       else if (nextArr.length < prevArr.length) action = 'removed an entry from';
     }
     const entry = { id: uid(), timestamp: new Date().toISOString(), actor, section, action };
+    logActivity(action + ' ' + section, '');
     setActivityLog(prev => {
       const next = [entry, ...prev].slice(0, 200);
       persist('activityLog', next);
@@ -7282,7 +7296,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     isPrivileged && { id: 'access-requests', label: 'Access requests', icon: ShieldCheck, group: 'Team' },
     session && session.mode === 'team' && { id: 'tasks', label: 'Tasks', icon: ClipboardList, group: 'Team' },
     perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: 'Team' },
-    session && session.mode === 'team' && { id: 'activity', label: 'Activity log', icon: History, group: 'Team' },
+    isPrivileged && { id: 'activity', label: 'Activity', icon: History, group: 'Team' },
 
     isPrivileged && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
   ].filter(Boolean);
@@ -7376,7 +7390,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
         {active === 'statements' && <StatementsSection roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalog} />}
-        {active === 'activity' && <ActivityLogSection activityLog={activityLog} />}
+        {active === 'activity' && <AuditSection roster={roster} />}
         <div className="imss-mobile-only mt-8 text-xs" style={{ color: C.textFaint }}>
           {confirmReset ? (
             <span className="inline-flex gap-2">

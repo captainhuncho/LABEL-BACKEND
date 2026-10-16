@@ -533,6 +533,19 @@ money calculation uses the terms in force for that revenue month (`termsAt` /
 `pctAt` in `finance.js`). The Roster edit form shows split, funding and deal
 read-only; reporting period and payout threshold stay ordinary profile settings.
 
+## 6f. Notifications and activity
+
+**Notifications:** every email the platform sends also lands in the recipient's
+bell (team top bar; artist sidebar and phone header), with unread count, mark
+as read, and a click through to the right screen. "Needs your attention" stays
+as the live to-do list.
+
+**Activity** (Team → Activity, Admin and Legal): a permanent log of sign-ins,
+CSV/Excel exports, statement and partner-copy downloads, artist submissions,
+requests, invoices and replies, publishing, deal changes, imports, invoice
+decisions, payouts and every team edit, plus scheduled jobs as "Scheduler".
+Filter by person, type and artist; export to CSV.
+
 ## 7. Look and layout
 
 Dark, warm, exact — not a generic admin template. The full visual system

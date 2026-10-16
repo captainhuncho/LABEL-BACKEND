@@ -8,6 +8,7 @@ import { aggregateEmpire, cleanTitle, isEmpireDetailed, parseEmpireDetailed } fr
 import { slug } from '../finance.js';
 import { formatCents, monthLabel, todayStr, uid } from '../constants.js';
 import { saveStatementFile } from '../storage.js';
+import { logActivity } from '../audit.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Btn, DropZone, Td, Th } from '../ui.jsx';
 
@@ -105,6 +106,7 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
       }));
       const ids = new Set(rows.map(r => r.id));
       updateRevenue([...revenue.filter(r => !ids.has(r.id)), ...rows]);
+      logActivity('imported EMPIRE statements', preview.files.filter(f => !f.skipped).map(f => f.name).join(', ') + ' · ' + rows.length + ' song-months');
       updateStatementFiles([...records.map(({ fileIndex, ...r }) => r), ...statementFiles]);
       setDone({ rows: rows.length, replaced: matched.filter(g => g.existing).length, gross: rows.reduce((t, r) => t + r.earning, 0), artists: new Set(records.map(r => r.artistId)).size, files: preview.files.filter(f => !f.skipped).length, skipped: preview.groups.length - matched.length });
       setPreview(null);

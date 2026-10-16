@@ -4,6 +4,7 @@ import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { artworkColor, artworkInitials } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
+import { logActivity } from './audit.js';
 
 export function resizeImageFile(file, size, callback) {
   const reader = new FileReader();
@@ -103,7 +104,9 @@ export function EmptyState({ icon: Icon, title, description }) {
   );
 }
 
+// Every CSV/Excel export anywhere is audited here, once.
 export function exportRowsToCsv(filename, headers, rows) {
+  logActivity('exported CSV', filename + ' (' + rows.length + ' rows)');
   const csv = [headers, ...rows]
     .map(r => r.map(v => { const s = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(','))
     .join('\n');
@@ -116,6 +119,7 @@ export function exportRowsToCsv(filename, headers, rows) {
 }
 
 export function exportRowsToExcel(filename, headers, rows) {
+  logActivity('exported Excel', filename + ' (' + rows.length + ' rows)');
   try {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     const wb = XLSX.utils.book_new();
@@ -131,7 +135,7 @@ export function ExportBar({ filename, headers, rows }) {
     <div className="imss-print-hide flex gap-2 flex-wrap mb-4">
       <Btn variant="ghost" onClick={() => exportRowsToCsv(filename, headers, rows)}><Download size={14} /> CSV</Btn>
       <Btn variant="ghost" onClick={() => exportRowsToExcel(filename, headers, rows)}><FileSpreadsheet size={14} /> Excel</Btn>
-      <Btn variant="ghost" onClick={() => window.print()}><Printer size={14} /> Print / PDF</Btn>
+      <Btn variant="ghost" onClick={() => { logActivity('printed / saved PDF', filename); window.print(); }}><Printer size={14} /> Print / PDF</Btn>
     </div>
   );
 }

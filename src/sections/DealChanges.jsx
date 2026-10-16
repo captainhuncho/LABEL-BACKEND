@@ -6,6 +6,7 @@ import { CheckCircle2, FileText, Plus } from 'lucide-react';
 import { dealTermsOf, slug, termsAt } from '../finance.js';
 import { DEAL_TYPES, FUNDING_TIERS, dealLabel, formatDate, monthLabel, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
+import { logActivity } from '../audit.js';
 import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
 
 const pctText = p => Math.round(Number(p) * 10000) / 100 + '%';
@@ -71,6 +72,7 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
       ...(isAdmin ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }),
     };
     updateChanges([entry, ...changes]);
+    logActivity(isAdmin ? 'recorded and approved a deal change' : 'recorded a deal change', a.name + ': ' + pctText(entry.artistPct) + ' from ' + entry.from + ' · ' + dealLabel(entry), a.id);
     if (isAdmin) apply(entry);
     setForm(null); setError('');
   }
@@ -79,12 +81,14 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     const p = problem(a, entry.from);
     if (p) { setError(p + ' Decline this change and record it again with a later month.'); return; }
     apply(entry);
+    logActivity('approved a deal change', entry.artist + ': ' + pctText(entry.artistPct) + ' from ' + entry.from, entry.artistId);
     updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }));
     setError('');
   }
   function decline(entry) {
     const note = (declineNote[entry.id] || '').trim();
     if (!note) { setError('Say why the change is declined.'); return; }
+    logActivity('declined a deal change', entry.artist + ': ' + note, entry.artistId);
     updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Declined', approvedBy: session.name, approvedAt: new Date().toISOString(), declineNote: note }));
     setError('');
   }

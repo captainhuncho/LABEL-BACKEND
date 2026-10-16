@@ -60,6 +60,16 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   published. Who may publish (Finance asks, Admin approves, unless an Admin
   turns on `labelSettings.financePublishDirect`) is enforced in the app, like
   other role rules.
+- **Activity audit** (`audit_log` table): append-only. Rows are written only by
+  `log_activity()`, which takes the actor from the signed-in session (team
+  member from the staff list, or the artist from the roster; an artist's
+  entries are always about themselves) and is rate-limited, or by the notify
+  function (service role) for scheduled jobs. Only Admin and Legal can read it
+  (`is_audit_reader()`). Nobody can update, delete or insert directly, Admins
+  included.
+- **Notifications** (`notifications` table): written only by the notify
+  function alongside each email; each person reads only rows addressed to
+  their own email and marks them read through `mark_notifications_read()`.
 - Internal helpers (`section()`, `my_artist()`, `js_slug()`) are not callable
   from the API. Default privileges in `public` grant no API access to new
   functions; every function exposed to the API is granted explicitly.

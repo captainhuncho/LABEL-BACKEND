@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { ArtistPortalShell } from './App.jsx';
 import { supabase } from './storage.js';
+import { logActivity, logSignIn } from './audit.js';
+
+const WHAT = { profileRequests: 'requested a profile change', artistRequests: 'sent a request', releaseSubmissions: 'submitted a release', invoices: 'submitted an invoice' };
+
 import { C, HEADING_FONT } from './theme.js';
 
 export default function ArtistApp({ signOut }) {
@@ -12,7 +16,7 @@ export default function ArtistApp({ signOut }) {
   async function load() {
     const { data: portal, error: err } = await supabase.rpc('artist_portal');
     if (err) setError('Could not load your data. Try again in a moment.');
-    else setData(portal);
+    else { setData(portal); if (portal && portal.artist) logSignIn('artist', portal.artist.name); }
   }
   useEffect(() => { load(); }, []);
 
@@ -22,6 +26,7 @@ export default function ArtistApp({ signOut }) {
     for (const item of next.filter(x => !known.has(x.id))) {
       const { error: err } = await supabase.rpc('artist_add', { section_key: section, item });
       if (err) { setError('Could not send that. Please try again.'); return; }
+      logActivity(WHAT[section] || 'added to ' + section, item.title || item.category || item.description || '');
     }
     load();
   };
@@ -43,11 +48,13 @@ export default function ArtistApp({ signOut }) {
       replyToSubmission={async (id, message) => {
         const { error: err } = await supabase.rpc('artist_reply_submission', { submission_id: id, message });
         if (err) { setError('Could not send your reply. Please try again.'); return; }
+        logActivity('replied on a release submission', '');
         load();
       }}
       replyToInvoice={async (id, message) => {
         const { error: err } = await supabase.rpc('artist_reply_invoice', { invoice_id: id, message });
         if (err) { setError('Could not send your message. Please try again.'); return; }
+        logActivity('messaged about an invoice', '');
         load();
       }}
       onLogout={signOut}
