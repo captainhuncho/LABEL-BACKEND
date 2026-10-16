@@ -1,7 +1,7 @@
 // Email-link sign-in in front of the dashboard. Without Supabase configured it
 // renders the dashboard straight away (local, single-browser mode).
-import { LegalFooter } from './Legal.jsx';
 import { useEffect, useState } from 'react';
+import { Mail } from 'lucide-react';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 import { Btn } from './ui.jsx';
@@ -95,14 +95,17 @@ export default function AuthGate({ children }) {
             <button type="button" onClick={() => { setEmailMode(false); setError(''); }} style={{ color: C.textDim, fontSize: 14, marginTop: 6 }}>Back</button>
           </form>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <button type="button" onClick={signInWithGoogle} disabled={busy} style={{ ...btn, background: C.text, color: C.bg }}><G /> Sign in with Google</button>
-            <button type="button" onClick={() => setEmailMode(true)} style={{ color: C.textDim, fontSize: 14 }}>Use email instead</button>
+            <button type="button" onClick={() => setEmailMode(true)} style={{ ...btn, background: 'transparent', color: C.text, border: '1px solid var(--hairline-strong)' }}><Mail size={18} aria-hidden="true" /> Sign in with email</button>
           </div>
         )}
         {error && <div role="alert" style={{ color: C.red, fontSize: 14, marginTop: 16 }}>{error}</div>}
       </main>
-      <div style={{ width: '100%', maxWidth: 360, opacity: 0.8 }}><LegalFooter /></div>
+      {/* Kept: Google sign-in needs the privacy policy linked from the page. */}
+      <nav aria-label="Legal" style={{ display: 'flex', gap: 18, fontSize: 12, color: C.textFaint }}>
+        <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a><a href="/terms" style={{ color: 'inherit' }}>Terms</a><span>© {new Date().getFullYear()} IMSS Records</span>
+      </nav>
     </div>
   );
 }
