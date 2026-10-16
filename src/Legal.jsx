@@ -23,6 +23,7 @@ export const LEGAL_PAGES = {
           <li><b>Royalty and payment information:</b> streams, sales and earnings reported by our distribution partners, the money we receive for them, statements, payouts and payout thresholds.</li>
           <li><b>What you send us:</b> release submissions, split sheets, lyrics, artwork, marketing plans, invoices, receipts, requests and messages, including replies you send by email.</li>
           <li><b>Technical data:</b> basic logs kept by our hosting providers, such as IP address and time of access, used for security.</li>
+          <li><b>Blocked sign-in attempts:</b> the Platform is invite only. If someone who hasn’t been invited tries to sign in, we keep that email address, the sign-in method and the time for up to 30 days so an Admin can correct a mistaken block, then delete it. We don’t email them.</li>
         </ul>
         <h2>Why we use it</h2>
         <ul>

@@ -1,11 +1,12 @@
 import { Pencil, Plus, Trash2, UserCog, Users, Archive } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { BlockedSignins } from './BlockedSignins.jsx';
 import { STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { SendLinkButton } from './ArtistDetail.jsx';
 
-export function TeamSection({ staff, update, sessionRole = 'Admin', sessionName = '', accessRequests = [], updateAccessRequests }) {
+export function TeamSection({ roster = [], updateRoster, staff, update, sessionRole = 'Admin', sessionName = '', accessRequests = [], updateAccessRequests }) {
   // Legal has Admin-level reach, but access changes it makes are proposals:
   // they queue for an Admin instead of applying.
   const proposesOnly = sessionRole === 'Legal';
@@ -124,6 +125,7 @@ export function TeamSection({ staff, update, sessionRole = 'Admin', sessionName 
   return (
     <div>
       <SectionHeader title="Team" description="Everyone on the label side with access to this dashboard — profiles, roles, permissions, and onboarding progress." action={<Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add team member</Btn>} />
+      {isTopRole(sessionRole) && <BlockedSignins roster={roster} updateRoster={updateRoster} onAddTeam={email => { openAdd(); setForm(f => ({ ...f, email })); }} />}
       {proposesOnly && (
         <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.amberSoft, color: C.amber, border: '1px solid ' + C.amber }}>
           You can change anyone's access here, including what an Admin set — but the change is a proposal. An Admin has to approve it in Access Requests before it takes effect.
