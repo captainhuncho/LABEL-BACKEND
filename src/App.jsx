@@ -2191,7 +2191,7 @@ function CatalogSection({ catalog, update, roster, artistMap, canEdit = true, pm
   );
 }
 
-function RevenueSection({ revenue, update, roster, canEdit = true, isAdmin = false, sessionName = '' }) {
+function RevenueSection({ revenue, update, roster, catalog = [], canEdit = true, isAdmin = false, sessionName = '' }) {
   const empty = { artist: roster[0] ? roster[0].name : '', title: '', month: todayStr().slice(0, 7), earning: '', type: RELEASE_TYPES[0], epAlbum: '', releaseDate: '' };
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -2238,9 +2238,10 @@ function RevenueSection({ revenue, update, roster, canEdit = true, isAdmin = fal
       if (appliedMonths.endMonth && r.month > appliedMonths.endMonth) return false;
       if (filters.artist !== 'all' && r.artistSlug !== filters.artist) return false;
       if (!q) return true;
-      return (r.title && r.title.toLowerCase().includes(q)) || (r.artist && r.artist.toLowerCase().includes(q));
+      const rel = catalog.find(c => slug(c.title) === slug(r.title) && slug((roster.find(a => a.id === c.artistId) || {}).name || '') === r.artistSlug);
+      return [r.title, r.artist, r.isrc, r.upc, rel && rel.isrc, rel && rel.upc].some(v => v && String(v).toLowerCase().includes(q));
     });
-  }, [revenue, filters, appliedMonths]);
+  }, [revenue, filters, appliedMonths, catalog, roster]);
 
   function exportCsv() {
     exportRowsToCsv('revenue-export', ['Artist', 'Title', 'Month', 'Earning', 'Type', 'EP/Album', 'Release date', 'Status'],
@@ -2273,7 +2274,7 @@ function RevenueSection({ revenue, update, roster, canEdit = true, isAdmin = fal
               {roster.map(a => <option key={a.id} value={slug(a.name)}>{a.name}</option>)}
             </Select>
           </Field>
-          <Field label="Search"><Input value={filters.search} onChange={e => setFilters({ ...filters, search: e.target.value })} placeholder="Track title or artist" /></Field>
+          <Field label="Search"><Input value={filters.search} onChange={e => setFilters({ ...filters, search: e.target.value })} placeholder="Title, artist, ISRC or UPC" /></Field>
         </div>
         {rangeError && (
           <div className="rounded px-3 py-2 text-xs mb-3" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{rangeError}</div>
@@ -7202,7 +7203,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         />}
         {active === 'catalog' && <CatalogSection catalog={catalog} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
         {active === 'calendar' && <ReleaseCalendarSection catalog={catalog} roster={roster} artistMap={artistMap} tasks={tasks} />}
-        {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
+        {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} catalog={catalog} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
         {active === 'streams' && <StreamsSection streams={streams} update={updateStreams} catalog={catalog} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}

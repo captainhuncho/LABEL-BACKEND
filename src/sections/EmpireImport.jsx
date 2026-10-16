@@ -32,9 +32,12 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
           if (!isEmpireDetailed(data)) throw new Error('This doesn’t look like an EMPIRE detailed royalty report. For other distributors, use “Import a distributor CSV”.');
           const { lines, totals } = parseEmpireDetailed(data);
           if (!lines.length) throw new Error('The report has no royalty lines.');
+          const code = v => lower(v).replace(/[^a-z0-9]/g, '');
           const groups = aggregateEmpire(lines).map(g => {
-            const artist = roster.find(a => lower(a.name) === lower(g.artist));
-            const release = artist && catalog.find(c => c.artistId === artist.id && ((g.isrc && lower(c.isrc).replace(/[^a-z0-9]/g, '') === lower(g.isrc)) || lower(cleanTitle(c.title)) === lower(g.title)));
+            // Match the song by ISRC, then UPC, then artist + title; a code match also finds the artist.
+            const byCode = (g.isrc && catalog.find(c => code(c.isrc) === code(g.isrc))) || (g.upc && catalog.find(c => code(c.upc) === code(g.upc) && lower(cleanTitle(c.title)) === lower(g.title))) || null;
+            const artist = (byCode && roster.find(a => a.id === byCode.artistId)) || roster.find(a => lower(a.name) === lower(g.artist));
+            const release = byCode || (artist && catalog.find(c => c.artistId === artist.id && lower(cleanTitle(c.title)) === lower(g.title)));
             const title = release ? release.title : g.title;
             const id = artist ? slug(artist.name) + '_' + slug(title) + '_' + g.month : null;
             return { ...g, artistRec: artist, release, bookedTitle: title, id, existing: id ? revenue.find(r => r.id === id) : null };
@@ -156,7 +159,7 @@ export default function EmpireImport({ roster, catalog, revenue, masterGross = [
               <tbody>
                 {preview.groups.map((g, i) => (
                   <tr key={i} style={{ opacity: g.artistRec ? 1 : 0.55 }}>
-                    <Td>{g.artist}{!g.artistRec && <div className="text-xs" style={{ color: C.amber }}>Not on Roster: skipped</div>}</Td>
+                    <Td>{g.artistRec ? g.artistRec.name : g.artist}{g.artistRec && lower(g.artistRec.name) !== lower(g.artist) && <div className="text-xs" style={{ color: C.textDim }}>File says “{g.artist}”, matched by {g.release && g.isrc && lower(g.release.isrc).replace(/[^a-z0-9]/g, '') === lower(g.isrc) ? 'ISRC' : 'UPC'}</div>}{!g.artistRec && <div className="text-xs" style={{ color: C.amber }}>Not on Roster: skipped</div>}</Td>
                     <Td>{g.bookedTitle}{!g.release && g.artistRec && <div className="text-xs" style={{ color: C.textDim }}>Not in Catalog yet</div>}</Td>
                     <Td mono>{monthLabel(g.month)}</Td>
                     <Td><span className="text-xs" style={{ color: C.textDim }}>{months(g.salesMonths)}</span></Td>
