@@ -151,5 +151,13 @@ Seed data is the real roster — 14 artists, 87 tracks, 596 revenue rows,
 33 months of master gross, pulled from the Ledger & Royalties source. `ledger`
 and `payouts` are intentionally empty; nothing was recorded there.
 
+**Live earnings were cleared on 2026-10-16** to test real EMPIRE CSVs. The
+earlier figures (596 revenue rows, 33 months of money received, the published
+snapshot) are archived in `private.app_data_archive` under
+`archive_id = 'before-real-csv-2026-10-16'` (not reachable through the API). To
+bring a section back: `update public.app_data d set value = a.value from
+private.app_data_archive a where a.archive_id = 'before-real-csv-2026-10-16'
+and a.key = d.key and d.key = '<section>';`
+
 Artists have no `productManager` assigned yet, so PM scoping shows an empty
 roster until you set one on each artist.
