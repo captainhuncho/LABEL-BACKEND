@@ -5757,7 +5757,6 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <ol className="imss-sum" aria-label="How your balance is worked out">
                 <li><span>Gross</span><b>{formatCents(lifetime.gross)}</b></li>
                 <li><span>Inbound Banking Charge</span><b>−{formatCents(lifetime.swift)}</b></li>
-                <li><span>Label share ({Math.round((1 - myPct) * 100)}%)</span><b>−{formatCents(lifetime.labelShare)}</b></li>
                 <li className="imss-sum-key"><span>Your earnings</span><b style={{ color: C.teal }}>{formatCents(lifetime.artistShare)}</b></li>
                 {recoupment.recouped > 0 && <li><span>Recouped expenses</span><b>−{formatCents(recoupment.recouped)}</b></li>}
                 <li><span>Paid to you</span><b>{paid > 0 ? '−' : ''}{formatCents(paid)}</b></li>
@@ -6340,8 +6339,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <div className="flex flex-wrap gap-3 mb-6">
               <KPICard icon={DollarSign} label={revFiltersActive ? 'Gross in this period' : 'Total gross'} value={formatCents(filteredRevTotals.gross)} />
               <KPICard icon={Wallet} label="Inbound Banking Charge" value={formatCents(filteredRevTotals.charge)} />
-              <KPICard icon={Wallet} label={'Label share (' + Math.round((1 - myPct) * 100) + '%)'} value={formatCents(filteredRevTotals.labelShare)} />
-              <KPICard icon={DollarSign} label={'Your earnings (' + Math.round(myPct * 100) + '%)'} value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
+              <KPICard icon={DollarSign} label="Your earnings" value={formatCents(filteredRevTotals.artistShare)} tone="teal" />
               <KPICard icon={ClipboardList} label="Entries" value={filteredMyRevenue.length} />
             </div>
 
@@ -6359,14 +6357,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               ))}
             </div>
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Type', 'Product', 'Gross', 'Inbound Banking Charge', 'Label share', 'Your earnings']} rows={filteredMyRevenue.map(r => { const x = splitOf(r); return [r.month, r.type, r.title, x.gross, x.charge, x.labelShare, x.artistShare]; })} />
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Type', 'Product', 'Gross', 'Inbound Banking Charge', 'Your earnings']} rows={filteredMyRevenue.map(r => { const x = splitOf(r); return [r.month, r.type, r.title, x.gross, x.charge, x.artistShare]; })} />
 
             {filteredMyRevenue.length === 0 ? (
               <EmptyState icon={DollarSign} title="Nothing in that period" description="No revenue was logged for what you picked. Try a wider date range, or clear the type and product filters." />
             ) : revGroupBy === 'none' ? (
               <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                 <table className="w-full" style={{ minWidth: 820 }}>
-                  <thead><tr><Th>Month</Th><Th>Type</Th><Th>Product</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Label share</Th><Th align="right">Your earnings</Th></tr></thead>
+                  <thead><tr><Th>Month</Th><Th>Type</Th><Th>Product</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Your earnings</Th></tr></thead>
                   <tbody>
                     {filteredMyRevenue.map((r, i) => { const x = splitOf(r); return (
                       <tr key={i}>
@@ -6375,7 +6373,6 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td>{r.title}</Td>
                         <Td align="right" mono>{formatCents(x.gross)}</Td>
                         <Td align="right" mono>−{formatCents(x.charge)}</Td>
-                        <Td align="right" mono>−{formatCents(x.labelShare)}</Td>
                         <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(x.artistShare)}</span></Td>
                       </tr>
                     ); })}
@@ -6583,17 +6580,16 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                     </ResponsiveContainer>
                   </div>
                 </section>
-                <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-earnings-by-month'} headers={['Month', 'Gross', 'Inbound Banking Charge', 'Label share', 'Your earnings', 'Running total']} rows={earningsByMonth.map(m => [m.month, m.gross, m.charge, m.labelShare, m.artistShare, m.running])} />
+                <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-earnings-by-month'} headers={['Month', 'Gross', 'Inbound Banking Charge', 'Your earnings', 'Running total']} rows={earningsByMonth.map(m => [m.month, m.gross, m.charge, m.artistShare, m.running])} />
                 <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                   <table className="w-full" style={{ minWidth: 720 }}>
-                    <thead><tr><Th>Month</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Label share</Th><Th align="right">Your earnings</Th><Th align="right">Running total</Th></tr></thead>
+                    <thead><tr><Th>Month</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Your earnings</Th><Th align="right">Running total</Th></tr></thead>
                     <tbody>
                       {earningsByMonth.map(m => (
                         <tr key={m.month}>
                           <Td mono>{monthLabel(m.month)}</Td>
                           <Td align="right" mono>{formatCents(m.gross)}</Td>
                           <Td align="right" mono>−{formatCents(m.charge)}</Td>
-                          <Td align="right" mono>−{formatCents(m.labelShare)}</Td>
                           <Td align="right" mono><span style={{ color: C.teal, fontWeight: 600 }}>{formatCents(m.artistShare)}</span></Td>
                           <Td align="right" mono>{formatCents(m.running)}</Td>
                         </tr>
@@ -6602,7 +6598,6 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                         <Td><span style={{ fontWeight: 600 }}>Total</span></Td>
                         <Td align="right" mono><span style={{ fontWeight: 600 }}>{formatCents(lifetime.gross)}</span></Td>
                         <Td align="right" mono><span style={{ fontWeight: 600 }}>−{formatCents(lifetime.swift)}</span></Td>
-                        <Td align="right" mono><span style={{ fontWeight: 600 }}>−{formatCents(lifetime.labelShare)}</span></Td>
                         <Td align="right" mono><span style={{ color: C.teal, fontWeight: 700 }}>{formatCents(lifetime.artistShare)}</span></Td>
                         <Td>{''}</Td>
                       </tr>

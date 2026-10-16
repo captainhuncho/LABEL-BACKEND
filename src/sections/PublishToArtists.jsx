@@ -3,7 +3,7 @@
 // Admin, unless an Admin has let Finance publish directly.
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
-import { applyPublish, publishDiff, slug } from '../finance.js';
+import { applyPublish, publishDiff, revenueRowSplit, slug } from '../finance.js';
 import { formatCents, formatDate, monthLabel, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextArea, Th } from '../ui.jsx';
@@ -29,6 +29,10 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
   const diff = useMemo(() => publishDiff(approvedRevenue, published).filter(d => d.state !== 'Published'), [approvedRevenue, published]);
   const shown = diff.filter(d => !artistFilter || d.artistSlug === artistFilter);
   const artistsInDiff = [...new Map(diff.map(d => [d.artistSlug, d.artist])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  // What the artist actually gets: gross less their Inbound Banking Charge share, times their %.
+  const pctOf = s => { const a = roster.find(x => slug(x.name) === s); return a && a.artistPct != null ? a.artistPct : 0; };
+  const liveShare = d => d.liveRows.reduce((t, r) => t + revenueRowSplit(r, approvedRevenue, masterGross, pctOf(d.artistSlug)).artistShare, 0);
+  const publishedShare = d => published.filter(r => r.artistSlug === d.artistSlug && r.month === d.month).reduce((t, r) => t + (r.earning - (Number(r.swiftShare) || 0)) * pctOf(d.artistSlug), 0);
   const artistIdOf = s => (roster.find(a => slug(a.name) === s) || {}).id || null;
 
   const toggle = key => setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -177,7 +181,7 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
             <table className="w-full" style={{ minWidth: 720 }}>
               <thead><tr>
                 <Th><input type="checkbox" checked={allShownSelected} onChange={toggleAll} aria-label="Select all shown" style={{ accentColor: C.amber }} /></Th>
-                <Th>Artist</Th><Th>Month</Th><Th>What changed</Th><Th align="right">Artists see now</Th><Th align="right">After publishing</Th>
+                <Th>Artist</Th><Th>Month</Th><Th>What changed</Th><Th align="right">Artist sees now</Th><Th align="right">After publishing</Th>
               </tr></thead>
               <tbody>
                 {shown.map(d => {
@@ -188,8 +192,8 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
                       <Td>{d.artist}</Td>
                       <Td mono>{monthLabel(d.month)}</Td>
                       <Td><Badge tone={waiting ? 'default' : STATE_TONE[d.state]}>{scheduledFor(d.key) ? 'Scheduled ' + fmtWhen(scheduledFor(d.key)) : waiting ? 'Awaiting approval' : STATE_LABEL[d.state]}</Badge></Td>
-                      <Td align="right" mono>{d.state === 'New' ? '—' : formatCents(d.publishedGross)}</Td>
-                      <Td align="right" mono>{d.state === 'Removed' ? '—' : formatCents(d.liveGross)}</Td>
+                      <Td align="right" mono>{d.state === 'New' ? '—' : formatCents(publishedShare(d))}</Td>
+                      <Td align="right" mono>{d.state === 'Removed' ? '—' : formatCents(liveShare(d))}<div className="text-xs" style={{ color: C.textDim }}>of {formatCents(d.liveGross)} gross</div></Td>
                     </tr>
                   );
                 })}
