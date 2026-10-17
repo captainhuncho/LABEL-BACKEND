@@ -298,7 +298,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
                   {form.collaborators.map((c, i) => (
                     <div key={i} className="flex items-center justify-between gap-2 text-sm">
                       <span>{c.name} <span style={{ color: C.textFaint }}>· {c.role} · {c.splitPercent}%</span></span>
-                      <button type="button" onClick={() => removeCollaborator(i)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                      <button aria-label="Delete" title="Delete" type="button" onClick={() => removeCollaborator(i)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
                     </div>
                   ))}
                 </div>
@@ -350,7 +350,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
                       <input type="checkbox" checked={t.done} onChange={() => toggleChecklistItem(t.id)} />
                       {t.label}
                     </label>
-                    <button type="button" onClick={() => removeChecklistItem(t.id)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                    <button aria-label="Delete" title="Delete" type="button" onClick={() => removeChecklistItem(t.id)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
                   </div>
                 ))}
                 {form.checklist.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>No tasks yet.</div>}
@@ -493,7 +493,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
             const lic = r.licenseExpiration ? r.license : null;
             const prog = checklistProgress(r.checklist);
             return (
-              <div key={r.id} data-focus={r.id} role={canEdit ? 'button' : undefined} tabIndex={canEdit ? 0 : undefined} onClick={() => canEdit && openEdit(r)} onKeyDown={e => { if (canEdit && (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); openEdit(r); } }} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
+              <div key={r.id} data-focus={r.id} onClick={() => canEdit && openEdit(r)} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
                 <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
                   <ArtworkThumb release={r} size="100%" radius={0} />
                   {canEdit && (
@@ -512,7 +512,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
                 </div>
                 <div className="p-3">
                   <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(r.releaseDate)}</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, marginTop: 2 }}>{r.title}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, marginTop: 2 }}>{canEdit ? <button onClick={e => { e.stopPropagation(); openEdit(r); }} style={{ font: 'inherit', textAlign: 'left' }}>{r.title}</button> : r.title}</div>
                   <div style={{ fontStyle: 'italic', fontSize: 13, color: C.textDim, marginTop: 1 }}>
                     {[artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown', ...(r.primaryArtists || [])].join(' & ')}
                     {r.collaborators && r.collaborators.length > 0 && ' feat. ' + r.collaborators.map(c => c.name).join(', ')}
@@ -574,8 +574,8 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
                   <Td align="right">
                     {confirmId === r.id ? <ConfirmInline onConfirm={() => remove(r.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                       <span className="inline-flex gap-3 justify-end">
-                        <button onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                        <button onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                        <button aria-label="Edit" title="Edit" onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                        <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                       </span>
                     ) : <span style={{ color: C.textFaint }}>—</span>}
                   </Td>

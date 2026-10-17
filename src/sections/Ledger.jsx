@@ -225,8 +225,8 @@ export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster
                     <Td align="right">
                       {confirmId === x.id ? <ConfirmInline onConfirm={() => remove(x.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                         <span className="inline-flex gap-3 justify-end">
-                          <button onClick={() => openEdit(x)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmId(x.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                          <button aria-label="Edit" title="Edit" onClick={() => openEdit(x)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(x.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                         </span>
                       ) : <span style={{ color: C.textFaint }}>—</span>}
                     </Td>

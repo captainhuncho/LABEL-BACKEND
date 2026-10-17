@@ -288,8 +288,8 @@ export function StreamsSection({ streams, update, catalog, releaseMap, artistMap
                       <Td align="right">
                         {s.imported ? <span className="text-xs" style={{ color: C.textDim }}>From EMPIRE</span> : confirmId === s.id ? <ConfirmInline onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                           <span className="inline-flex gap-3 justify-end">
-                            <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                            <button onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                            <button aria-label="Edit" title="Edit" onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                            <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(s.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                           </span>
                         ) : <span style={{ color: C.textFaint }}>—</span>}
                       </Td>

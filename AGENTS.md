@@ -81,7 +81,7 @@ handles HTTPS.
 
 Each screen lives in its own file in `src/sections/`. Shared helpers sit
 next to the screen that owns them and are exported (e.g. invoice stages in
-`Invoices.jsx`). `ArtistPortal.jsx` is still large (~1,600 lines).
+`Invoices.jsx`). The artist portal's shell (state, tabs, layout) is `ArtistPortal.jsx` (~640 lines); each tab's screen is in `src/sections/portal/` and gets its state as props.
 
 ## The finance model
 

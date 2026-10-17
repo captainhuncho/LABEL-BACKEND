@@ -185,8 +185,8 @@ export function TasksSection({ tasks, update, staff, roster, catalog }) {
                         <Td align="right">
                           {confirmId === t.id ? <ConfirmInline onConfirm={() => remove(t.id)} onCancel={() => setConfirmId(null)} /> : (
                             <span className="inline-flex gap-3 justify-end">
-                              <button onClick={() => openEdit(t)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                              <button onClick={() => setConfirmId(t.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                              <button aria-label="Edit" title="Edit" onClick={() => openEdit(t)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                              <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(t.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                             </span>
                           )}
                         </Td>

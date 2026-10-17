@@ -235,7 +235,7 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
                   <span className="text-xs" style={{ fontWeight: 600, color: C.textDim }}>{c.author}</span>
                   <span className="flex items-center gap-2">
                     <span className="text-xs" style={{ color: C.textFaint }}>{new Date(c.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                    {canEdit && <button onClick={() => removeComment(c.id)} style={{ color: C.textFaint }}><Trash2 size={11} /></button>}
+                    {canEdit && <button aria-label="Delete" title="Delete" onClick={() => removeComment(c.id)} style={{ color: C.textFaint }}><Trash2 size={11} /></button>}
                   </span>
                 </div>
                 <div className="text-sm" style={{ color: C.text }}>{c.text}</div>

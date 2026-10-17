@@ -82,7 +82,7 @@ export function ArtworkThumb({ release, size = 40, radius = 6 }) {
     return <img src={release.artworkUrl} alt="" style={{ ...style, objectFit: 'cover' }} />;
   }
   return (
-    <div style={{ ...style, background: artworkColor(release ? release.title : '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1d1d1f', fontWeight: 700, fontSize: Math.round(size * 0.34), fontFamily: HEADING_FONT }}>
+    <div style={{ ...style, background: artworkColor(release ? release.title : '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1d1d1f', fontWeight: 700, fontSize: typeof size === 'number' ? Math.round(size * 0.34) : 28, fontFamily: HEADING_FONT }}>
       {artworkInitials(release ? release.title : '?')}
     </div>
   );

@@ -193,8 +193,8 @@ export function PayoutsSection({ invoices = [], payouts, update, roster, revenue
                   <Td align="right">
                     {confirmId === p.id ? <ConfirmInline onConfirm={() => remove(p.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                       <span className="inline-flex gap-3 justify-end">
-                        {p.status === 'draft' && <button onClick={() => markPaid(p.id)} style={{ color: C.teal }}><CheckCircle2 size={14} /></button>}
-                        <button onClick={() => setConfirmId(p.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                        {p.status === 'draft' && <button aria-label="Mark paid" title="Mark paid" onClick={() => markPaid(p.id)} style={{ color: C.teal }}><CheckCircle2 size={14} /></button>}
+                        <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(p.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                       </span>
                     ) : <span style={{ color: C.textFaint }}>—</span>}
                   </Td>

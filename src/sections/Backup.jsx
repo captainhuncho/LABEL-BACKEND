@@ -169,7 +169,7 @@ export function BackupSection({ allData, updaters, onClearAll = null, onReseed =
       <div className="rounded p-5" style={{ background: C.panel }}>
         <div style={{ fontWeight: 600 }} className="mb-1">Restore from a backup file</div>
         <div className="text-sm mb-3" style={{ color: C.textDim }}>Replaces the sections in the file with the file’s contents, for everyone. A copy of what’s here now downloads first, then the page reloads.</div>
-        <input ref={fileInputRef} type="file" accept="application/json" onChange={handleFile} className="text-sm" style={{ color: C.textDim }} />
+        <input ref={fileInputRef} type="file" accept="application/json" aria-label="Backup file to restore" onChange={handleFile} className="text-sm" style={{ color: C.textDim }} />
         {confirmRestore && (
           <div className="rounded p-3 mt-3" style={{ border: '1px solid ' + C.amber, background: C.amberSoft }}>
             <div className="text-sm mb-3">Restore this backup{confirmRestore.exportedAt ? ' from ' + new Date(confirmRestore.exportedAt).toLocaleString() : ''}? It overwrites {Object.keys(confirmRestore).filter(k => !skip.has(k)).length} sections for everyone.</div>

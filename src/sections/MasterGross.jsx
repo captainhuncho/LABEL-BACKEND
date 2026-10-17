@@ -98,8 +98,8 @@ export function MasterGrossSection({ masterGross, update, roster, revenue, label
                     <Td align="right">
                       {confirmId === g.id ? <ConfirmInline onConfirm={() => remove(g.id)} onCancel={() => setConfirmId(null)} /> : canEdit ? (
                         <span className="inline-flex gap-3 justify-end">
-                          <button onClick={() => openEdit(g)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmId(g.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                          <button aria-label="Edit" title="Edit" onClick={() => openEdit(g)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(g.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                         </span>
                       ) : <span style={{ color: C.textFaint }}>—</span>}
                     </Td>

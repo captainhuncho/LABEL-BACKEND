@@ -149,12 +149,12 @@ export function RevenueSection({ revenue, update, roster, catalog = [], canEdit 
                       <span className="inline-flex gap-3 justify-end items-center">
                         {isAdmin && r.approvalStatus === 'Pending' && (
                           <>
-                            <button onClick={() => approveEntry(r.id)} style={{ color: C.teal }}><CheckCircle2 size={14} /></button>
-                            <button onClick={() => rejectEntry(r.id)} style={{ color: C.red }}><Trash2 size={14} /></button>
+                            <button aria-label="Approve" title="Approve" onClick={() => approveEntry(r.id)} style={{ color: C.teal }}><CheckCircle2 size={14} /></button>
+                            <button aria-label="Delete" title="Delete" onClick={() => rejectEntry(r.id)} style={{ color: C.red }}><Trash2 size={14} /></button>
                           </>
                         )}
-                        {canEdit && <button onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>}
-                        {canEdit && <button onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>}
+                        {canEdit && <button aria-label="Edit" title="Edit" onClick={() => openEdit(r)} style={{ color: C.textDim }}><Pencil size={14} /></button>}
+                        {canEdit && <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(r.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>}
                       </span>
                     )}
                   </Td>

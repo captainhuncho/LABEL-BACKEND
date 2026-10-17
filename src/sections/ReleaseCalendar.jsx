@@ -144,12 +144,12 @@ export function ReleaseCalendarSection({ focus = null, catalog, roster, artistMa
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => shiftMonth(-1)} style={{ color: C.textDim }}><ChevronLeft size={18} /></button>
+          <button aria-label="Previous month" title="Previous month" onClick={() => shiftMonth(-1)} style={{ color: C.textDim }}><ChevronLeft size={18} /></button>
           <div className="flex items-center gap-3">
             <div style={{ fontWeight: 600 }}>{monthLabelText}</div>
             <button onClick={goToday} className="text-xs px-2 py-1 rounded" style={{ border: '1px solid ' + C.border, color: C.textFaint }}>Today</button>
           </div>
-          <button onClick={() => shiftMonth(1)} style={{ color: C.textDim }}><ChevronRight size={18} /></button>
+          <button aria-label="Next month" title="Next month" onClick={() => shiftMonth(1)} style={{ color: C.textDim }}><ChevronRight size={18} /></button>
         </div>
         <div className="flex items-center gap-3 mb-3 text-xs" style={{ color: C.textFaint }}>
           <span className="flex items-center gap-1"><span style={{ width: 5, height: 5, borderRadius: 9999, background: C.amber, display: 'inline-block' }}></span> Task due</span>

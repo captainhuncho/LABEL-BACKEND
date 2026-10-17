@@ -14,7 +14,22 @@ function label(table) {
   }
 }
 
+// A table box that scrolls sideways must be reachable by keyboard (WCAG 2.1.1).
+function keyboardScroll() {
+  for (const box of document.querySelectorAll('.overflow-x-auto')) {
+    const scrolls = box.scrollWidth > box.clientWidth + 2;
+    if (scrolls && !box.hasAttribute('tabindex')) {
+      box.setAttribute('tabindex', '0');
+      box.setAttribute('role', 'region');
+      box.setAttribute('aria-label', 'Scrollable table');
+    } else if (!scrolls && box.getAttribute('aria-label') === 'Scrollable table') {
+      box.removeAttribute('tabindex'); box.removeAttribute('role'); box.removeAttribute('aria-label');
+    }
+  }
+}
+
 function check() {
+  keyboardScroll();
   if (!window.matchMedia(PHONE).matches) return;
   for (const table of document.querySelectorAll('.imss-content table, .imss-portal table')) {
     if (table.classList.contains('imss-keep-table')) continue;

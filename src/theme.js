@@ -34,11 +34,11 @@ export const GLOBAL_STYLES = `
 :root {
   color-scheme: light;
   --bg: #f5f5f7; --panel: #ffffff; --panel-2: #fbfbfd; --chrome: rgba(251,251,253,0.82);
-  --text: #1d1d1f; --text-2: #6e6e73; --text-3: #86868b;
+  --text: #1d1d1f; --text-2: #68686d; --text-3: #707075;
   --hairline: rgba(0,0,0,0.09); --hairline-strong: rgba(0,0,0,0.16);
   --fill: rgba(0,0,0,0.05); --hover: rgba(0,0,0,0.04); --field: #ffffff; --field-line: rgba(0,0,0,0.16);
-  --amber: #9E5D00; --amber-fill: #E7A23D; --on-amber: #1d1d1f; --amber-soft: rgba(231,162,61,0.16); --amber-line: rgba(180,112,14,0.45);
-  --teal: #1F7A64; --teal-soft: rgba(31,122,100,0.11); --teal-line: rgba(31,122,100,0.4);
+  --amber: #935600; --amber-fill: #E7A23D; --on-amber: #1d1d1f; --amber-soft: rgba(231,162,61,0.16); --amber-line: rgba(180,112,14,0.45);
+  --teal: #1B735E; --teal-soft: rgba(31,122,100,0.11); --teal-line: rgba(31,122,100,0.4);
   --red: #C42B1C; --red-soft: rgba(196,43,28,0.09); --red-line: rgba(196,43,28,0.4);
   --shadow: 0 2px 6px rgba(0,0,0,0.04), 0 10px 30px rgba(0,0,0,0.06);
   --logo-filter: invert(1);
@@ -47,7 +47,7 @@ export const GLOBAL_STYLES = `
   :root {
     color-scheme: dark;
     --bg: #000000; --panel: #1c1c1e; --panel-2: #232325; --chrome: rgba(22,22,23,0.8);
-    --text: #f5f5f7; --text-2: #a1a1a6; --text-3: #86868b;
+    --text: #f5f5f7; --text-2: #a1a1a6; --text-3: #98989d;
     --hairline: rgba(255,255,255,0.11); --hairline-strong: rgba(255,255,255,0.2);
     --fill: rgba(255,255,255,0.08); --hover: rgba(255,255,255,0.06); --field: #1c1c1e; --field-line: rgba(255,255,255,0.18);
     --amber: #F0B04F; --amber-fill: #E7A23D; --on-amber: #1d1d1f; --amber-soft: rgba(231,162,61,0.18); --amber-line: rgba(231,162,61,0.5);

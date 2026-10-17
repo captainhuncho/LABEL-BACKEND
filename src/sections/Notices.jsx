@@ -78,8 +78,8 @@ export function NoticesSection({ notices, update, roster, staff, sessionName }) 
                 </div>
                 {confirmId === n.id ? <ConfirmInline onConfirm={() => remove(n.id)} onCancel={() => setConfirmId(null)} /> : (
                   <span className="inline-flex gap-3">
-                    <button onClick={() => openEdit(n)} style={{ color: C.textDim }}><Pencil size={14} /></button>
-                    <button onClick={() => setConfirmId(n.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
+                    <button aria-label="Edit" title="Edit" onClick={() => openEdit(n)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                    <button aria-label="Delete" title="Delete" onClick={() => setConfirmId(n.id)} style={{ color: C.textDim }}><Trash2 size={14} /></button>
                   </span>
                 )}
               </div>

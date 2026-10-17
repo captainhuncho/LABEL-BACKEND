@@ -336,7 +336,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
                         <ConfirmInline label="Archive? They lose sign-in; their history stays." onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
                       ) : canEdit ? (
                         <span className="inline-flex gap-3 justify-end">
-                          <button onClick={() => openEdit(a)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button aria-label="Edit" title="Edit" onClick={() => openEdit(a)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                           {a.status === 'Archived' ? <button onClick={() => restore(a.id)} style={{ color: C.amber, fontSize: 13 }}>Restore</button> : <button onClick={() => setConfirmId(a.id)} aria-label={'Archive ' + a.name} title="Archive" style={{ color: C.textDim }}><Archive size={14} /></button>}
                         </span>
                       ) : <span style={{ color: C.textFaint }}>—</span>}

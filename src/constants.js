@@ -199,7 +199,7 @@ export function trackOptionLabel(release, includeArtist, artistName) {
   return label;
 }
 
-export const ARTWORK_PALETTE = ['#E7A23D', '#5FA593', '#C1584A', '#7B9BC7', '#7B5FA5'];
+export const ARTWORK_PALETTE = ['#E7A23D', '#5FA593', '#E07A6C', '#7B9BC7', '#9C84C4'];
 export function artworkInitials(title) {
   return String(title || '?').trim().slice(0, 2).toUpperCase();
 }

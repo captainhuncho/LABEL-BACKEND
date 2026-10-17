@@ -231,7 +231,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
                     <input type="checkbox" checked={t.done} onChange={() => toggleTask(t.id)} />
                     {t.label}
                   </label>
-                  <button type="button" onClick={() => removeTask(t.id)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
+                  <button aria-label="Delete" title="Delete" type="button" onClick={() => removeTask(t.id)} style={{ color: C.textFaint }}><Trash2 size={12} /></button>
                 </div>
               ))}
               {form.onboarding.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>No tasks yet.</div>}
@@ -312,7 +312,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
                       {confirmId === s.id ? <ConfirmInline label="Archive? They lose sign-in; their work stays." onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : (
                         <span className="inline-flex gap-3 justify-end">
                           {isTopRole(sessionRole) && <WelcomeButton member={s} />}
-                          <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
+                          <button aria-label="Edit" title="Edit" onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                           {s.status === 'Archived' ? <button onClick={() => restore(s.id)} style={{ color: C.amber, fontSize: 13 }}>Restore</button> : !isTopRole(s.role) && <button onClick={() => setConfirmId(s.id)} aria-label={'Archive ' + s.name} title="Archive" style={{ color: C.textDim }}><Archive size={14} /></button>}
                         </span>
                       )}

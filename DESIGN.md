@@ -6,17 +6,17 @@ colors:
   panel-light: "#ffffff"
   panel-2-light: "#fbfbfd"
   text-light: "#1d1d1f"
-  text-2-light: "#6e6e73"
-  text-3-light: "#86868b"
-  amber-text-light: "#9E5D00"
-  teal-light: "#1F7A64"
+  text-2-light: "#68686d"
+  text-3-light: "#707075"
+  amber-text-light: "#935600"
+  teal-light: "#1B735E"
   red-light: "#C42B1C"
   ground-dark: "#000000"
   panel-dark: "#1c1c1e"
   panel-2-dark: "#232325"
   text-dark: "#f5f5f7"
   text-2-dark: "#a1a1a6"
-  text-3-dark: "#86868b"
+  text-3-dark: "#98989d"
   amber-text-dark: "#F0B04F"
   teal-dark: "#6CC4AC"
   red-dark: "#FF6B5E"
@@ -154,15 +154,15 @@ Two complete sets, switched by the device. Variable names are shared; values cha
 | `--panel-2` | #fbfbfd | #232325 | Table header band, inset review areas |
 | `--chrome` | rgba(251,251,253,0.82) | rgba(22,22,23,0.8) | Frosted sidebar / phone tab bar |
 | `--text` | #1d1d1f | #f5f5f7 | Primary text |
-| `--text-2` | #6e6e73 | #a1a1a6 | Secondary text, labels, descriptions |
-| `--text-3` | #86868b | #86868b | Placeholders, table headers only |
+| `--text-2` | #68686d | #a1a1a6 | Secondary text, labels, descriptions |
+| `--text-3` | #707075 | #98989d | Placeholders, table headers only |
 | `--hairline` / `--hairline-strong` | rgba(0,0,0,.09) / .16 | rgba(255,255,255,.11) / .2 | Borders, dividers |
 | `--fill` / `--hover` | rgba(0,0,0,.05) / .04 | rgba(255,255,255,.08) / .06 | Ghost buttons, chips / hover rows |
-| `--amber` | #9E5D00 | #F0B04F | Amber as text (deepened on white for contrast) |
+| `--amber` | #935600 | #F0B04F | Amber as text (deepened on white for contrast) |
 | `--amber-fill` | #E7A23D | #E7A23D | Primary button and active-chip fill |
 | `--on-amber` | #1d1d1f | #1d1d1f | Text on amber fill |
 | `--amber-soft` / `--amber-line` | rgba(231,162,61,.16) / rgba(180,112,14,.45) | .18 / rgba(231,162,61,.5) | Active nav, badges / focus ring |
-| `--teal` / `--teal-soft` | #1F7A64 / rgba(31,122,100,.11) | #6CC4AC / rgba(95,165,147,.18) | Earnings |
+| `--teal` / `--teal-soft` | #1B735E / rgba(31,122,100,.11) | #6CC4AC / rgba(95,165,147,.18) | Earnings |
 | `--red` / `--red-soft` | #C42B1C / rgba(196,43,28,.09) | #FF6B5E / rgba(255,107,94,.14) | Danger, errors |
 
 ### Primary
@@ -172,7 +172,7 @@ Two complete sets, switched by the device. Variable names are shared; values cha
 **Teal** (`teal-*`): money earned or confirmed. Nothing else.
 
 ### Neutral
-Apple greys: #f5f5f7 / #ffffff / #1d1d1f / #6e6e73 in light; #000 / #1c1c1e / #f5f5f7 / #a1a1a6 in dark.
+Apple greys: #f5f5f7 / #ffffff / #1d1d1f / #68686d in light; #000 / #1c1c1e / #f5f5f7 / #a1a1a6 in dark.
 
 ### Named Rules
 - **The Meaning Rule.** Amber = owed, active, primary action. Teal = earnings only. Red = danger. Neither accent is ever decoration.
