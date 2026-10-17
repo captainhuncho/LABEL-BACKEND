@@ -1,6 +1,6 @@
 // Shared UI primitives — buttons, fields, tables, cards, export bars.
 import { Download, FileSpreadsheet, Printer, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { documentUrl } from './storage.js';
 import { artworkColor, artworkInitials } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
@@ -22,6 +22,58 @@ export function resizeImageFile(file, size, callback) {
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
+}
+
+// Lets someone choose how their photo sits in the circle: drag to move, slider
+// to zoom. Saves a square JPEG of `size` px of exactly what the circle shows.
+export function PhotoCropper({ file, size = 300, onDone, onCancel }) {
+  const VIEW = 240;
+  const [src, setSrc] = useState(null);
+  const [nat, setNat] = useState(null); // natural width/height
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 }); // offset of image centre from circle centre, in view px
+  const drag = useRef(null);
+  useEffect(() => {
+    const r = new FileReader();
+    r.onload = () => { const img = new Image(); img.onload = () => { setNat({ w: img.width, h: img.height, img }); setSrc(r.result); }; img.src = r.result; };
+    r.readAsDataURL(file);
+  }, [file]);
+  if (!src || !nat) return null;
+  const base = Math.max(VIEW / nat.w, VIEW / nat.h); // cover the circle at zoom 1
+  const w = nat.w * base * zoom, h = nat.h * base * zoom;
+  const clamp = p => ({ x: Math.min((w - VIEW) / 2, Math.max(-(w - VIEW) / 2, p.x)), y: Math.min((h - VIEW) / 2, Math.max(-(h - VIEW) / 2, p.y)) });
+  const at = clamp(pos);
+  function down(e) { e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX - at.x, y: e.clientY - at.y }; }
+  function move(e) { if (drag.current) setPos(clamp({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y })); }
+  function key(e) {
+    const step = { ArrowLeft: [8, 0], ArrowRight: [-8, 0], ArrowUp: [0, 8], ArrowDown: [0, -8] }[e.key];
+    if (step) { e.preventDefault(); setPos(clamp({ x: at.x + step[0], y: at.y + step[1] })); }
+  }
+  function done() {
+    const c = document.createElement('canvas'); c.width = size; c.height = size;
+    const k = size / VIEW;
+    c.getContext('2d').drawImage(nat.img, (VIEW / 2 + at.x - w / 2) * k, (VIEW / 2 + at.y - h / 2) * k, w * k, h * k);
+    onDone(c.toDataURL('image/jpeg', 0.85));
+  }
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Position your photo" style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="rounded p-6" style={{ background: C.panel, color: C.text, width: '100%', maxWidth: 340, textAlign: 'center', fontFamily: HEADING_FONT }}>
+        <h2 style={{ fontWeight: 700, fontSize: 19, marginBottom: 4 }}>Position your photo</h2>
+        <p style={{ color: C.textDim, fontSize: 14, marginBottom: 16 }}>Drag to move it. Use the slider to zoom.</p>
+        <div tabIndex={0} aria-label="Photo position. Use arrow keys to move." onPointerDown={down} onPointerMove={move} onPointerUp={() => { drag.current = null; }} onKeyDown={key}
+          style={{ width: VIEW, height: VIEW, borderRadius: '50%', overflow: 'hidden', position: 'relative', margin: '0 auto', cursor: 'grab', touchAction: 'none', background: C.fill, outlineOffset: 3 }}>
+          <img src={src} alt="" draggable={false} style={{ position: 'absolute', width: w, height: h, maxWidth: 'none', left: VIEW / 2 + at.x - w / 2, top: VIEW / 2 + at.y - h / 2, userSelect: 'none', pointerEvents: 'none' }} />
+        </div>
+        <label className="flex items-center gap-3 mt-4" style={{ fontSize: 13, color: C.textDim }}>
+          Zoom <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={e => setZoom(Number(e.target.value))} style={{ flex: 1, accentColor: C.amber }} />
+        </label>
+        <div className="flex gap-2 justify-center mt-5">
+          <Btn variant="primary" onClick={done}>Use photo</Btn>
+          <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function ArtworkThumb({ release, size = 40, radius = 6 }) {

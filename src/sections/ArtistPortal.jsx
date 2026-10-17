@@ -8,7 +8,7 @@ import { SOCIAL_LINKS, safeLink, PROFILE_EDITABLE_FIELDS, REQUEST_CATEGORIES } f
 import { LegalFooter } from '../Legal.jsx';
 import { NotificationBell } from './Notifications.jsx';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI, MONO_FONT } from '../theme.js';
-import { ArtworkThumb, Avatar, Badge, Btn, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
+import { ArtworkThumb, Avatar, Badge, Btn, EmptyState, ExportBar, Field, Input, KPICard, PeopleInput, Select, Td, TextArea, Th, resizeImageFile, PhotoCropper } from '../ui.jsx';
 import { pctTxt, DealSpanNote, ArtistStatementView } from './ArtistStatement.jsx';
 import { INVOICE_KINDS, invoiceStatus, artistInvoiceStatus, INVOICE_TONES, InvoiceThread } from './Invoices.jsx';
 import { BREAKDOWN_FIELDS, breakdownLabel, RevenueBreakdownTable, StatementFilesList } from './StatementFiles.jsx';
@@ -367,11 +367,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const [profileForm, setProfileForm] = useState({ photoUrl: artist.photoUrl || '', bio: artist.bio || '', email: artist.email || '', ...Object.fromEntries(SOCIAL_LINKS.map(l => [l.key, artist[l.key] || ''])) });
   const profileInputRef = useRef(null);
   const [profileSaved, setProfileSaved] = useState('');
+  const [cropFile, setCropFile] = useState(null);
 
   function handleProfilePhoto(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    resizeImageFile(file, 300, dataUrl => setProfileForm(f => ({ ...f, photoUrl: dataUrl })));
+    setCropFile(file);
   }
   function submitProfileRequest() {
     const changes = {};
@@ -1016,6 +1017,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <h2 style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>Edit your profile</h2>
               <p className="mt-1 mb-5" style={{ color: C.textDim, fontSize: 14 }}>{saveProfile ? 'Changes save as soon as you press Save.' : 'Changes go to the label for review before they show.'}</p>
 
+              {cropFile && <PhotoCropper file={cropFile} onDone={url => { setProfileForm(f => ({ ...f, photoUrl: url })); setCropFile(null); if (profileInputRef.current) profileInputRef.current.value = ''; }} onCancel={() => { setCropFile(null); if (profileInputRef.current) profileInputRef.current.value = ''; }} />}
               <section aria-label="Photo" className="flex items-center gap-4 mb-6">
                 <Avatar name={artist.name} photoUrl={profileForm.photoUrl} size={72} />
                 <div className="flex items-center gap-3 flex-wrap">
