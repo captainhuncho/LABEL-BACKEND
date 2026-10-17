@@ -1557,30 +1557,34 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   ))}
                 </div>
               </fieldset>
-              <div className="imss-form-grid gap-3">
-                <Field label="Description (be specific)" full><Input required value={invoiceForm.title} onChange={e => setInvoiceForm(f => ({ ...f, title: e.target.value }))} placeholder={invoiceForm.kind === 'expense' ? 'e.g. Studio session, 12 March' : 'e.g. Feature verse on “Wave”'} /></Field>
-                <Field label="Amount (USD)"><Input required inputMode="decimal" value={invoiceForm.amount} onChange={e => setInvoiceForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" /></Field>
-                <Field label="Invoice date"><Input type="date" value={invoiceForm.invoiceDate} onChange={e => setInvoiceForm(f => ({ ...f, invoiceDate: e.target.value }))} /></Field>
-                <Field label="Invoice number (optional)"><Input value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="e.g. AC-2026-004" /></Field>
-                <Field label="Pay to (name on the account)"><Input value={invoiceForm.payTo} onChange={e => setInvoiceForm(f => ({ ...f, payTo: e.target.value }))} placeholder="Your name or company" /></Field>
-                <Field label="What it’s for">
-                  <Select value={invoiceForm.budgetCategory} onChange={e => setInvoiceForm(f => ({ ...f, budgetCategory: e.target.value }))}>
+              <div className="imss-form-grid imss-two gap-3">
+                <Field label="What it’s for" full>
+                  <Select required value={invoiceForm.budgetCategory} onChange={e => setInvoiceForm(f => ({ ...f, budgetCategory: e.target.value }))}>
                     <option value="">Choose…</option>
                     {Object.entries(BUDGET_TYPES).map(([t, names]) => <optgroup key={t} label={t}>{names.map(n => <option key={n} value={t + '|' + n}>{n}</option>)}</optgroup>)}
                     <option value="Other|Other">Something else</option>
                   </Select>
                 </Field>
+                <Field label="Description" full><Input required value={invoiceForm.title} onChange={e => setInvoiceForm(f => ({ ...f, title: e.target.value }))} placeholder={invoiceForm.kind === 'expense' ? 'e.g. Studio session, 12 March' : 'e.g. Feature verse on “Wave”'} /></Field>
+                <Field label="Amount (USD)"><Input required inputMode="decimal" value={invoiceForm.amount} onChange={e => setInvoiceForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" /></Field>
+                <Field label="Invoice date"><Input type="date" value={invoiceForm.invoiceDate} onChange={e => setInvoiceForm(f => ({ ...f, invoiceDate: e.target.value }))} /></Field>
+                <Field label="Invoice number (optional)"><Input value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="e.g. AC-2026-004" /></Field>
+                <Field label="Pay to (name on the account)"><Input value={invoiceForm.payTo} onChange={e => setInvoiceForm(f => ({ ...f, payTo: e.target.value }))} placeholder="Your name or company" /></Field>
                 {budgets.filter(b => b.status === 'Active').length > 0 && (
-                  <Field label="Budget (optional)">
+                  <Field label="Budget (optional)" full>
                     <Select value={invoiceForm.overheadId} onChange={e => setInvoiceForm(f => ({ ...f, overheadId: e.target.value }))}>
                       <option value="">Not part of a budget</option>
                       {budgets.filter(b => b.status === 'Active').map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                     </Select>
                   </Field>
                 )}
-                <Field label="Details (optional)" full><TextArea rows={3} value={invoiceForm.details} onChange={e => setInvoiceForm(f => ({ ...f, details: e.target.value }))} placeholder="Anything the label needs to know: who agreed it, what it covers." /></Field>
+                <Field label="Notes for the label (optional)" full><TextArea rows={3} value={invoiceForm.details} onChange={e => setInvoiceForm(f => ({ ...f, details: e.target.value }))} placeholder="Who agreed it, and anything else the label should know." /></Field>
                 <Field label={invoiceForm.kind === 'expense' ? 'Receipt (PDF or photo, up to 10 MB)' : 'Invoice file (PDF or photo, up to 10 MB, optional)'} full>
-                  <input ref={invoiceFileRef} type="file" accept="application/pdf,image/*" onChange={handleInvoiceFile} className="text-sm" style={{ color: C.textDim }} />
+                  <label className="rounded-full border px-4 inline-flex items-center gap-2 text-sm" style={{ minHeight: 44, cursor: 'pointer', borderColor: invoiceForm.attachmentName ? C.teal : C.border, color: invoiceForm.attachmentName ? C.teal : C.text, maxWidth: '100%' }}>
+                    <FileText size={14} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoiceForm.attachmentName || 'Choose file'}</span>
+                    <input ref={invoiceFileRef} type="file" accept="application/pdf,image/*" onChange={handleInvoiceFile} className="sr-only" />
+                  </label>
                 </Field>
               </div>
               {invoiceError && <div className="text-sm mt-3" role="alert" style={{ color: C.red }}>{invoiceError}</div>}
