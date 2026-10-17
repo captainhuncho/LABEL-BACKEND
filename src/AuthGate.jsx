@@ -25,8 +25,14 @@ export default function AuthGate({ children }) {
   const [emailMode, setEmailMode] = useState(false);
   // Uninvited: the database refuses to create the account, so nothing about the
   // attempt (not even the email) is kept, and no email is sent.
+  const [linkError, setLinkError] = useState(() => {
+    const u = window.location.search + window.location.hash;
+    if (/otp_expired|expired/i.test(u)) return 'That sign-in link has expired or was already used. Ask for a new one.';
+    if (/error=/.test(u) && !/Database(\+|%20| )error|invite_only/i.test(u)) return 'Sign-in didn’t finish. Please try again.';
+    return '';
+  });
   const [denied, setDenied] = useState(() => /Database(\+|%20| )error|invite_only/i.test(window.location.search + window.location.hash));
-  useEffect(() => { if (denied && /error/.test(window.location.search + window.location.hash)) window.history.replaceState(null, '', '/'); }, [denied]);
+  useEffect(() => { if ((denied || linkError) && /error/.test(window.location.search + window.location.hash)) window.history.replaceState(null, '', '/' + (import.meta.env.DEV && isArtistSite() ? '?site=artist' : '')); }, [denied, linkError]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -43,13 +49,15 @@ export default function AuthGate({ children }) {
   useEffect(() => {
     if (!supabase || !authEmail) return;
     setAccess(undefined);
-    supabase.rpc('my_access').then(({ data, error: err }) => setAccess(err ? null : data));
+    // A failed check is a site problem, not "not invited".
+    supabase.rpc('my_access').then(({ data, error: err }) => setAccess(err ? 'error' : data));
   }, [authEmail]);
 
   // Signed in, but not on the Team list or an artist's Roster entry: sign them
   // straight back out and say why on the sign-in page.
   useEffect(() => {
     if (!supabase || !authEmail || access === undefined) return;
+    if (access === 'error') { setError('We couldn’t open your account just now. Try again in a moment.'); supabase.auth.signOut(); return; }
     if (access === 'team' && isArtistSite()) { window.location.replace(OPS_URL); return; }
     if (access === null || (access === 'artist' && !isArtistSite())) { setDenied(true); supabase.auth.signOut(); }
   }, [authEmail, access]);
@@ -58,25 +66,25 @@ export default function AuthGate({ children }) {
   if (checking) return null;
   const signOut = () => supabase.auth.signOut();
   if (authEmail && access === undefined) return null;
-  if (authEmail && access && !(access === 'artist' && !isArtistSite()) && !(access === 'team' && isArtistSite())) return children({ authEmail, access, signOut });
+  if (authEmail && access && access !== 'error' && !(access === 'artist' && !isArtistSite()) && !(access === 'team' && isArtistSite())) return children({ authEmail, access, signOut });
   if (authEmail) return null; // not invited: the effect above signs them out
 
   // Google sign-in: the Google account's email must be on the Team list or an
   // artist's Roster entry, exactly as with an email link (my_access decides).
   async function signInWithGoogle() {
-    setError(''); setDenied(false);
+    setError(''); setDenied(false); setLinkError('');
     const { error: err } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } } });
     if (err) setError(/not enabled|provider/i.test(err.message) ? 'Google sign-in isn’t switched on yet. Use the email link for now.' : err.message);
   }
   async function signInWithPasskey() {
-    setError(''); setDenied(false); setBusy(true);
+    setError(''); setDenied(false); setLinkError(''); setBusy(true);
     const { error: err } = await supabase.auth.signInWithPasskey();
     setBusy(false);
     if (err && !/abort|cancel|not allowed/i.test(err.message || '')) setError('No passkey found for this device. Sign in with Google or email, then add one.');
   }
   async function sendLink(e) {
     e.preventDefault();
-    setError(''); setDenied(false);
+    setError(''); setDenied(false); setLinkError('');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Enter your email address.'); return; }
     setBusy(true);
     const { error: err } = await supabase.auth.signInWithOtp({
@@ -121,7 +129,9 @@ export default function AuthGate({ children }) {
           </div>
         )}
         {denied && !sent && <div role="alert" style={{ color: C.red, fontSize: 14, lineHeight: 1.5, marginTop: 20 }}>This platform is invite only.</div>}
-        {error && <div role="alert" style={{ color: C.red, fontSize: 14, marginTop: 16 }}>{error}</div>}
+        {(error || linkError) && <div role="alert" style={{ color: C.red, fontSize: 14, marginTop: 16 }}>{error || linkError}</div>}
+        {/* Artists whose email is set up but can't get in: send them to their PM (never named here). */}
+        {isArtistSite() && (error || linkError) && !/^Enter your email/.test(error) && !denied && <div style={{ color: C.textDim, fontSize: 14, marginTop: 8 }}>Still having trouble signing in? Contact your Product Manager.</div>}
       </main>
     </div>
   );
