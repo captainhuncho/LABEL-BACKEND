@@ -17,7 +17,7 @@ import { Badge, Btn, EmptyState, Field, Input, KPICard, SectionHeader, Select, T
 // Budget types and their sub-categories. Any sub-category can also be named freely.
 export const BUDGET_TYPES = {
   Advance: ['Advance payment', 'Recording / Studio', 'Mixing & mastering', 'Legal / Other'],
-  'Marketing Advance': ['Marketing / Ads', 'Video production', 'Tour support', 'Distro / Software & tools'],
+  'Marketing Advance': ['Marketing / Ads', 'Radio', 'TV', 'PR', 'Video production', 'Tour support', 'Distro / Software & tools'],
 };
 // "Advance · Recording / Studio"; older categories without a type show their name.
 export const catLabel = c => (c.type ? c.type + ' · ' : '') + c.category;
