@@ -2,7 +2,7 @@ import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye
 import { logActivity, logSignIn } from './audit.js';
 import { MobileNav } from './MobileNav.jsx';
 import { usePageUrl } from './pageUrl.js';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
 import { streamsFromRevenue } from './streams.js';
 import { PasskeySettings } from './Passkeys.jsx';
@@ -11,7 +11,7 @@ import { isStale } from './UpdateBanner.jsx';
 import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
 import { DATA_VERSION, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
-import { supabase } from './storage.js';
+import { supabase, isConflict, subscribeToChanges } from './storage.js';
 import { LegalFooter } from './Legal.jsx';
 import PublishToArtists from './sections/PublishToArtists.jsx';
 import DealChanges from './sections/DealChanges.jsx';
@@ -408,6 +408,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmReseed, setConfirmReseed] = useState(false);
   const [session, setSession] = useState(null);
+  const sectionSetters = useRef({});
   useEffect(() => { if (session && session.mode === 'team') logSignIn('team', session.name); else if (session && session.mode === 'artist') { const a = roster.find(x => x.id === session.artistId); if (a) logSignIn('artist', a.name); } }, [session && session.mode, session && session.name]);
 
   useEffect(() => {
@@ -447,6 +448,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
       ];
+      sectionSetters.current = Object.fromEntries(jobs.map(([key, setter]) => [key, setter]));
       for (const [key, setter, seed] of jobs) {
         if (needsReseed) {
           if (!cancelled) setter(seed);
@@ -492,6 +494,20 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [loading]);
 
+  // Re-read one section from storage and show it (also refreshes the version
+  // its next save is checked against).
+  async function reloadSection(key) {
+    const setter = sectionSetters.current[key];
+    if (!setter) return;
+    try { const res = await window.storage.get(key, false); if (res && res.value) setter(JSON.parse(res.value)); } catch (e) { /* keep what's on screen */ }
+  }
+
+  // Another tab or person saved: show their version straight away.
+  useEffect(() => {
+    if (loading) return;
+    return subscribeToChanges(key => { reloadSection(key); });
+  }, [loading]);
+
   async function persist(key, value) {
     // A tab left open on an older version never saves: it could write back
     // figures that have since been changed or cleared.
@@ -499,6 +515,24 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     try {
       await window.storage.set(key, JSON.stringify(value), false);
     } catch (e) {
+      if (isConflict(e)) {
+        // The activity log only ever gains entries, so merge by id and retry.
+        if (key === 'activityLog') {
+          try {
+            const res = await window.storage.get(key, false);
+            const theirs = res && res.value ? JSON.parse(res.value) : [];
+            const seen = new Set(value.map(x => x.id));
+            const merged = [...value, ...theirs.filter(x => !seen.has(x.id))].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, 200);
+            setActivityLog(merged);
+            await window.storage.set(key, JSON.stringify(merged), false);
+            return;
+          } catch (e2) { /* fall through to the message */ }
+        }
+        // Anything else: never overwrite. Show the latest and say so.
+        await reloadSection(key);
+        setError('This list changed since you opened it (someone else saved), so your last change wasn’t saved. The latest version is now showing; please make your change again.');
+        return;
+      }
       setError('Could not save your last change. It may not persist after this session.');
       setTimeout(() => setError(''), 4500);
     }
