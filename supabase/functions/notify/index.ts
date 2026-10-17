@@ -15,6 +15,8 @@ const RESEND_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const WEBHOOK_SECRET = Deno.env.get('RESEND_WEBHOOK_SECRET') ?? '';
 const RECEIVE_DOMAIN = Deno.env.get('RECEIVE_DOMAIN') ?? '';
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
+// Artists use their own address; emails to them link there.
+const ARTIST_URL = Deno.env.get('ARTIST_URL') ?? 'https://artist.imssrecords.com';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
@@ -120,6 +122,7 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
     }
   }
   if (!recipients.length) return { skipped: 'no recipients' };
+  if (artistTopic) html = html.split(APP_URL).join(ARTIST_URL);
   const inApp = await notifyInApp(recipients, subject);
   if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp };
   // Only emails with a reply address (submissions, requests, invoices) say replies work.

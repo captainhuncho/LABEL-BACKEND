@@ -40,6 +40,11 @@ handles HTTPS.
   which returns only that artist's rows, with each month's swift fee already
   split to their share (label totals stay in the database). New requests go
   through `artist_add()`, which stamps them as that artist's and unreviewed.
+- Two addresses, one app: `artist.imssrecords.com` is the artist portal
+  ("For Artists" under the logo); `ops.imssrecords.com` is the team's. Artists
+  who sign in on ops are signed out with "invite only"; team members on the
+  artist address go to ops (`isArtistSite()` in `src/AuthGate.jsx`; preview
+  locally with `?site=artist`). Artist emails link to `ARTIST_URL`.
 - Sign-in is invite only, enforced in the database: `private.is_invited(email)`
   (Team list or a Roster entry). A trigger on `auth.users` refuses to create
   any other account, so nothing is stored and no email is sent; taking someone

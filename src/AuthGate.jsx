@@ -6,6 +6,13 @@ import { passkeysSupported } from './Passkeys.jsx';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 
+// Two addresses, one app: artist.imssrecords.com is the artist portal ("For
+// Artists"), ops.imssrecords.com is for the team. Artists who sign in on ops
+// are turned away as invite only; team members on the artist address go to ops.
+// `?site=artist` previews the artist address locally.
+export const isArtistSite = () => window.location.hostname.startsWith('artist.') || (import.meta.env.DEV && new URLSearchParams(window.location.search).get('site') === 'artist');
+const OPS_URL = 'https://ops.imssrecords.com';
+
 export default function AuthGate({ children }) {
   const [authEmail, setAuthEmail] = useState(null);
   // 'team', 'artist', or null (signed in but on neither list); undefined while checking.
@@ -42,16 +49,16 @@ export default function AuthGate({ children }) {
   // Signed in, but not on the Team list or an artist's Roster entry: sign them
   // straight back out and say why on the sign-in page.
   useEffect(() => {
-    if (!supabase || !authEmail || access !== null) return;
-    setDenied(true);
-    supabase.auth.signOut();
+    if (!supabase || !authEmail || access === undefined) return;
+    if (access === 'team' && isArtistSite()) { window.location.replace(OPS_URL); return; }
+    if (access === null || (access === 'artist' && !isArtistSite())) { setDenied(true); supabase.auth.signOut(); }
   }, [authEmail, access]);
 
   if (!supabase) return children({ authEmail: null, access: 'team', signOut: null });
   if (checking) return null;
   const signOut = () => supabase.auth.signOut();
   if (authEmail && access === undefined) return null;
-  if (authEmail && access) return children({ authEmail, access, signOut });
+  if (authEmail && access && !(access === 'artist' && !isArtistSite()) && !(access === 'team' && isArtistSite())) return children({ authEmail, access, signOut });
   if (authEmail) return null; // not invited: the effect above signs them out
 
   // Google sign-in: the Google account's email must be on the Team list or an
@@ -92,6 +99,7 @@ export default function AuthGate({ children }) {
       <style>{GLOBAL_STYLES}</style>
       <main style={{ width: '100%', maxWidth: 360, margin: 'auto 0', textAlign: 'center' }}>
         <a href="/" aria-label="IMSS Records" style={{ display: 'inline-block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 76, width: 'auto', display: 'block', filter: 'var(--logo-filter)' }} /></a>
+        {isArtistSite() && <div style={{ marginTop: 14, fontSize: 15, fontWeight: 600, letterSpacing: '0.02em', color: C.textDim }}>For Artists</div>}
         <div style={{ height: 1, width: 280, maxWidth: '100%', background: C.border, margin: '36px auto 44px' }} />
         {sent ? (
           <div role="status">
