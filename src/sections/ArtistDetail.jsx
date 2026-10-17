@@ -6,6 +6,7 @@ import { artistLifetime, recoupmentForArtist, revenueRowSplit, artistSpend, pctA
 import { SOCIAL_LINKS, safeLink, PROFILE_EDITABLE_FIELDS } from '../seed.js';
 import { DOC_MAX_BYTES, supabase, uploadDocument } from '../storage.js';
 import { logActivity } from '../audit.js';
+import SignOutEverywhere from '../SignOutEverywhere.jsx';
 import { C } from '../theme.js';
 import { ArtworkThumb, Avatar, Badge, Btn, KPICard, Td, TextArea, Th } from '../ui.jsx';
 import { StatementFilesList } from './StatementFiles.jsx';
@@ -195,7 +196,7 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
             <div>{artist.email || '—'}</div>
           </div>
         </div>
-        <PortalAccess artist={artist} isAdmin={isAdmin} canEdit={canEdit} onEdit={onEdit} />
+        <PortalAccess artist={artist} isAdmin={isAdmin} isPm={sessionName === artist.productManager} canEdit={canEdit} onEdit={onEdit} />
         {artist.notes && (
           <div className="mt-3 pt-3 text-sm" style={{ borderTop: '1px solid ' + C.border, color: C.textDim }}>{artist.notes}</div>
         )}
@@ -387,7 +388,7 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
 
 // Portal access: the artist's sign-in email and (Admin) the welcome email that
 // points them to artist.imssrecords.com. Last send comes from the audit log.
-function PortalAccess({ artist, isAdmin, canEdit, onEdit }) {
+function PortalAccess({ artist, isAdmin, isPm, canEdit, onEdit }) {
   const [last, setLast] = useState(null);
   const [state, setState] = useState('idle');
   useEffect(() => {
@@ -420,6 +421,7 @@ function PortalAccess({ artist, isAdmin, canEdit, onEdit }) {
           <span className="text-xs" role="status" style={{ color: state === 'error' ? C.red : state === 'sent' ? C.teal : C.textDim }}>
             {state === 'error' ? 'Could not send. Try again shortly.' : state === 'sent' ? 'Welcome email sent.' : archived ? 'Archived: no sign-in.' : last ? 'Welcome sent ' + formatDate(String(last).slice(0, 10)) : 'Welcome email not sent yet'}
           </span>
+          {(isAdmin || isPm) && !archived && <SignOutEverywhere kind="artist" id={artist.id} name={artist.name} />}
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import { STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLE
 import { C } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { supabase } from '../storage.js';
+import SignOutEverywhere from '../SignOutEverywhere.jsx';
 
 export function TeamSection({ roster = [], updateRoster, staff, update, sessionRole = 'Admin', sessionName = '', accessRequests = [], updateAccessRequests }) {
   // Legal has Admin-level reach, but access changes it makes are proposals:
@@ -238,6 +239,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add team member'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
             {isTopRole(sessionRole) && editing && <WelcomeButton labeled member={staff.find(x => x.id === editing)} />}
+            {isTopRole(sessionRole) && editing && (() => { const m = staff.find(x => x.id === editing); return m && m.email ? <SignOutEverywhere kind="staff" id={m.id} name={m.name} /> : null; })()}
           </div>
         </form>
       )}
