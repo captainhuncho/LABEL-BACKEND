@@ -428,6 +428,13 @@ Deno.serve(async req => {
     if (!ok) return new Response('forbidden', { status: 403 });
     const body = JSON.parse(raw || '{}');
     if (body.action === 'due') return Response.json(await sendDueStatements());
+    if (body.action === 'signinAlert') {
+      // A watched account signed in (private.signin_alert): tell every Admin.
+      const admins = (await section('staff')).filter(m => m.role === 'Admin' && m.status !== 'Archived').map(m => lower(m.email)).filter(e => e.includes('@'));
+      const label = String(body.label || 'A watched account').slice(0, 120);
+      const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+      return Response.json(await send(admins, `${label} signed in`, page(`${label} signed in`, [`They signed in to IMSS Records at <b>${esc(when)}</b>.`, 'You asked to be told when this account signs in.'], { label: 'Open the dashboard', url: `${APP_URL}/` })));
+    }
     if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));
     if (body.action === 'events') {
       const results = [];
