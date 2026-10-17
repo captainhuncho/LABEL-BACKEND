@@ -436,6 +436,7 @@ async function sendWelcome(artistId: string) {
     `Hi ${esc(a.name)},`,
     'Your IMSS Records artist portal is where you see your royalties, statements, releases and invoices.',
     `Sign in at <b>artist.imssrecords.com</b> with this email address (${esc(email)}): continue with Google, or ask for a sign-in code by email.`,
+    'For the best experience, use a desktop or laptop. Your phone works too for quick checks.',
   ], { label: 'Open your portal', url: ARTIST_URL });
   return await send([email], 'Welcome to your IMSS Records artist portal', html, undefined, 'welcome');
 }
