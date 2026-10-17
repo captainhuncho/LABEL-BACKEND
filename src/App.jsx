@@ -351,6 +351,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [ledger, setLedger] = useState(SEED_LEDGER);
   const [notices, setNotices] = useState(SEED_NOTICES);
   const [labelBudgets, setLabelBudgets] = useState(SEED_LABEL_BUDGETS);
+  const [overheads, setOverheads] = useState([]);
   const [profileRequests, setProfileRequests] = useState(SEED_PROFILE_REQUESTS);
   const [accessRequests, setAccessRequests] = useState(SEED_ACCESS_REQUESTS);
   const [artistRequests, setArtistRequests] = useState(SEED_ARTIST_REQUESTS);
@@ -410,6 +411,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['ledger', setLedger, SEED_LEDGER],
         ['notices', setNotices, SEED_NOTICES],
         ['labelBudgets', setLabelBudgets, SEED_LABEL_BUDGETS],
+        ['overheads', setOverheads, []],
         ['profileRequests', setProfileRequests, SEED_PROFILE_REQUESTS],
         ['accessRequests', setAccessRequests, SEED_ACCESS_REQUESTS],
         ['artistRequests', setArtistRequests, SEED_ARTIST_REQUESTS],
@@ -540,6 +542,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   function updateTasks(next) { logChange('Tasks', tasks, next); setTasks(next); persist('tasks', next); }
   function updateLedger(next) { logChange('Ledger', ledger, next); setLedger(next); persist('ledger', next); }
   function updateNotices(next) { logChange('Noticeboard', notices, next); setNotices(next); persist('notices', next); }
+  function updateOverheads(next) { logChange('Budget', overheads, next); setOverheads(next); persist('overheads', next); }
   function updateLabelBudgets(next) { logChange('Budget', labelBudgets, next); setLabelBudgets(next); persist('labelBudgets', next); }
   function updateProfileRequests(next) { logChange('Profile requests', profileRequests, next); setProfileRequests(next); persist('profileRequests', next); }
   function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
@@ -712,7 +715,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection invoices={invoices} payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
-        {active === 'budget' && <BudgetSection labelBudgets={labelBudgets} update={updateLabelBudgets} ledger={approvedLedger} roster={roster} canEdit={canEdit} />}
+        {active === 'budget' && <BudgetSection overheads={overheads} update={updateOverheads} roster={roster} catalog={catalogView} staff={staff} ledger={ledger} invoices={invoices} session={session} canEdit={canEdit} />}
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
         {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
