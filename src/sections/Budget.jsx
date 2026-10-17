@@ -33,6 +33,18 @@ export const BUDGET_TYPES = {
 };
 // "Advance · Recording / Studio"; older categories without a type show their name.
 export const catLabel = c => (c.type ? c.type + ' · ' : '') + c.category;
+// Every sub-category spend can be attached to: the allocated ones, plus every
+// other standard sub-category of the budget's types (allocated $0, id "x:Type|Name").
+export function categoryChoices(o) {
+  const have = o.categories || [];
+  const extra = (o.types || []).flatMap(t => (BUDGET_TYPES[t] || []).filter(n => !have.some(c => c.type === t && c.category === n)).map(n => ({ id: 'x:' + t + '|' + n, type: t, category: n, allocated: 0 })));
+  return [...have, ...extra];
+}
+// Allocated sub-categories plus any unallocated ones that have spend attached.
+export function categoriesWithSpend(categories = [], itemCategoryIds = []) {
+  const extra = [...new Set(itemCategoryIds.filter(id => String(id).startsWith('x:')))].map(id => { const [t, n] = id.slice(2).split('|'); return { id, type: t, category: n, allocated: 0 }; });
+  return [...categories, ...extra];
+}
 // Categories grouped by type, in type order, for display.
 export function byType(categories = []) {
   const order = [...Object.keys(BUDGET_TYPES), ''];
@@ -334,7 +346,7 @@ function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, ov
         <h2 className="mb-3" style={{ fontWeight: 600, fontSize: 17 }}>Categories</h2>
         {(o.categories || []).length === 0 ? <p style={{ color: C.textDim }}>No categories yet.</p> : (
           <ul className="flex flex-col gap-3">
-            {byType(o.categories).flatMap(g => [g.type && <li key={'t-' + g.type} className="flex items-baseline justify-between gap-3" style={{ paddingTop: 6 }}><span style={{ fontWeight: 700, fontSize: 15 }}>{g.type}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{money(sum(g.cats, c => c.allocated))} allocated</span></li>, ...g.cats.map(c => {
+            {byType(categoriesWithSpend(o.categories, items.map(x => x.categoryId))).flatMap(g => [g.type && <li key={'t-' + g.type} className="flex items-baseline justify-between gap-3" style={{ paddingTop: 6 }}><span style={{ fontWeight: 700, fontSize: 15 }}>{g.type}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{money(sum(g.cats, c => c.allocated))} allocated</span></li>, ...g.cats.map(c => {
               const spent = spend.byCat[c.id] || 0;
               const pct = c.allocated > 0 ? Math.min(100, Math.round(spent / c.allocated * 100)) : 0;
               return (
@@ -423,7 +435,7 @@ export function ArtistBudgets({ budgets = [], catalog = [], fmt = money }) {
               ))}
             </dl>
             <ul className="mt-4 flex flex-col gap-3">
-              {byType(b.categories).flatMap(g => [g.type && <li key={'t-' + g.type} className="flex items-baseline justify-between gap-3" style={{ paddingTop: 6 }}><span style={{ fontWeight: 700, fontSize: 15 }}>{g.type}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{fmt(sum(g.cats, c => c.allocated))} allocated</span></li>, ...g.cats.map(c => {
+              {byType(categoriesWithSpend(b.categories, b.items.map(x => x.categoryId))).flatMap(g => [g.type && <li key={'t-' + g.type} className="flex items-baseline justify-between gap-3" style={{ paddingTop: 6 }}><span style={{ fontWeight: 700, fontSize: 15 }}>{g.type}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{fmt(sum(g.cats, c => c.allocated))} allocated</span></li>, ...g.cats.map(c => {
                 const its = b.items.filter(x => x.categoryId === c.id);
                 const cs = sum(its, x => x.amount);
                 const pct = c.allocated > 0 ? Math.min(100, Math.round(cs / c.allocated * 100)) : 0;

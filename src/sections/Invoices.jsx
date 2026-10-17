@@ -1,6 +1,6 @@
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, Send, UserCog, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
-import { catLabel } from './Budget.jsx';
+import { catLabel, categoryChoices } from './Budget.jsx';
 import React, { useState } from 'react';
 import { formatCents, formatCurrency, formatDate } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
@@ -274,7 +274,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                                 const amt = Number(inv.amount) || 0;
                                 const spentOf = f => ledger.filter(l => l.type === 'expense' && l.overheadId === target.id && (l.approvalStatus || 'Approved') === 'Approved' && f(l)).reduce((t, l) => t + (Number(l.amount) || 0), 0)
                                   + invoices.filter(i => i.id !== inv.id && i.kind === 'expense' && i.overheadId === target.id && ['Pay Approved', 'Paid'].includes(i.status) && f(i)).reduce((t, i) => t + (Number(i.amount) || 0), 0);
-                                const cat = (target.categories || []).find(c => c.id === categoryId);
+                                const cat = categoryChoices(target).find(c => c.id === categoryId);
                                 const over = spentOf(() => true) + amt > target.total + 1e-9 || (cat && spentOf(x => x.categoryId === cat.id) + amt > cat.allocated + 1e-9);
                                 if (over && !approver) { setError('That takes the budget over. An Admin needs to attach it.'); return; }
                               }
@@ -291,7 +291,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                                   </Select>
                                   {o && <Select value={inv.categoryId || ''} onChange={e => attach(o.id, e.target.value)} aria-label="Budget category" style={{ flex: '1 1 160px' }}>
                                     <option value="">Unallocated</option>
-                                    {(o.categories || []).map(c => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
+                                    {categoryChoices(o).map(c => <option key={c.id} value={c.id}>{catLabel(c)}{c.allocated ? '' : ' (nothing allocated)'}</option>)}
                                   </Select>}
                                 </div>
                                 <div className="text-xs mt-1" style={{ color: C.textDim }}>Counts against the budget once it reaches Pay Approved.</div>

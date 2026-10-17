@@ -1,6 +1,6 @@
 import { ClipboardList, DollarSign, Pencil, Plus, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { catLabel } from './Budget.jsx';
+import { catLabel, categoryChoices } from './Budget.jsx';
 import { LEDGER_CATEGORIES, formatCurrency, formatDate, todayStr, uid } from '../constants.js';
 import { ledgerTotals, recoupmentForArtist } from '../finance.js';
 import { C } from '../theme.js';
@@ -26,7 +26,7 @@ export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster
     const claims = invoices.filter(i => i.kind === 'expense' && i.overheadId === o.id && ['Pay Approved', 'Paid'].includes(i.status));
     const spent = others.reduce((t, l) => t + (Number(l.amount) || 0), 0) + claims.reduce((t, i) => t + (Number(i.amount) || 0), 0);
     if (spent + entry.amount > o.total + 1e-9) return 'This takes ' + o.title + ' over its ' + formatCurrency(o.total) + ' total.';
-    const cat = (o.categories || []).find(c => c.id === entry.categoryId);
+    const cat = categoryChoices(o).find(c => c.id === entry.categoryId);
     if (cat) {
       const catSpent = others.filter(l => l.categoryId === cat.id).reduce((t, l) => t + (Number(l.amount) || 0), 0) + claims.filter(i => i.categoryId === cat.id).reduce((t, i) => t + (Number(i.amount) || 0), 0);
       if (catSpent + entry.amount > cat.allocated + 1e-9) return 'This takes ' + cat.category + ' over its ' + formatCurrency(cat.allocated) + '.';
@@ -143,7 +143,7 @@ export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster
               {chosen && <Field label="Budget category">
                 <Select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })}>
                   <option value="">Unallocated</option>
-                  {(chosen.categories || []).map(c => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
+                  {categoryChoices(chosen).map(c => <option key={c.id} value={c.id}>{catLabel(c)}{c.allocated ? '' : ' (nothing allocated)'}</option>)}
                 </Select>
               </Field>}
               {chosen && overBudget({ ...form, amount: Number(form.amount) || 0, id: editing }) && <div className="imss-span-2" role="alert" style={{ color: C.red, fontSize: 14 }}>{overBudget({ ...form, amount: Number(form.amount) || 0, id: editing })} {approver ? 'You can approve this.' : 'It waits for an Admin to approve the overspend.'}</div>}
