@@ -48,6 +48,19 @@ export default function AuthGate({ children }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  // "Sign out everywhere" ends the session on the server; an open tab only
+  // learns that when it asks. Check every minute and when the tab comes back.
+  useEffect(() => {
+    if (!supabase || !authEmail) return;
+    const check = () => supabase.auth.getUser().then(({ error: err }) => {
+      if (err && (err.status === 401 || err.status === 403)) supabase.auth.signOut({ scope: 'local' });
+    });
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    const t = setInterval(check, 60000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [authEmail]);
+
   useEffect(() => {
     if (!supabase || !authEmail) return;
     setAccess(undefined);
