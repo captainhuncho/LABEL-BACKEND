@@ -18,6 +18,7 @@ import { licenseFor, rightsLine } from '../licenses.js';
 import { streamsFromRevenue } from '../streams.js';
 import { PasskeySettings } from '../Passkeys.jsx';
 import { MobileNav } from '../MobileNav.jsx';
+import { usePageUrl } from '../pageUrl.js';
 import { TwoFactorSettings } from '../Mfa.jsx';
 
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null }) {
@@ -258,6 +259,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     { id: 'requests', label: 'Requests', icon: MessageSquare },
     { id: 'profile', label: 'Profile', icon: UserCog },
   ].filter(Boolean);
+
+  usePageUrl(TABS, tab, setTab);
 
   const myArtistRequests = useMemo(() => [...artistRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [artistRequests, artist.id]);
   const openRequestCount = myArtistRequests.filter(r => r.status !== 'Resolved').length;

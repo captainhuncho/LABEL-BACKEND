@@ -1,6 +1,7 @@
 import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
 import { logActivity, logSignIn } from './audit.js';
 import { MobileNav } from './MobileNav.jsx';
+import { usePageUrl } from './pageUrl.js';
 import { useEffect, useMemo, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
 import { streamsFromRevenue } from './streams.js';
@@ -616,6 +617,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
 
     isAdmin && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
   ].filter(Boolean);
+
+  usePageUrl(useMemo(() => [...NAV.map(n => ({ id: n.id, label: n.label })), { id: 'account', label: 'Account' }], [NAV.map(n => n.id).join()]), active, setActive);
 
   useEffect(() => {
     if (session && session.mode === 'team' && NAV.length && !NAV.find(n => n.id === active)) {

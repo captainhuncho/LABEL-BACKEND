@@ -1,4 +1,33 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "artist.imssrecords.com"
+        }
+      ],
+      "destination": "/dashboard",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json|email-logo-dark.png|email-logo-light.png).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "artist.imssrecords.com"
+        }
+      ],
+      "destination": "/artist.html"
+    },
+    {
+      "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -59,22 +88,6 @@
           "value": "no-cache, no-store, must-revalidate"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json|email-logo-dark.png|email-logo-light.png).*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "artist.imssrecords.com"
-        }
-      ],
-      "destination": "/artist.html"
-    },
-    {
-      "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json).*)",
-      "destination": "/index.html"
     }
   ]
 }
