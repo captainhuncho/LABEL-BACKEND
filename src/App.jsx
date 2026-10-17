@@ -436,9 +436,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           const val = res && res.value ? JSON.parse(res.value) : seed;
           if (!cancelled) setter(val);
         } catch (e) {
+          const missing = String(e && e.message).startsWith('not found');
+          // With Supabase a section you have no permission for reads as missing: show it empty, never seed it.
+          if (supabase && missing) { if (!cancelled) setter(Array.isArray(seed) ? [] : seed); continue; }
           if (!cancelled) setter(seed);
           // Missing key: save the seed. Unreadable data: keep it on disk so nothing real is lost.
-          if (String(e && e.message).startsWith('not found')) {
+          if (missing) {
             try { await window.storage.set(key, JSON.stringify(seed), false); } catch (e2) { /* ignore */ }
           } else if (!cancelled) {
             setError('Some saved ' + key + ' data could not be read, so sample data is shown. Your saved copy is untouched until you edit that section.');

@@ -43,22 +43,31 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - `app_data` has row-level security on. Signed-out visitors can't read or write
   anything.
 - **Team:** a signed-in user whose email is on the `staff` list and who
-  passed the second step (`is_team_member()`) can read every section and write
-  most of them. A trigger (`private.app_data_write_rules`) adds role rules for
-  the sensitive ones:
+  passed the second step (`is_team_member()`) can read and write sections
+  according to the same permissions as the app's screens (`private.my_perm`
+  mirrors `permissionsFor()`):
+  - Reading: revenue, money received (`masterGross`), payouts, published
+    earnings, publish requests and statement files need **Artist earnings**;
+    the ledger, budgets (`overheads`) and label budgets need **Budgets &
+    expenses** (`can_read_section()` in the read policy). Hidden sections load
+    as empty in the app.
+  - Writing (`private.app_data_write_rules` trigger): the same sections also
+    need **Can edit**. `publishedRevenue` (what artists see) is Admin only, or
+    Artist earnings + Can edit when an Admin has turned on direct publishing
+    (refreshing per-store streams is allowed with Artist earnings + Can edit).
+    `labelSettings` needs Artist earnings + Can edit; its invoice workflow and
+    direct-publishing switch are Admin only. `dealChanges` is written by Admin
+    and Legal only.
   - `staff`: only an Admin can add or remove members or change anyone's role,
     access, `canApproveBudgets`, sign-in email or Archived/Inactive status.
     Others can edit profile fields. Legal's access changes go through
     `accessRequests` for an Admin to approve.
-  - `publishedRevenue` (what artists see): Admin only, or someone with Artist
-    earnings + Can edit when an Admin has turned on direct publishing. Anyone
-    who can edit may refresh per-store streams on published rows.
-  - `payouts` and `revenuePublish`: Artist earnings + Can edit, or Admin.
-  - `labelSettings`: Artist earnings + Can edit, or Admin; the invoice
-    workflow and the direct-publishing switch are Admin only.
-  Permissions are read the same way as `permissionsFor()` in the app
-  (`private.my_perm`). The notify function, cron jobs and migrations are not
-  affected; a security-definer RPC called by a signed-in user is.
+  - `roster`: an existing artist's deal terms (share, funding tier and type,
+    contract type, license years, effective date, reporting period, payout
+    threshold, no-extension) change only through an Admin, i.e. an approved
+    Deal change. A new artist can be added with starting terms.
+  The notify function, cron jobs and migrations are not affected; a
+  security-definer RPC called by a signed-in user is.
 - **Artists** never read `app_data` directly. `artist_portal()` returns only
   their own catalog, revenue, payouts, expenses and requests, with each month's
   Inbound Banking Charge pre-split to their share, so label-wide totals never
@@ -159,11 +168,12 @@ Tailwind 4 migration.
 
 These are real and accepted for now. Don't treat them as protected.
 
-1. **Most role permissions are still enforced only in the app.** The database
-   guards the team list, published earnings, payouts, publish requests and
-   label settings (see Data access). Every team member can still read every
-   section, and can change the other sections (roster and deal terms, catalog,
-   revenue, money received, ledger, invoices, budgets) through the API.
+1. **Some data is still readable by the whole team.** The roster (including
+   each artist's share), deal changes, invoices and the team list are readable
+   by every team member, because several screens need them. Rows inside a
+   section are not scoped per artist (a Product Manager's view of their own
+   artists is enforced in the app). Approval steps inside a section (who may
+   approve a revenue row, a budget overspend or an invoice stage) are app rules.
 2. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
    Supabase, not this project) as callable by anyone. Review it in the Supabase
    dashboard.
