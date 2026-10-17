@@ -39,23 +39,35 @@ const localStorageStorage = {
   },
 };
 
+// Team members without deal access can't read `roster`; they get `rosterPublic`
+// (deal fields removed) and save to it. The database merges it back.
+const PUBLIC_COPY = { roster: 'rosterPublic' };
+const aliases = new Map();
+const realKey = key => aliases.get(key) || key;
 const supabaseStorage = {
-  async get(key) {
-    const { data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle();
+  async get(name) {
+    let key = realKey(name);
+    let { data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle();
+    if (!error && !data && PUBLIC_COPY[name] && key === name) {
+      key = PUBLIC_COPY[name];
+      ({ data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle());
+      if (data) aliases.set(name, key);
+    }
     if (error) throw error;
-    if (!data) throw new Error('not found: ' + key);
+    if (!data) throw new Error('not found: ' + name);
     versions.set(key, data.updated_at);
     // Sections are stored as JSON; dataVersion is a bare string.
     return { value: typeof data.value === 'string' ? data.value : JSON.stringify(data.value) };
   },
-  async set(key, value) {
+  async set(name, value) {
+    const key = realKey(name);
     let parsed;
     try { parsed = JSON.parse(value); } catch { parsed = value; }
     const updated_at = new Date().toISOString();
     if (!versions.has(key)) {
       // Never loaded (a new section): create it, but never replace one that exists.
       const { data, error } = await supabase.from('app_data').insert({ key, value: parsed, updated_at }).select('updated_at').maybeSingle();
-      if (error) { if (error.code === '23505') throw conflict(key); throw error; }
+      if (error) { if (error.code === '23505') throw conflict(name); throw error; }
       versions.set(key, data ? data.updated_at : updated_at);
       return true;
     }
@@ -63,7 +75,7 @@ const supabaseStorage = {
     const { data, error } = await supabase.from('app_data').update({ value: parsed, updated_at })
       .eq('key', key).eq('updated_at', versions.get(key)).select('updated_at');
     if (error) throw error;
-    if (!data || data.length === 0) throw conflict(key);
+    if (!data || data.length === 0) throw conflict(name);
     versions.set(key, data[0].updated_at);
     return true;
   },
@@ -81,7 +93,8 @@ export function subscribeToChanges(onChange) {
   const channel = supabase.channel('app_data_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_data' }, payload => {
       const row = payload.new || {};
-      if (row.key && versions.get(row.key) !== row.updated_at) onChange(row.key);
+      const name = [...aliases].find(([, k]) => k === row.key)?.[0] || row.key;
+      if (row.key && versions.get(row.key) !== row.updated_at) onChange(name);
     })
     .subscribe();
   return () => { supabase.removeChannel(channel); };

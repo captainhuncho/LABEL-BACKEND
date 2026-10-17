@@ -32,6 +32,8 @@ export const ARTIST_STATUSES = ['Active', 'On Hiatus', 'Former', 'Archived'];
 export const FUNDING_TIERS = ['Non-Funded', 'Funded'];
 // Deal categories under each funding tier. Add new categories here.
 export const DEAL_TYPES = { Funded: ['Core', 'Recordings+'], 'Non-Funded': ['Distro', 'Distro+'] };
+// Artist fields only deal viewers see (kept in step with private.deal_fields() in the database).
+export const DEAL_FIELDS = ['artistPct', 'royaltyRate', 'fundingTier', 'dealType', 'dealTerms', 'contractType', 'licenseYears', 'effectiveDate', 'reportingPeriod', 'payoutThreshold', 'annualBudget', 'noExtension'];
 export const dealLabel = a => (a.fundingTier || 'Non-Funded') + (a.dealType ? ' · ' + a.dealType : '');
 export function artistStatusTone(status) {
   if (status === 'Active') return 'teal';

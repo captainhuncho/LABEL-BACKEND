@@ -62,6 +62,12 @@ Please don't open a public issue or share details elsewhere until it's fixed.
     access, `canApproveBudgets`, sign-in email or Archived/Inactive status.
     Others can edit profile fields. Legal's access changes go through
     `accessRequests` for an Admin to approve.
+  - Deal privacy: the real `roster` and `dealChanges` are readable only by
+    Admin, Finance, Legal and anyone with Artist earnings
+    (`private.can_see_deals()`). Everyone else reads `rosterPublic`, the roster
+    without deal fields (`private.deal_fields()`), kept in step by a trigger;
+    when they save it, the database merges it back and keeps every existing
+    artist's deal fields as they were.
   - `roster`: an existing artist's deal terms (share, funding tier and type,
     contract type, license years, effective date, reporting period, payout
     threshold, no-extension) change only through an Admin, i.e. an approved
@@ -168,9 +174,10 @@ Tailwind 4 migration.
 
 These are real and accepted for now. Don't treat them as protected.
 
-1. **Some data is still readable by the whole team.** The roster (including
-   each artist's share), deal changes, invoices and the team list are readable
-   by every team member, because several screens need them. Rows inside a
+1. **Some data is still readable by the whole team.** Invoices (with amounts)
+   and the team list are readable by every team member, because several
+   screens need them. Budgets keep a snapshot of the artist's deal at creation
+   (`overheads.dealTerm`), readable by anyone with Budgets & expenses. Rows inside a
    section are not scoped per artist (a Product Manager's view of their own
    artists is enforced in the app). Approval steps inside a section (who may
    approve a revenue row, a budget overspend or an invoice stage) are app rules.

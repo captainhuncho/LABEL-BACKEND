@@ -1,6 +1,6 @@
 import { Globe, Pencil, Plus, Search, Trash2, Users, Archive } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { ARTIST_STATUSES, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid } from '../constants.js';
+import { ARTIST_STATUSES, DEAL_FIELDS, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid } from '../constants.js';
 import { DEFAULT_DELIVERY_DAYS } from '../finance.js';
 import { SOCIAL_LINKS } from '../seed.js';
 import DealChanges from './DealChanges.jsx';
@@ -10,6 +10,8 @@ import { ArtistDetailPanel } from './ArtistDetail.jsx';
 
 export function RosterSection({ updateStatementFiles, focus = null, updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(focus && focus.artistId || null);
+  // Deal terms (share, funding, contract) are for Admin, Finance, Legal and Artist earnings; the database hides them from everyone else.
+  const canSeeDeals = canViewRoyalties || ['Admin', 'Finance', 'Legal'].includes(session.role);
   useEffect(() => { if (focus && focus.artistId) setDetailId(focus.artistId); }, [focus]);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
@@ -34,6 +36,8 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
     let payload = { ...form, royaltyRate: Number(form.royaltyRate), artistPct: Number(form.royaltyRate) / 100, payoutThreshold: Number(form.payoutThreshold) || 0, deliveryDays: Number(form.deliveryDays) || '', annualBudget: form.fundingTier === 'Funded' ? (Number(form.annualBudget) || 0) : 0 };
     // The split and deal change only through Deal changes, dated and approved.
     if (editing) { const o = roster.find(a => a.id === editing); payload = { ...payload, artistPct: o.artistPct, royaltyRate: o.royaltyRate, fundingTier: o.fundingTier, dealType: o.dealType, dealTerms: o.dealTerms }; }
+    // Without deal access, leave the terms out: existing ones are kept by the database, new artists get theirs from an Admin.
+    if (!canSeeDeals) DEAL_FIELDS.forEach(k => { delete payload[k]; });
     setFormError('');
     if (editing) update(roster.map(a => a.id === editing ? { ...payload, id: editing } : a));
     else update([...roster, { ...payload, id: uid() }]);
@@ -79,7 +83,8 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
       {detailId && roster.find(a => a.id === detailId) ? (
         <ArtistDetailPanel
           invoices={invoices}
-          dealSection={(session.role === 'Admin' || session.role === 'Legal' || canViewRoyalties) && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={ledger} invoices={invoices} />}
+          canSeeDeals={canSeeDeals}
+          dealSection={canSeeDeals && <DealChanges roster={roster} updateRoster={update} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} artistId={detailId} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={ledger} invoices={invoices} />}
           statementFiles={statementFiles}
           updateStatementFiles={updateStatementFiles}
           artist={roster.find(a => a.id === detailId)}
@@ -165,19 +170,19 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
               {MARKETS.filter(m => m !== form.primaryMarket).map(m => <option key={m} value={m}>{m}</option>)}
             </Select>
           </Field>
-          <Field label="Artist share (%)"><Input type="number" min="0" max="100" disabled={!!editing} value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>
-          <Field label="Reporting period">
+          {canSeeDeals && <Field label="Artist share (%)"><Input type="number" min="0" max="100" disabled={!!editing} value={form.royaltyRate} onChange={e => setForm({ ...form, royaltyRate: e.target.value })} /></Field>}
+          {canSeeDeals && <Field label="Reporting period">
             <Select disabled={!!editing} value={form.reportingPeriod || 'quarterly'} onChange={e => setForm({ ...form, reportingPeriod: e.target.value })}>
               <option value="monthly">Monthly (cutoff end of each month)</option>
               <option value="quarterly">Quarterly (cutoff 31 Mar, 30 Jun, 30 Sep, 31 Dec)</option>
               <option value="half-yearly">Half-yearly (cutoff 30 Jun, 31 Dec)</option>
             </Select>
-          </Field>
+          </Field>}
           <Field label={'Statement due (days after cutoff, default ' + DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'] + ')'}><Input type="number" min="1" value={form.deliveryDays} onChange={e => setForm({ ...form, deliveryDays: e.target.value })} placeholder={String(DEFAULT_DELIVERY_DAYS[form.reportingPeriod || 'quarterly'])} /></Field>
           <div className="text-xs" style={{ gridColumn: '1 / -1', color: C.textFaint, marginTop: 6 }}>Socials and streaming (full links)</div>
           {SOCIAL_LINKS.map(l => <Field key={l.key} label={l.label}><Input type="url" value={form[l.key] || ''} onChange={e => setForm(f => ({ ...f, [l.key]: e.target.value }))} placeholder="https://" /></Field>)}
-          <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input disabled={!!editing} type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>
-          <Field label="Funding tier">
+          {canSeeDeals && <Field label="Payout threshold (USD, on the artist’s share after label % and charges)"><Input disabled={!!editing} type="number" min="0" step="0.01" value={form.payoutThreshold} onChange={e => setForm({ ...form, payoutThreshold: e.target.value })} placeholder="0 = pay any amount" /></Field>}
+          {canSeeDeals && <><Field label="Funding tier">
             <Select disabled={!!editing} value={form.fundingTier} onChange={e => setForm({ ...form, fundingTier: e.target.value, dealType: (DEAL_TYPES[e.target.value] || [])[0] || '' })}>
               {FUNDING_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
@@ -187,9 +192,9 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
               <option value="">Not set</option>
               {(DEAL_TYPES[form.fundingTier || 'Non-Funded'] || []).map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
-          </Field>
-          {editing && <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>Split, funding and deal change through <b style={{ color: C.text }}>Record a deal change</b> on the artist’s profile, from the month the new deal starts.</div>}
-          {form.fundingTier === 'Funded' && (
+          </Field></>}
+          {editing && canSeeDeals && <div className="imss-span-2" style={{ color: C.textDim, fontSize: 14 }}>Split, funding and deal change through <b style={{ color: C.text }}>Record a deal change</b> on the artist’s profile, from the month the new deal starts.</div>}
+          {canSeeDeals && form.fundingTier === 'Funded' && (
             <Field label="Annual budget"><Input type="number" min="0" step="0.01" value={form.annualBudget} onChange={e => setForm({ ...form, annualBudget: e.target.value })} placeholder="Total allocated for this artist" /></Field>
           )}
           <Field label="Signed date"><Input type="date" value={form.signedDate} onChange={e => setForm({ ...form, signedDate: e.target.value })} /></Field>
@@ -228,13 +233,12 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
         </form>
       )}
 
-      <ExportBar filename="imss-roster" headers={['Name', 'Genre', 'Sub-genre', 'Status', 'Royalty %', 'Funding Tier', 'Primary Market', 'Secondary Market', 'Product Manager', 'A&R', 'Signed Date', 'Contract Expiration', 'Email']} rows={filtered.map(a => [
+      <ExportBar filename="imss-roster" headers={['Name', 'Genre', 'Sub-genre', 'Status', ...(canSeeDeals ? ['Royalty %', 'Funding Tier'] : []), 'Primary Market', 'Secondary Market', 'Product Manager', 'A&R', 'Signed Date', 'Contract Expiration', 'Email']} rows={filtered.map(a => [
         a.name,
         a.genre || '',
         a.subGenre || '',
         a.status,
-        a.royaltyRate,
-        dealLabel(a),
+        ...(canSeeDeals ? [a.royaltyRate, dealLabel(a)] : []),
         a.primaryMarket || '',
         a.secondaryMarket || '',
         a.productManager || '',
@@ -265,8 +269,8 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mb-2">
                   <Badge tone={artistStatusTone(a.status)}>{a.status}</Badge>
-                  <Badge>{a.royaltyRate}% royalty</Badge>
-                  <Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge>
+                  {canSeeDeals && <Badge>{a.royaltyRate}% royalty</Badge>}
+                  {canSeeDeals && <Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge>}
                   {a.contractExpiration && expirationStatus(a.contractExpiration).label !== 'Active' && (
                     <Badge tone={expirationStatus(a.contractExpiration).tone}>{expirationStatus(a.contractExpiration).label}</Badge>
                   )}
@@ -295,7 +299,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 680 }}>
             <thead><tr>
-              <Th></Th><Th>Artist</Th><Th>Genre</Th><Th>Market</Th><Th>Team</Th><Th align="right">Royalty</Th><Th>Signed</Th><Th>Contract</Th><Th align="right">Releases</Th><Th>Status</Th><Th>Funding</Th><Th align="right">Actions</Th>
+              <Th></Th><Th>Artist</Th><Th>Genre</Th><Th>Market</Th><Th>Team</Th>{canSeeDeals && <Th align="right">Royalty</Th>}<Th>Signed</Th><Th>Contract</Th><Th align="right">Releases</Th><Th>Status</Th>{canSeeDeals && <Th>Funding</Th>}<Th align="right">Actions</Th>
             </tr></thead>
             <tbody>
               {filtered.map(a => {
@@ -314,7 +318,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
                         </div>
                       )}
                     </Td>
-                    <Td align="right" mono>{a.royaltyRate}%</Td>
+                    {canSeeDeals && <Td align="right" mono>{a.royaltyRate}%</Td>}
                     <Td mono>{formatDate(a.signedDate)}</Td>
                     <Td>
                       {!a.contractExpiration ? '—' : (
@@ -326,7 +330,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
                     </Td>
                     <Td align="right">{releaseCount}</Td>
                     <Td><Badge tone={artistStatusTone(a.status)}>{a.status}</Badge></Td>
-                    <Td><Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge></Td>
+                    {canSeeDeals && <Td><Badge tone={a.fundingTier === 'Funded' ? 'teal' : 'default'}>{dealLabel(a)}</Badge></Td>}
                     <Td align="right">
                       {confirmId === a.id ? (
                         <ConfirmInline label="Archive? They lose sign-in; their history stays." onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />

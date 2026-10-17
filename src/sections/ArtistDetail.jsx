@@ -11,7 +11,7 @@ import { C } from '../theme.js';
 import { ArtworkThumb, Avatar, Badge, Btn, KPICard, Td, TextArea, Th } from '../ui.jsx';
 import { StatementFilesList } from './StatementFiles.jsx';
 
-export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSection = null, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
+export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSection = null, canSeeDeals = true, statementFiles = [], artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], tasks = [], labelSettings, staff, onBack, onEdit, canEdit, canViewRoyalties = true, canViewSpend = true, update, sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const artistCatalog = useMemo(() => catalog.filter(c => c.artistId === artist.id).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '')), [catalog, artist.id]);
   const releaseIds = useMemo(() => new Set(artistCatalog.map(c => c.id)), [artistCatalog]);
   const aSlug = useMemo(() => slug(artist.name), [artist.name]);
@@ -97,7 +97,7 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
             <div className="text-sm mt-1" style={{ color: C.textFaint }}>{artist.genre || 'No genre set'}{artist.subGenre ? ' · ' + artist.subGenre : ''}</div>
             <div className="flex items-center gap-1.5 flex-wrap mt-2">
               <Badge tone={artistStatusTone(artist.status)}>{artist.status}</Badge>
-              <Badge>{artist.royaltyRate}% royalty</Badge>
+              {canSeeDeals && <Badge>{artist.royaltyRate}% royalty</Badge>}
               {isFunded && <Badge tone="teal">Funded</Badge>}
               {artist.primaryMarket && <Badge tone="teal"><Globe size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{artist.primaryMarket}</Badge>}
               {artist.secondaryMarket && <Badge>+ {artist.secondaryMarket}</Badge>}
