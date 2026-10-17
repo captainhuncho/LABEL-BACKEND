@@ -18,10 +18,11 @@ import { licenseFor, rightsLine } from '../licenses.js';
 import { streamsFromRevenue } from '../streams.js';
 import { PasskeySettings } from '../Passkeys.jsx';
 import { MobileNav } from '../MobileNav.jsx';
+import { ArtistBudgets } from './Budget.jsx';
 import { usePageUrl } from '../pageUrl.js';
 import { TwoFactorSettings } from '../Mfa.jsx';
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [] }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
   const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
   // A rights return shows to the artist only once Admin or Legal has sent it to their dashboard.
@@ -254,7 +255,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     { id: 'invoices', label: 'Invoices', icon: FileText },
     { id: 'statements', label: 'Statements', icon: Eye },
     { id: 'payouts', label: 'Payouts', icon: Wallet },
-    isFunded && { id: 'budget', label: 'Budget', icon: ClipboardList },
+    (isFunded || budgets.length > 0) && { id: 'budget', label: 'Budget', icon: ClipboardList },
     { id: 'releases', label: 'Releases', icon: Disc3 },
     { id: 'requests', label: 'Requests', icon: MessageSquare },
     { id: 'profile', label: 'Profile', icon: UserCog },
@@ -472,7 +473,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div style={{ fontWeight: 600, fontSize: 15 }}>{artist.name}</div>
               <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
-            <NotificationBell routes={{ notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
+            <NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
             <button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
           </div>
         </div>
@@ -480,7 +481,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         {tab !== 'overview' && (
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>
-            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
+            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
           </div>
         )}
 
@@ -490,7 +491,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <h1 className="imss-portal-title">Dashboard</h1>
               <div className="flex items-center gap-2">
                 <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
-                <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
+                <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
               </div>
             </div>
 
@@ -1321,6 +1322,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
           </div>
         )}
 
+        {tab === 'budget' && <><h1 className="imss-portal-title">Budget</h1><ArtistBudgets budgets={budgets} catalog={catalog} fmt={formatCents} /></>}
         {tab === 'budget' && isFunded && (
           <div>
             <div className="flex flex-wrap gap-3 mb-6">

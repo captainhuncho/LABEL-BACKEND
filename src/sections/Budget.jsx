@@ -107,17 +107,18 @@ export function BudgetSection({ overheads = [], update, roster = [], catalog = [
     else if (o.pendingChange) save(overheads.map(x => x.id !== o.id ? x : stamp({ ...x, ...(ok ? x.pendingChange.changes : {}), pendingChange: null }, { action: ok ? 'approved a change' : 'rejected a change' })), ok ? 'approved a budget change' : 'rejected a budget change');
   }
   function close(o) { save(overheads.map(x => x.id !== o.id ? x : stamp({ ...x, status: 'Closed', closedBy: session.name, closedAt: now() }, { action: 'closed: product ended' })), 'closed a budget overhead'); }
+  function sendToArtist(o) { save(overheads.map(x => x.id !== o.id ? x : stamp({ ...x, sentToArtistAt: now(), sentToArtistBy: session.name }, { action: 'sent it to the artist’s dashboard' })), 'sent a budget to the artist'); }
   function reopen(o) { save(overheads.map(x => x.id !== o.id ? x : stamp({ ...x, status: 'Active', closedBy: '', closedAt: '' }, { action: 'reopened' })), 'reopened a budget overhead'); }
 
   if (form) return <OverheadForm form={form} setForm={setForm} submit={submit} problem={formProblem(form)} roster={roster} catalog={catalog} overheads={overheads} approver={approver} onCancel={() => setForm(null)} />;
 
   const open = overheads.find(o => o.id === openId);
   if (open) return <OverheadDetail o={open} ledger={ledger} invoices={invoices} artistName={artistName} catalog={catalog} overheads={overheads} spend={overheadSpend(open, ledger, invoices)} approver={approver} canEdit={canEdit}
-    onBack={() => setOpenId(null)} onEdit={() => editForm(open)} onDecide={ok => decide(open, ok)} onClose={() => close(open)} onReopen={() => reopen(open)} />;
+    onBack={() => setOpenId(null)} onEdit={() => editForm(open)} onDecide={ok => decide(open, ok)} onClose={() => close(open)} onReopen={() => reopen(open)} canSend={session.role === 'Admin' || session.role === 'Legal'} onSend={() => sendToArtist(open)} />;
 
   return (
     <div>
-      <SectionHeader title="Budget" artistNote="nothing yet. Sending a budget to an artist's dashboard comes next." description="One overhead per artist product: a total, split into categories, and the spend attached to it. Only money actually spent is recouped. An Admin closes it when the product is done." action={canEdit && <Btn variant="primary" onClick={newForm}><Plus size={14} /> New overhead</Btn>} />
+      <SectionHeader title="Budget" artistNote="their own budgets, after an Admin or Legal sends them: totals, categories and the spend attached. Never label budgets or notes." description="One overhead per artist product: a total, split into categories, and the spend attached to it. Only money actually spent is recouped. An Admin closes it when the product is done." action={canEdit && <Btn variant="primary" onClick={newForm}><Plus size={14} /> New overhead</Btn>} />
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={Wallet} label="Committed (active)" value={money(committed)} sub={active.length + ' active'} />
         <KPICard icon={Wallet} label="Spent (active)" value={money(spentActive)} tone="amber" />
@@ -240,7 +241,7 @@ function OverheadForm({ form, setForm, submit, problem, roster, catalog, overhea
   );
 }
 
-function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, overheads, spend, approver, canEdit, onBack, onEdit, onDecide, onClose, onReopen }) {
+function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, overheads, spend, approver, canEdit, onBack, onEdit, onDecide, onClose, onReopen, canSend = false, onSend }) {
   const allocated = sum(o.categories || [], c => c.allocated);
   const children = overheads.filter(x => x.parentId === o.id && x.status !== 'Rejected');
   const releaseTitles = (o.releaseIds || []).map(id => (catalog.find(r => r.id === id) || {}).title).filter(Boolean);
@@ -312,6 +313,8 @@ function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, ov
         {canEdit && o.status !== 'Closed' && o.status !== 'Rejected' && !change && <Btn variant="ghost" onClick={onEdit}>{approver ? 'Change' : 'Propose a change'}</Btn>}
         {approver && o.status === 'Active' && <Btn variant="ghost" onClick={onClose}><Lock size={14} /> Close: product ended</Btn>}
         {approver && o.status === 'Closed' && <Btn variant="ghost" onClick={onReopen}>Reopen</Btn>}
+        {canSend && o.kind === 'artist' && ['Active', 'Closed'].includes(o.status) && !o.sentToArtistAt && <Btn variant="primary" onClick={onSend}>Send to artist’s dashboard</Btn>}
+        {o.sentToArtistAt && <span className="text-sm self-center" style={{ color: C.teal }}>On the artist’s dashboard since {formatDate(String(o.sentToArtistAt).slice(0, 10))}</span>}
       </div>
 
       <div className="rounded p-5" style={{ background: C.panel }}>
@@ -323,16 +326,71 @@ function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, ov
 }
 
 // Expenses and claims attached to a category; ones not yet counted say why.
-function AttachedItems({ items }) {
+function AttachedItems({ items, fmt = money }) {
   if (!items.length) return null;
   return (
     <ul className="mt-2 flex flex-col" style={{ borderTop: '1px solid var(--hairline)' }}>
       {items.map(x => (
         <li key={x.id} className="flex items-baseline justify-between gap-3 text-sm" style={{ padding: '6px 0', borderBottom: '1px solid var(--hairline)' }}>
           <span style={{ minWidth: 0 }}><span style={{ color: C.textDim }}>{x.date ? formatDate(x.date) : ''}</span> {x.text}{x.state && <span style={{ color: C.amber }}> · {x.state}</span>}</span>
-          <span style={{ fontVariantNumeric: 'tabular-nums', flex: '0 0 auto' }}>{money(x.amount)}</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', flex: '0 0 auto' }}>{fmt(x.amount)}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+// The artist's view of a budget, the same shape artist_portal() returns.
+export function artistBudgetsFor(artistId, overheads = [], ledger = [], invoices = []) {
+  return overheads.filter(o => o.kind === 'artist' && o.artistId === artistId && o.sentToArtistAt && ['Active', 'Closed'].includes(o.status)).map(o => ({
+    id: o.id, title: o.title, status: o.status, total: o.total, releaseIds: o.releaseIds || [], parentId: o.parentId || '', closedAt: o.closedAt || '', sentToArtistAt: o.sentToArtistAt,
+    categories: (o.categories || []).map(c => ({ id: c.id, category: c.category, allocated: c.allocated })),
+    items: [
+      ...ledger.filter(l => l.type === 'expense' && l.overheadId === o.id && (l.approvalStatus || 'Approved') === 'Approved').map(l => ({ id: l.id, categoryId: l.categoryId || '', date: l.date, text: l.description || l.category, amount: l.amount })),
+      ...invoices.filter(i => i.kind === 'expense' && i.overheadId === o.id && ['Pay Approved', 'Paid'].includes(i.status)).map(i => ({ id: i.id, categoryId: i.categoryId || '', date: String(i.submittedAt || '').slice(0, 10), text: 'Expense claim: ' + i.title, amount: i.amount })),
+    ],
+  }));
+}
+
+// Artist portal: their budgets, per release then per category, with what's been spent.
+export function ArtistBudgets({ budgets = [], catalog = [], fmt = money }) {
+  if (!budgets.length) return null;
+  return (
+    <div className="flex flex-col gap-4 mb-6">
+      {budgets.map(b => {
+        const spent = sum(b.items, x => x.amount);
+        const releases = (b.releaseIds || []).map(id => (catalog.find(r => r.id === id) || {}).title).filter(Boolean);
+        return (
+          <section key={b.id} aria-label={b.title} className="rounded p-5" style={{ background: C.panel }}>
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <h2 style={{ fontWeight: 700, fontSize: 19, letterSpacing: '-0.02em' }}>{b.title}</h2>
+              {b.status === 'Closed' && <Badge>Closed{b.closedAt ? ' ' + formatDate(String(b.closedAt).slice(0, 10)) : ''}</Badge>}
+            </div>
+            {releases.length > 0 && <div className="text-sm mt-0.5" style={{ color: C.textDim }}>{releases.join(', ')}</div>}
+            <dl className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+              {[['Budget', b.total, C.text], ['Spent', spent, C.amber], ['Left', b.total - spent, spent > b.total ? C.red : C.teal]].map(([k, v, col]) => (
+                <div key={k}><dt className="text-sm" style={{ color: C.textDim }}>{k}</dt><dd style={{ fontWeight: 700, fontSize: 20, color: col, fontVariantNumeric: 'tabular-nums' }}>{fmt(v)}</dd></div>
+              ))}
+            </dl>
+            <ul className="mt-4 flex flex-col gap-3">
+              {b.categories.map(c => {
+                const its = b.items.filter(x => x.categoryId === c.id);
+                const cs = sum(its, x => x.amount);
+                const pct = c.allocated > 0 ? Math.min(100, Math.round(cs / c.allocated * 100)) : 0;
+                return (
+                  <li key={c.id}>
+                    <div className="flex items-baseline justify-between gap-3"><span style={{ fontWeight: 600 }}>{c.category}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{fmt(cs)} of {fmt(c.allocated)}</span></div>
+                    <div className="mt-1.5" style={{ height: 6, borderRadius: 9999, background: 'var(--fill)', overflow: 'hidden' }}><div style={{ width: pct + '%', height: '100%', background: cs > c.allocated ? C.red : C.amberFill }} /></div>
+                    <AttachedItems fmt={fmt} items={its.map(x => ({ ...x, amount: Number(x.amount) || 0 }))} />
+                  </li>
+                );
+              })}
+              {b.items.some(x => !x.categoryId) && <li><span style={{ fontWeight: 600 }}>Other spend</span><AttachedItems fmt={fmt} items={b.items.filter(x => !x.categoryId).map(x => ({ ...x, amount: Number(x.amount) || 0 }))} /></li>}
+            </ul>
+            <p className="text-sm mt-4" style={{ color: C.textDim }}>Only money actually spent is recouped from your earnings, never the unspent budget.</p>
+          </section>
+        );
+      })}
+    </div>
   );
 }

@@ -22,7 +22,7 @@ import { AccessRequestsSection } from './sections/AccessRequests.jsx';
 import { ArtistPortalShell } from './sections/ArtistPortal.jsx';
 import { ArtistRequestsSection } from './sections/ArtistRequests.jsx';
 import { BackupSection } from './sections/Backup.jsx';
-import { BudgetSection, canApproveBudgets } from './sections/Budget.jsx';
+import { BudgetSection, artistBudgetsFor, canApproveBudgets } from './sections/Budget.jsx';
 import { CatalogSection } from './sections/Catalog.jsx';
 import { ImportSection } from './sections/Import.jsx';
 import { invoiceStage, invoiceReviewers, InvoicesSection } from './sections/Invoices.jsx';
@@ -674,7 +674,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     const shownPayouts = payouts.filter(p => p.artistSlug === slug(artist.name) && p.sentAt);
     const shownLedger = approvedLedger.filter(l => lastPub && String(l.date || '').slice(0, 7) <= lastPub);
     const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} budgets={artistBudgetsFor(artist.id, overheads, ledger, invoices)} labelSettings={labelSettings} onLogout={logout} />;
   }
 
   return (

@@ -20,7 +20,7 @@ const ARTIST_URL = Deno.env.get('ARTIST_URL') ?? 'https://artist.imssrecords.com
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice' | 'repRelease' | 'repInvoice'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice' | 'repRelease' | 'repInvoice' | 'budgetSent'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -89,7 +89,7 @@ ${quote ? `<div class="q" style="margin:18px 0;padding:14px 16px;background:#f5f
 // Every email is also an in-app notification. The topic lets each side open the right screen.
 function topicOf(subject: string) {
   const s = subject.toLowerCase();
-  return s.includes('notice') ? 'notice' : s.includes('deal') ? 'deal' : s.includes('earnings') ? 'earnings' : s.includes('statement') ? 'statement'
+  return s.includes('budget') ? 'budget' : s.includes('notice') ? 'notice' : s.includes('deal') ? 'deal' : s.includes('earnings') ? 'earnings' : s.includes('statement') ? 'statement'
     : s.includes('invoice') || s.includes('claim') ? 'invoice' : s.includes('submission') || s.includes('release') ? 'submission' : s.includes('request') ? 'request' : '';
 }
 async function notifyInApp(recipients: string[], subject: string) {
@@ -219,6 +219,15 @@ async function handleEvent(ev: Event) {
     }
     await audit('sent a notice', `"${item.title}" to ${artists.length + team.length} ${artists.length + team.length === 1 ? 'person' : 'people'}`);
     return results.length ? results : { skipped: 'no one in the audience has an email' };
+  }
+
+  // Admin or Legal sent a budget to the artist's dashboard: a bell notification, no email.
+  if (ev.type === 'budgetSent') {
+    if (item.kind !== 'artist') return { skipped: 'label budget' };
+    const a = roster.find(r => r.id === item.artistId);
+    const email = lower(a?.email);
+    if (!email.includes('@')) return { skipped: 'no artist email' };
+    return inAppOnly([email], `Your budget for ${item.title} is in your dashboard`);
   }
 
   // A PM confirmed a release for, or sent an invoice to, the artist's label rep.

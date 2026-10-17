@@ -54,6 +54,7 @@ export default function ArtistApp({ signOut }) {
       invoices={data.invoices || []} updateInvoices={adder('invoices')}
       statementFiles={data.statementFiles || []}
       dealChanges={data.dealChanges || []}
+      budgets={data.budgets || []}
       replyToSubmission={async (id, message) => {
         const { error: err } = await supabase.rpc('artist_reply_submission', { submission_id: id, message });
         if (err) { setError('Could not send your reply. Please try again.'); return; }
