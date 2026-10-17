@@ -16,8 +16,20 @@ import { Badge, Btn, EmptyState, Field, Input, KPICard, SectionHeader, Select, T
 
 // Budget types and their sub-categories. Any sub-category can also be named freely.
 export const BUDGET_TYPES = {
-  Advance: ['Advance payment', 'Recording / Studio', 'Mixing & mastering', 'Legal / Other'],
-  'Marketing Advance': ['Marketing / Ads', 'Radio', 'TV', 'PR', 'Video production', 'Tour support', 'Distro / Software & tools'],
+  Advance: [
+    'Artist cash advance', 'Signing bonus', 'Living allowance or stipend', 'Recording and studio costs', 'Producer fees',
+    'Songwriter and co-writer fees', 'Featured artist fees', 'Session musicians and vocalists', 'Mixing, mastering, and engineering',
+    'Sample clearances and interpolation fees', 'Song acquisition or licensing', 'Equipment and software', 'Rehearsal and creative development',
+    'Travel and accommodation for recording', 'Legal and accounting fees, if covered by the deal', 'Minimum guarantee',
+  ],
+  'Marketing Advance': [
+    'Digital advertising and paid media', 'PR and press campaigns', 'Radio promotion', 'Playlist pitching', 'Influencer and creator campaigns',
+    'Social media management and content campaigns', 'Music videos, lyric videos, and visualizers', 'Photography, artwork, and creative direction',
+    'Website, landing pages, and email marketing', 'Fan acquisition and audience data campaigns', 'Physical promotion, posters, and billboards',
+    'Release parties, listening events, and showcases', 'Tour marketing and tour support', 'Distribution setup and release delivery',
+    'Physical manufacturing and fulfillment', 'Merchandise design and promotion', 'International marketing',
+    'Marketing agencies, consultants, and campaign staff', 'Analytics, research, and campaign reporting',
+  ],
 };
 // "Advance · Recording / Studio"; older categories without a type show their name.
 export const catLabel = c => (c.type ? c.type + ' · ' : '') + c.category;
