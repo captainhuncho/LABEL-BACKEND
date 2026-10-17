@@ -64,7 +64,9 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
   const canApproveProfile = isAdmin || sessionName === artist.productManager;
   const myPendingProfileRequests = profileRequests.filter(r => r.artistId === artist.id && r.status === 'Pending');
   function approveProfileRequest(req) {
-    if (update) update(roster.map(a => a.id === artist.id ? { ...a, ...req.changes } : a));
+    // The sign-in email never changes through an artist's request; the team sets it on the Roster.
+    const { email: _ignored, ...changes } = req.changes || {};
+    if (update) update(roster.map(a => a.id === artist.id ? { ...a, ...changes } : a));
     if (updateProfileRequests) updateProfileRequests(profileRequests.map(r => r.id === req.id ? { ...r, status: 'Approved', reviewedBy: sessionName, reviewedAt: new Date().toISOString() } : r));
   }
   function rejectProfileRequest(req) {

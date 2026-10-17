@@ -800,7 +800,7 @@ export const safeLink = u => /^https:\/\//i.test(String(u || '').trim()) ? Strin
 export const PROFILE_EDITABLE_FIELDS = [
   { key: 'photoUrl', label: 'Profile photo' },
   { key: 'bio', label: 'Bio' },
-  { key: 'email', label: 'Contact email' },
+  // Email is the artist's sign-in, so only the team changes it (on the Roster).
   ...SOCIAL_LINKS,
 ];
 

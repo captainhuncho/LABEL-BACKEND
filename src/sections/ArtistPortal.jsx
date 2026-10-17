@@ -1022,7 +1022,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <section aria-label="About you" className="mb-6">
                 <h3 className="mb-3" style={{ fontWeight: 600, fontSize: 15 }}>About you</h3>
                 <div className="imss-form-grid gap-3">
-                  <Field label="Contact email" full><Input type="email" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></Field>
+                  <Field label="Sign-in email" full><Input type="email" value={artist.email || ''} disabled readOnly /><div style={{ color: C.textDim, fontSize: 13, marginTop: 6 }}>To change your sign-in email, contact your Product Manager.</div></Field>
                   <Field label="Bio" full><TextArea rows={4} value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="A short bio the label can use for press and pitches." /></Field>
                 </div>
               </section>
