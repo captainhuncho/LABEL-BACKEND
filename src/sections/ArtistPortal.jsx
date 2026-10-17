@@ -19,7 +19,7 @@ import { streamsFromRevenue } from '../streams.js';
 import { PasskeySettings } from '../Passkeys.jsx';
 import { TwoFactorSettings } from '../Mfa.jsx';
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
   const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
   // A rights return shows to the artist only once Admin or Legal has sent it to their dashboard.
@@ -366,6 +366,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const myPendingRequest = myProfileRequests.find(r => r.status === 'Pending');
   const [profileForm, setProfileForm] = useState({ photoUrl: artist.photoUrl || '', bio: artist.bio || '', email: artist.email || '', ...Object.fromEntries(SOCIAL_LINKS.map(l => [l.key, artist[l.key] || ''])) });
   const profileInputRef = useRef(null);
+  const [profileSaved, setProfileSaved] = useState('');
 
   function handleProfilePhoto(e) {
     const file = e.target.files && e.target.files[0];
@@ -379,7 +380,12 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
       const proposed = f.link ? (safeLink(profileForm[f.key]) || (profileForm[f.key] ? artist[f.key] || '' : '')) : (profileForm[f.key] || '');
       if (proposed !== current) changes[f.key] = proposed;
     });
-    if (Object.keys(changes).length === 0) return;
+    if (Object.keys(changes).length === 0) { setProfileSaved('No changes to save.'); return; }
+    if (saveProfile) {
+      setProfileSaved('Saving…');
+      saveProfile(changes).then(ok => setProfileSaved(ok ? 'Saved.' : 'Couldn’t save. Check the links start with https:// and try again.'));
+      return;
+    }
     const request = { id: uid(), artistId: artist.id, changes, submittedAt: new Date().toISOString(), status: 'Pending', reviewedBy: '', reviewedAt: '' };
     updateProfileRequests([request, ...profileRequests]);
     if (profileInputRef.current) profileInputRef.current.value = '';
@@ -985,7 +991,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             </section>
             <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
               <div className="text-sm" style={{ color: C.textDim }}>
-                You can update your photo, bio, and contact email here. Changes are reviewed by your Product Manager or Admin before they go live — everything else on your profile (royalty rate, contract terms, team assignments) is managed by the label directly.
+                {saveProfile ? 'Update your photo, bio and links here; they save straight away. Your sign-in email, royalty rate, contract terms and team are managed by the label.' : 'You can update your photo, bio and links here. Changes are reviewed by your Product Manager or Admin before they go live. Everything else on your profile (royalty rate, contract terms, team assignments) is managed by the label directly.'}
               </div>
             </div>
 
@@ -1008,7 +1014,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
             <div className="rounded p-6 mb-6" style={{ background: C.panel }}>
               <h2 style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>Edit your profile</h2>
-              <p className="mt-1 mb-5" style={{ color: C.textDim, fontSize: 14 }}>Changes go to the label for review before they show.</p>
+              <p className="mt-1 mb-5" style={{ color: C.textDim, fontSize: 14 }}>{saveProfile ? 'Changes save as soon as you press Save.' : 'Changes go to the label for review before they show.'}</p>
 
               <section aria-label="Photo" className="flex items-center gap-4 mb-6">
                 <Avatar name={artist.name} photoUrl={profileForm.photoUrl} size={72} />
@@ -1024,7 +1030,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <section aria-label="About you" className="mb-6">
                 <h3 className="mb-3" style={{ fontWeight: 600, fontSize: 15 }}>About you</h3>
                 <div className="imss-form-grid gap-3">
-                  <Field label="Sign-in email" full><Input type="email" value={artist.email || ''} disabled readOnly /><div style={{ color: C.textDim, fontSize: 13, marginTop: 6 }}>To change your sign-in email, contact your Product Manager.</div></Field>
+                  <Field label="Sign-in email" full><div aria-readonly="true" title="Only the label can change this" style={{ background: 'transparent', border: '1px dashed ' + C.border, borderRadius: 12, padding: '10px 14px', color: C.textDim, cursor: 'not-allowed', userSelect: 'all' }}>{artist.email || '—'}</div><div style={{ color: C.textDim, fontSize: 13, marginTop: 6 }}>To change your sign-in email, contact your Product Manager.</div></Field>
                   <Field label="Bio" full><TextArea rows={4} value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="A short bio the label can use for press and pitches." /></Field>
                 </div>
               </section>
@@ -1040,7 +1046,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               ))}
 
               <div className="flex items-center justify-end gap-3 pt-4" style={{ borderTop: '1px solid ' + C.border }}>
-                <Btn variant="primary" onClick={submitProfileRequest}>Submit for review</Btn>
+                {profileSaved && <span role="status" className="text-sm" style={{ color: /Couldn|No changes/.test(profileSaved) ? C.amber : C.teal }}>{profileSaved}</span>}
+                <Btn variant="primary" onClick={submitProfileRequest}>{saveProfile ? 'Save' : 'Submit for review'}</Btn>
               </div>
             </div>
 

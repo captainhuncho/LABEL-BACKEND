@@ -67,6 +67,12 @@ export default function ArtistApp({ signOut }) {
         load();
       }}
       onLogout={signOut}
+      saveProfile={async changes => {
+        const { error: err } = await supabase.rpc('artist_update_profile', { changes });
+        if (err) return false;
+        load();
+        return true;
+      }}
     /></>
   );
 }
