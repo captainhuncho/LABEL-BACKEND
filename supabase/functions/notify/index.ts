@@ -302,6 +302,11 @@ async function handleEvent(ev: Event) {
         page('Your invoice wasn’t approved', [`Hi ${esc(artistName)}, your invoice <b>${esc(item.title)}</b> (${amount}) wasn’t approved.`],
           { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
     }
+    if (item.status === 'Needs changes') {
+      return send([artistEmail], `Your invoice “${item.title}” needs changes`,
+        page('Your invoice needs changes', [`Hi ${esc(artistName)}, the label returned <b>${esc(item.title)}</b> (${amount}) so you can fix it.`, 'Open it in your portal, make the change and press Resubmit.'],
+          { label: 'Open your portal', url: `${APP_URL}/invoices` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
+    }
     if (item.status === 'Paid') {
       return send([artistEmail], `Paid: your invoice “${item.title}” (${amount})`,
         page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }), replyKey, 'invoice');

@@ -55,6 +55,14 @@ export default function ArtistApp({ signOut }) {
       statementFiles={data.statementFiles || []}
       dealChanges={data.dealChanges || []}
       budgets={data.budgets || []}
+      resubmitInvoice={async (id, changes) => {
+        // Fixing a returned invoice is like submitting one: it needs a fresh passkey or code.
+        if (!(await askStepUp())) { load(); return; }
+        const { error: err } = await supabase.rpc('artist_resubmit_invoice', { invoice_id: id, changes });
+        if (err) { setError('Could not resubmit that invoice. Please try again.'); return; }
+        logActivity('resubmitted an invoice', changes.title || '');
+        load();
+      }}
       replyToSubmission={async (id, message) => {
         const { error: err } = await supabase.rpc('artist_reply_submission', { submission_id: id, message });
         if (err) { setError('Could not send your reply. Please try again.'); return; }

@@ -18,11 +18,11 @@ import { licenseFor, rightsLine } from '../licenses.js';
 import { streamsFromRevenue } from '../streams.js';
 import { PasskeySettings } from '../Passkeys.jsx';
 import { MobileNav } from '../MobileNav.jsx';
-import { ArtistBudgets } from './Budget.jsx';
+import { ArtistBudgets, catLabel, categoryChoices } from './Budget.jsx';
 import { usePageUrl } from '../pageUrl.js';
 import { TwoFactorSettings } from '../Mfa.jsx';
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [] }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [], resubmitInvoice = null }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
   const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
   // A rights return shows to the artist only once Admin or Legal has sent it to their dashboard.
@@ -196,7 +196,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const myInvoices = useMemo(() => [...invoices.filter(i => i.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [invoices, artist.id]);
   const myExpenseClaims = myInvoices.filter(i => i.kind === 'expense');
   const invoicesDue = myInvoices.filter(i => invoiceStatus(i) === 'Pay Approved').reduce((t, i) => t + (Number(i.amount) || 0), 0);
-  const emptyInvoice = { kind: 'expense', title: '', invoiceNumber: '', invoiceDate: todayStr(), amount: '', payTo: '', details: '', attachment: '', attachmentName: '' };
+  const emptyInvoice = { kind: 'expense', title: '', invoiceNumber: '', invoiceDate: todayStr(), amount: '', payTo: '', details: '', attachment: '', attachmentName: '', overheadId: '', categoryId: '' };
+  const [resubmittingId, setResubmittingId] = useState(null); // a returned invoice being fixed
   const [invoiceForm, setInvoiceForm] = useState(emptyInvoice);
   const [invoiceError, setInvoiceError] = useState('');
   const [invoiceSent, setInvoiceSent] = useState(false);
@@ -212,6 +213,13 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     const amount = Math.round(parseFloat(invoiceForm.amount) * 100) / 100;
     if (!invoiceForm.title.trim()) { setInvoiceError('Add a short description of what the invoice is for.'); return; }
     if (!(amount > 0)) { setInvoiceError('Enter the amount in USD, for example 120.50.'); return; }
+    if (resubmittingId) {
+      const changes = { title: invoiceForm.title.trim(), amount, invoiceDate: invoiceForm.invoiceDate, invoiceNumber: invoiceForm.invoiceNumber, payTo: invoiceForm.payTo, details: invoiceForm.details, attachment: invoiceForm.attachment, attachmentName: invoiceForm.attachmentName, overheadId: invoiceForm.overheadId, categoryId: invoiceForm.categoryId };
+      if (resubmitInvoice) resubmitInvoice(resubmittingId, changes);
+      else updateInvoices(invoices.map(i => i.id !== resubmittingId ? i : { ...i, ...changes, status: 'PM Approval', reviewNote: '', history: [...(i.history || []), { at: new Date().toISOString(), by: artist.name, action: 'resubmitted', from: 'Needs changes', to: 'PM Approval', note: '' }] }));
+      setResubmittingId(null); setInvoiceForm(emptyInvoice); setInvoiceError(''); setInvoiceSent(true);
+      return;
+    }
     const invoice = { id: uid(), artistId: artist.id, ...invoiceForm, title: invoiceForm.title.trim(), amount, status: 'PM Approval', history: [], submittedAt: new Date().toISOString() };
     updateInvoices([invoice, ...invoices]);
     setInvoiceForm(emptyInvoice); setInvoiceError(''); setInvoiceSent(true);
@@ -1549,6 +1557,20 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 <Field label="Invoice date"><Input type="date" value={invoiceForm.invoiceDate} onChange={e => setInvoiceForm(f => ({ ...f, invoiceDate: e.target.value }))} /></Field>
                 <Field label="Invoice number (optional)"><Input value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="e.g. AC-2026-004" /></Field>
                 <Field label="Pay to (name on the account)"><Input value={invoiceForm.payTo} onChange={e => setInvoiceForm(f => ({ ...f, payTo: e.target.value }))} placeholder="Your name or company" /></Field>
+                {budgets.filter(b => b.status === 'Active').length > 0 && <>
+                  <Field label="Budget (optional)">
+                    <Select value={invoiceForm.overheadId} onChange={e => setInvoiceForm(f => ({ ...f, overheadId: e.target.value, categoryId: '' }))}>
+                      <option value="">Not part of a budget</option>
+                      {budgets.filter(b => b.status === 'Active').map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                    </Select>
+                  </Field>
+                  {invoiceForm.overheadId && <Field label="What it’s for">
+                    <Select value={invoiceForm.categoryId} onChange={e => setInvoiceForm(f => ({ ...f, categoryId: e.target.value }))}>
+                      <option value="">Not sure (the label will choose)</option>
+                      {categoryChoices(budgets.find(b => b.id === invoiceForm.overheadId) || {}).map(c => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
+                    </Select>
+                  </Field>}
+                </>}
                 <Field label="Details (optional)" full><TextArea rows={3} value={invoiceForm.details} onChange={e => setInvoiceForm(f => ({ ...f, details: e.target.value }))} placeholder="Anything the label needs to know: who agreed it, what it covers." /></Field>
                 <Field label={invoiceForm.kind === 'expense' ? 'Receipt (PDF or photo, up to 10 MB)' : 'Invoice file (PDF or photo, up to 10 MB, optional)'} full>
                   <input ref={invoiceFileRef} type="file" accept="application/pdf,image/*" onChange={handleInvoiceFile} className="text-sm" style={{ color: C.textDim }} />
@@ -1556,7 +1578,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               </div>
               {invoiceError && <div className="text-sm mt-3" role="alert" style={{ color: C.red }}>{invoiceError}</div>}
               {invoiceSent && !invoiceError && <div className="text-sm mt-3" role="status" style={{ color: C.teal }}>Invoice sent. It’s listed below while the label reviews it.</div>}
-              <div className="mt-4"><Btn variant="primary" type="submit"><FileText size={14} /> Submit invoice</Btn></div>
+              <div className="mt-4 flex gap-2"><Btn variant="primary" type="submit"><FileText size={14} /> {resubmittingId ? 'Resubmit invoice' : 'Submit invoice'}</Btn>{resubmittingId && <Btn variant="ghost" onClick={() => { setResubmittingId(null); setInvoiceForm(emptyInvoice); }}>Cancel</Btn>}</div>
             </form>
 
             <h2 className="mb-3" style={{ fontWeight: 600, fontSize: 17 }}>Your invoices</h2>
@@ -1579,6 +1601,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       </tr>
                       {openInvoiceId === i.id && (
                         <tr><td colSpan={6} style={{ padding: 16, borderBottom: '1px solid ' + C.border }}>
+                          {i.status === 'Needs changes' && (
+                            <div className="rounded p-3 mb-3" style={{ background: C.redSoft }}>
+                              <div style={{ fontWeight: 600 }}>The label asked for changes</div>
+                              {i.reviewNote && <div className="text-sm mt-1">{i.reviewNote}</div>}
+                              <div className="mt-2"><Btn variant="primary" onClick={() => { setResubmittingId(i.id); setInvoiceForm({ ...emptyInvoice, ...Object.fromEntries(Object.keys(emptyInvoice).map(k => [k, i[k] ?? emptyInvoice[k]])), amount: String(i.amount ?? '') }); setInvoiceSent(false); window.scrollTo && document.querySelector('.imss-content')?.scrollTo({ top: 0, behavior: 'smooth' }); }}>Edit and resubmit</Btn></div>
+                            </div>
+                          )}
+                          {i.correctedNote && i.status !== 'Needs changes' && <div className="text-sm mb-3" style={{ color: C.textDim }}>The label corrected this invoice: {i.correctedNote}</div>}
                           <InvoiceThread inv={i} artistLabel={artist.name} />
                           {invoiceStatus(i) !== 'Paid' && (
                             <div className="mt-3">

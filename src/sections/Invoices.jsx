@@ -44,11 +44,12 @@ export function invoiceReviewers(inv, roster, staff, workflow) {
 export function artistInvoiceStatus(inv) {
   const st = invoiceStatus(inv);
   if (st === 'Paid' || st === 'Rejected') return st;
+  if (st === 'Needs changes') return 'Needs your changes';
   if (st === 'Pay Approved') return 'Approved for payment';
   const step = INVOICE_FLOW.indexOf(st);
   return step > 0 ? 'In review · step ' + (step + 1) + ' of ' + INVOICE_FLOW.length : 'Submitted';
 }
-export const INVOICE_TONES = { 'PM Approval': 'amber', 'Finance Queue': 'amber', 'LH Queue': 'amber', 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red', Pending: 'amber', Approved: 'teal' };
+export const INVOICE_TONES = { 'PM Approval': 'amber', 'Finance Queue': 'amber', 'LH Queue': 'amber', 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red', 'Needs changes': 'red', Pending: 'amber', Approved: 'teal' };
 
 // Messages between the label and the artist on one invoice (in app or by email).
 export function InvoiceThread({ inv, artistLabel }) {
@@ -78,6 +79,32 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [message, setMessage] = useState('');
   const [moveTo, setMoveTo] = useState('');
+  const [returnNote, setReturnNote] = useState('');
+  const [fixing, setFixing] = useState(null); // { id, ...fields } while correcting an invoice
+  // The artist's PM corrects or returns an invoice up to Pay Approved; an Admin at any stage before Paid.
+  const canFix = inv => canEdit && !['Paid', 'Rejected', 'Needs changes'].includes(invoiceStatus(inv))
+    && (isAdmin || (pmOf(inv) && pmOf(inv) === session.name && invoiceStatus(inv) !== 'Pay Approved'));
+  const FIX_FIELDS = [['title', 'Description'], ['amount', 'Amount'], ['invoiceDate', 'Invoice date'], ['invoiceNumber', 'Invoice number'], ['payTo', 'Pay to'], ['details', 'Details']];
+  function saveFix(inv) {
+    const amount = Math.round(parseFloat(fixing.amount) * 100) / 100;
+    if (!String(fixing.title).trim()) { setError('The description can’t be empty.'); return; }
+    if (!(amount > 0)) { setError('Enter a valid amount.'); return; }
+    const next = { ...fixing, amount, title: String(fixing.title).trim() };
+    const diffs = FIX_FIELDS.filter(([k]) => String(inv[k] ?? '') !== String(next[k] ?? '')).map(([k, label]) => label + (k === 'amount' ? ' $' + Number(inv.amount || 0).toFixed(2) + ' → $' + amount.toFixed(2) : ' changed'));
+    if (!diffs.length) { setFixing(null); return; }
+    const entry = { at: new Date().toISOString(), by: session.name, action: 'corrected', from: invoiceStatus(inv), to: invoiceStatus(inv), note: diffs.join('; ') + (fixing.why ? ' (' + fixing.why + ')' : '') };
+    logActivity('corrected an invoice', inv.title + ': ' + entry.note, inv.artistId);
+    update(invoices.map(i => i.id !== inv.id ? i : { ...i, ...Object.fromEntries(FIX_FIELDS.map(([k]) => [k, next[k]])), correctedNote: entry.note, history: [...(i.history || []), entry] }));
+    setFixing(null); setError('');
+  }
+  function returnToArtist(inv) {
+    const text = returnNote.trim();
+    if (!text) { setError('Say what the artist needs to fix. They see this.'); return; }
+    const entry = { at: new Date().toISOString(), by: session.name, action: 'returned to artist', from: invoiceStatus(inv), to: 'Needs changes', note: text };
+    logActivity('returned an invoice to the artist', inv.title + ': ' + text, inv.artistId);
+    update(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'Needs changes', reviewNote: text, history: [...(i.history || []), entry] }));
+    setReturnNote(''); setError('');
+  }
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
   const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
   const pmOf = inv => (roster.find(a => a.id === inv.artistId) || {}).productManager || '';
@@ -132,7 +159,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
     const next = { ...workflow, [key]: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
     updateLabelSettings({ ...labelSettings, invoiceWorkflow: next });
   }
-  const tabs = [['all', 'All', scoped.length], ['mine', 'My queue', mine.length], ...INVOICE_STAGES.map(st => [st.status, st.status, scoped.filter(i => invoiceStatus(i) === st.status).length]), ['Paid', 'Paid', 0], ['Rejected', 'Rejected', 0]];
+  const tabs = [['all', 'All', scoped.length], ['mine', 'My queue', mine.length], ...INVOICE_STAGES.map(st => [st.status, st.status, scoped.filter(i => invoiceStatus(i) === st.status).length]), ['Needs changes', 'Needs changes', scoped.filter(i => i.status === 'Needs changes').length], ['Paid', 'Paid', 0], ['Rejected', 'Rejected', 0]];
   const activeStaff = staff.filter(m => (m.status || 'Active') !== 'Inactive');
 
   return (
@@ -263,6 +290,26 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                               </div>
                             )}
                           </section>
+                          {canFix(inv) && (
+                            <section className="imss-sub-wide">
+                              <h3 className="imss-sub-h">Correct or return</h3>
+                              {fixing && fixing.id === inv.id ? (
+                                <div className="imss-form-grid gap-3">
+                                  {FIX_FIELDS.map(([k, label]) => <Field key={k} label={label} full={k === 'details' || k === 'title'}>{k === 'details' ? <TextArea rows={2} value={fixing[k] || ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })} /> : <input className="w-full" type={k === 'invoiceDate' ? 'date' : 'text'} inputMode={k === 'amount' ? 'decimal' : undefined} value={fixing[k] ?? ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })} style={{ background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} />}</Field>)}
+                                  <Field label="Why (shown in the history)" full><input className="w-full" value={fixing.why || ''} onChange={e => setFixing({ ...fixing, why: e.target.value })} placeholder="e.g. Receipt total is $120" style={{ background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} /></Field>
+                                  <div className="imss-span-2 flex gap-2"><Btn variant="primary" onClick={() => saveFix(inv)}>Save correction</Btn><Btn variant="ghost" onClick={() => setFixing(null)}>Cancel</Btn></div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex gap-2 flex-wrap"><Btn variant="ghost" onClick={() => { setFixing({ id: inv.id, ...Object.fromEntries(FIX_FIELDS.map(([k]) => [k, inv[k] ?? ''])), amount: String(inv.amount ?? ''), why: '' }); setError(''); }}>Edit details</Btn></div>
+                                  <div className="text-xs mt-2 mb-3" style={{ color: C.textDim }}>Edits are logged in the history and the artist sees what changed. The invoice carries on through the queues as usual.</div>
+                                  <Field label="Return to the artist: what needs fixing?"><TextArea rows={2} value={returnNote} onChange={e => { setReturnNote(e.target.value); setError(''); }} placeholder="e.g. Receipt missing, or the amount doesn’t match it" /></Field>
+                                  <div className="mt-2"><Btn variant="danger" onClick={() => returnToArtist(inv)}>Return to artist</Btn></div>
+                                  <div className="text-xs mt-1" style={{ color: C.textDim }}>They get an email, fix it in their portal and resubmit. It comes back to PM Approval.</div>
+                                </>
+                              )}
+                            </section>
+                          )}
                           {canEdit && inv.kind === 'expense' && (() => {
                             // Attach an expense claim to the artist's budget. Going over needs someone who can approve budgets.
                             const choices = overheads.filter(o => o.kind === 'artist' && o.artistId === inv.artistId && (o.status === 'Active' || o.id === inv.overheadId));
