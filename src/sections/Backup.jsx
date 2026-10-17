@@ -28,7 +28,7 @@ async function liveSections() {
   return Object.fromEntries(data.map(r => [r.key, r.value]));
 }
 
-export function BackupSection({ allData, updaters }) {
+export function BackupSection({ allData, updaters, onClearAll = null, onReseed = null }) {
   const [confirmRestore, setConfirmRestore] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -161,6 +161,35 @@ export function BackupSection({ allData, updaters }) {
           </div>
         )}
       </div>
+
+      {(onClearAll || onReseed) && <TestCopyTools onClearAll={onClearAll} onReseed={onReseed} />}
+    </div>
+  );
+}
+
+// Local test copy only (never shown when connected to the shared database):
+// wipe or reseed this browser's sample data, after typing the word to confirm.
+function TestCopyTools({ onClearAll, onReseed }) {
+  const [word, setWord] = useState('');
+  const [which, setWhich] = useState(null); // 'CLEAR' | 'RESET'
+  const go = () => { if (which === 'CLEAR') onClearAll(); else onReseed(); setWhich(null); setWord(''); };
+  return (
+    <div className="rounded p-5 mt-6" style={{ background: C.panel, border: '1px dashed ' + C.border }}>
+      <div style={{ fontWeight: 600 }} className="mb-1">Test copy</div>
+      <div className="text-sm mb-3" style={{ color: C.textDim }}>Only on the local test copy, never on the live site. Changes this browser’s sample data, nothing shared.</div>
+      {!which ? (
+        <div className="flex gap-2 flex-wrap">
+          {onReseed && <Btn variant="ghost" onClick={() => setWhich('RESET')}>Reset to sample data</Btn>}
+          {onClearAll && <Btn variant="ghost" onClick={() => setWhich('CLEAR')}>Clear all data</Btn>}
+        </div>
+      ) : (
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-sm" style={{ flex: '1 1 100%' }}>Type <b>{which}</b> to {which === 'CLEAR' ? 'clear all test data' : 'replace it with fresh sample data'}.</span>
+          <input value={word} onChange={e => setWord(e.target.value.toUpperCase())} aria-label={'Type ' + which + ' to confirm'} autoFocus style={{ flex: '1 1 160px', background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} />
+          <Btn variant={which === 'CLEAR' ? 'danger' : 'primary'} onClick={go} disabled={word !== which}>{which === 'CLEAR' ? 'Clear' : 'Reset'}</Btn>
+          <Btn variant="ghost" onClick={() => { setWhich(null); setWord(''); }}>Cancel</Btn>
+        </div>
+      )}
     </div>
   );
 }

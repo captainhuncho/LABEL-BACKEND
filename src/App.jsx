@@ -40,7 +40,7 @@ import { SubmissionsSection } from './sections/Submissions.jsx';
 import { TasksSection } from './sections/Tasks.jsx';
 import { TeamSection } from './sections/Team.jsx';
 
-function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmReset, onReseed, confirmReseed, setConfirmReseed, sessionName, onLogout }) {
+function Sidebar({ active, setActive, nav, sessionName, onLogout }) {
   return (
     <div className="imss-sidebar shrink-0" style={{ borderColor: C.border, background: C.panel }}>
       <div className="imss-desktop-only px-5 pt-6 pb-4">
@@ -84,31 +84,6 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
           </div>
         )}
         {sessionName && <button onClick={() => setActive('account')} className="block mb-3" style={{ color: active === 'account' ? C.amber : C.textDim }}>Account &amp; security</button>}
-        {/* Wiping or reseeding only makes sense on the local test copy, never on shared live data. */}
-        {!supabase && <>
-        {confirmReset ? (
-          <span className="inline-flex flex-col gap-1">
-            Clear all data?
-            <span className="inline-flex gap-2">
-              <button onClick={onClearAll} style={{ color: C.red, fontWeight: 600 }}>Yes, clear</button>
-              <button onClick={() => setConfirmReset(false)} style={{ color: C.textDim }}>Cancel</button>
-            </span>
-          </span>
-        ) : (
-          <button onClick={() => setConfirmReset(true)} style={{ color: C.textFaint }}>Clear all data</button>
-        )}
-        {confirmReseed ? (
-          <span className="inline-flex flex-col gap-1 mt-2">
-            Overwrite with fresh sample data?
-            <span className="inline-flex gap-2">
-              <button onClick={onReseed} style={{ color: C.amber, fontWeight: 600 }}>Yes, reset</button>
-              <button onClick={() => setConfirmReseed(false)} style={{ color: C.textDim }}>Cancel</button>
-            </span>
-          </span>
-        ) : (
-          <button onClick={() => setConfirmReseed(true)} className="block mt-2" style={{ color: C.textFaint }}>Reset to sample data</button>
-        )}
-        </>}
       </div>
     </div>
   );
@@ -406,8 +381,6 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     return () => clearTimeout(t);
   }, [focus]);
   const [error, setError] = useState('');
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [confirmReseed, setConfirmReseed] = useState(false);
   const [session, setSession] = useState(null);
   const sectionSetters = useRef({});
   useEffect(() => { if (session && session.mode === 'team') logSignIn('team', session.name); else if (session && session.mode === 'artist') { const a = roster.find(x => x.id === session.artistId); if (a) logSignIn('artist', a.name); } }, [session && session.mode, session && session.name]);
@@ -582,7 +555,6 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     updateRoster([]); updateCatalog([]); updateRevenue([]); updateStreams([]); updatePayouts([]);
     updateMasterGross([]); updateLabelSettings(SEED_LABEL_SETTINGS);
     updateTasks([]); updateLedger([]); updateNotices([]); updateLabelBudgets([]); updateProfileRequests([]); updateArtistRequests([]); updateReleaseSubmissions([]); updateAccessRequests([]);
-    setConfirmReset(false);
   }
 
   function reseedSample() {
@@ -590,7 +562,6 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     updatePayouts(SEED_PAYOUTS); updateMasterGross(SEED_MASTER_GROSS); updateLabelSettings(SEED_LABEL_SETTINGS);
     updateStaff(SEED_STAFF); updateTasks(SEED_TASKS); updateLedger(SEED_LEDGER); updateNotices(SEED_NOTICES); updateLabelBudgets(SEED_LABEL_BUDGETS); updateProfileRequests(SEED_PROFILE_REQUESTS); updateArtistRequests(SEED_ARTIST_REQUESTS); updateReleaseSubmissions(SEED_RELEASE_SUBMISSIONS); updateAccessRequests(SEED_ACCESS_REQUESTS);
     window.storage.set('dataVersion', DATA_VERSION, false).catch(() => {});
-    setConfirmReseed(false);
   }
 
   const artistMap = useMemo(() => Object.fromEntries(roster.map(a => [a.id, a])), [roster]);
@@ -710,7 +681,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <div className="imss-bg-blob imss-bg-blob-2"></div>
       <div className="imss-bg-blob imss-bg-blob-3"></div>
       <div className="imss-bg-blob imss-bg-blob-4"></div>
-      <Sidebar active={active} setActive={setActive} nav={NAV} onClearAll={clearAll} confirmReset={confirmReset} setConfirmReset={setConfirmReset} onReseed={reseedSample} confirmReseed={confirmReseed} setConfirmReseed={setConfirmReseed} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
+      <Sidebar active={active} setActive={setActive} nav={NAV} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
         <TopBar onLogout={logout} roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
@@ -728,6 +699,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           allData={{ roster, catalog, revenue, streams, payouts, masterGross, labelSettings, staff, tasks, ledger, accessRequests, invoices }}
           updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}
           dataVersion={DATA_VERSION}
+          onClearAll={supabase ? null : clearAll} onReseed={supabase ? null : reseedSample}
         />}
         {active === 'catalog' && <CatalogSection focus={focus} catalog={catalogView} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
         {active === 'calendar' && <ReleaseCalendarSection focus={focus} catalog={catalogView} roster={roster} artistMap={artistMap} tasks={tasks} />}
@@ -746,30 +718,6 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
         {active === 'activity' && <AuditSection roster={roster} />}
         {active === 'account' && <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div>}
-        <div className="imss-mobile-only mt-8 text-sm" style={{ color: C.textFaint }}>
-          {!supabase && <>
-          {confirmReset ? (
-            <span className="inline-flex gap-2">
-              Clear all data?
-              <button onClick={clearAll} style={{ color: C.red, fontWeight: 600 }}>Yes</button>
-              <button onClick={() => setConfirmReset(false)} style={{ color: C.textDim }}>Cancel</button>
-            </span>
-          ) : (
-            <button onClick={() => setConfirmReset(true)}>Clear all data</button>
-          )}
-          <div className="mt-2">
-            {confirmReseed ? (
-              <span className="inline-flex gap-2">
-                Overwrite with sample data?
-                <button onClick={reseedSample} style={{ color: C.amber, fontWeight: 600 }}>Yes</button>
-                <button onClick={() => setConfirmReseed(false)} style={{ color: C.textDim }}>Cancel</button>
-              </span>
-            ) : (
-              <button onClick={() => setConfirmReseed(true)}>Reset to sample data</button>
-            )}
-          </div>
-          </>}
-        </div>
         <LegalFooter />
         </div>
       </div>
