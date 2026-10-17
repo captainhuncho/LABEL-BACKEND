@@ -221,7 +221,11 @@ td, th { font-variant-numeric: tabular-nums; }
   /* iPhone date and month fields ignore width unless their native look is reset. */
   .imss-shell input[type=date], .imss-shell input[type=month], .imss-shell input[type=time], .imss-shell input[type=datetime-local] { -webkit-appearance: none; appearance: none; display: block; width: 100% !important; min-width: 0 !important; max-width: 100%; box-sizing: border-box; text-align: left; }
   .imss-shell input::-webkit-date-and-time-value { text-align: left; margin: 0; }
-  .imss-kpi { max-width: none !important; min-width: 0 !important; }
+  /* Stat cards: two per row (an odd last one takes the full row); labels wrap between words only. */
+  .imss-kpi { max-width: none !important; flex: 1 1 calc(50% - 6px) !important; min-width: calc(50% - 6px) !important; padding: 16px !important; }
+  .imss-kpi, .imss-kpi * { overflow-wrap: normal !important; word-break: normal !important; hyphens: none; }
+  .imss-kpi > div:first-child { align-items: flex-start !important; line-height: 1.3; }
+  .imss-kpi > div:first-child svg { margin-top: 1px; }
   /* Pop-overs (notifications) sit inside the screen, under the top of the page. */
   .imss-pop { position: fixed !important; left: 12px !important; right: 12px !important; top: 64px !important; width: auto !important; max-height: 70dvh !important; }
 }
