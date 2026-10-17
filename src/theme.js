@@ -153,11 +153,18 @@ input[type="month"]::-webkit-datetime-edit-fields-wrapper { color: inherit; }
   .imss-sheet-scrim { display: flex; position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.35); align-items: flex-end; animation: imss-fade 200ms ease-out; }
   .imss-sheet { width: 100%; max-height: 86dvh; display: flex; flex-direction: column; background: var(--panel); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); outline: none; animation: imss-sheet-up 260ms cubic-bezier(0.32, 0.72, 0, 1); }
   .imss-sheet-list { overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
-  .imss-sheet-group { list-style: none; margin: 0 12px; padding: 0; background: var(--panel-2); border-radius: 12px; overflow: hidden; }
-  .imss-sheet-group li + li { border-top: 1px solid var(--hairline); }
-  .imss-sheet-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; font-size: 16px; }
-  .imss-sheet-row:active { background: var(--hover) !important; }
 }
+/* Rows in the More sheet and the account menu (all sizes). */
+.imss-sheet-group { list-style: none; margin: 0 12px; padding: 0; background: var(--panel-2); border-radius: 12px; overflow: hidden; }
+.imss-sheet-group li + li { border-top: 1px solid var(--hairline); }
+.imss-sheet-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; font-size: 16px; }
+.imss-sheet-row:hover, .imss-sheet-row:active { background: var(--hover) !important; }
+/* Account menu from the top-bar initials: a card that pops up under them. */
+.imss-acct-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.25); animation: imss-fade 160ms ease-out; }
+.imss-acct-pop { position: fixed; top: 64px; right: 12px; width: min(340px, calc(100vw - 24px)); background: var(--panel); border-radius: 18px; padding: 6px 0; box-shadow: 0 2px 6px rgba(0,0,0,.2), 0 18px 48px rgba(0,0,0,.35); transform-origin: top right; animation: imss-pop-in 200ms cubic-bezier(0.32, 0.72, 0, 1); }
+.imss-acct-pop .imss-sheet-group { margin: 0 6px !important; background: transparent; }
+@keyframes imss-pop-in { from { opacity: 0; transform: scale(0.92) translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .imss-acct-pop, .imss-acct-scrim { animation: none; } }
 @keyframes imss-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes imss-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .imss-sheet, .imss-sheet-scrim { animation: none; } }

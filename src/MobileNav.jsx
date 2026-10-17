@@ -2,7 +2,7 @@
 // More sheet with search and every other page in its sidebar group.
 // Desktop keeps the sidebar; this renders nothing above 767px (CSS).
 import { useEffect, useRef, useState } from 'react';
-import { MoreHorizontal, Search, X } from 'lucide-react';
+import { ChevronRight, LogOut, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react';
 import { C } from './theme.js';
 
 // The four tabs per role, in order; pages the person can't open are skipped
@@ -35,8 +35,39 @@ function Badge({ n }) {
   return <span aria-label={n + ' need attention'} style={{ position: 'absolute', top: -6, left: 14, background: C.amberFill, color: C.onAmber, borderRadius: 9999, fontSize: 11, fontWeight: 700, minWidth: 18, height: 18, padding: '0 5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{n > 99 ? '99+' : n}</span>;
 }
 
-export function MobileNav({ nav, active, setActive, role, badges = {}, account = [] }) {
+// Who's signed in, at the top of the More sheet. The top-bar avatar opens the
+// same sheet (window event 'imss:open-account'). Sign out asks to confirm.
+const initials = n => String(n || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+function AccountCard({ profile, close }) {
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <section aria-label="Your account" className="imss-sheet-group" style={{ marginBottom: 6 }}>
+      <div className="flex items-center gap-3" style={{ padding: '12px 14px' }}>
+        <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 9999, background: C.amberSoft, color: C.amber, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15, flex: '0 0 auto' }}>{initials(profile.name)}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 17, color: C.text }}>{profile.name}</div>
+          <div style={{ fontSize: 13, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[profile.role, profile.email].filter(Boolean).join(' · ')}</div>
+        </div>
+      </div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderTop: '1px solid var(--hairline)' }}>
+        <li><button onClick={() => { close(); profile.onSecurity(); }} className="imss-sheet-row" style={{ color: C.text }}><ShieldCheck size={19} aria-hidden="true" style={{ color: C.textDim }} /><span style={{ flex: 1, textAlign: 'left' }}>Account &amp; security</span><ChevronRight size={16} aria-hidden="true" style={{ color: C.textDim }} /></button></li>
+        <li style={{ borderTop: '1px solid var(--hairline)' }}>
+          {confirm ? (
+            <div className="flex items-center gap-2 flex-wrap" style={{ padding: '10px 14px' }} role="alertdialog" aria-label="Sign out of IMSS Records?">
+              <span style={{ flex: '1 1 100%', fontSize: 15, color: C.text, marginBottom: 4 }}>Sign out of IMSS Records on this device?</span>
+              <button onClick={profile.onSignOut} autoFocus style={{ background: C.red, color: '#fff', borderRadius: 980, padding: '10px 18px', fontWeight: 600, minHeight: 44 }}>Sign out</button>
+              <button onClick={() => setConfirm(false)} style={{ background: 'var(--fill)', color: C.text, borderRadius: 980, padding: '10px 18px', minHeight: 44 }}>Cancel</button>
+            </div>
+          ) : <button onClick={() => setConfirm(true)} className="imss-sheet-row" style={{ color: C.red }}><LogOut size={19} aria-hidden="true" /><span style={{ flex: 1, textAlign: 'left' }}>Sign out</span></button>}
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+export function MobileNav({ nav, active, setActive, role, badges = {}, account = [], profile = null }) {
   const [open, setOpen] = useState(false);
+  const [acctOpen, setAcctOpen] = useState(null); // where the top-bar initials are, while the account menu is open
   const [q, setQ] = useState('');
   const sheetRef = useRef(null);
   const moreRef = useRef(null);
@@ -46,6 +77,11 @@ export function MobileNav({ nav, active, setActive, role, badges = {}, account =
   const activeInMore = !tabs.some(t => t.id === active);
   const moreBadge = rest.reduce((s, n) => s + (badges[n.id] || 0), 0);
 
+  useEffect(() => {
+    const show = e => setAcctOpen(e.detail || { bottom: 56, right: window.innerWidth - 12 });
+    window.addEventListener('imss:open-account', show);
+    return () => window.removeEventListener('imss:open-account', show);
+  }, []);
   useEffect(() => {
     if (!open) return;
     const key = e => { if (e.key === 'Escape') close(); };
@@ -114,7 +150,7 @@ export function MobileNav({ nav, active, setActive, role, badges = {}, account =
                   </ul>
                 </section>
               ))}
-              {!term && account.length > 0 && (
+              {!profile && !term && account.length > 0 && (
                 <section aria-label="Account">
                   <h3 style={{ color: C.textDim, fontSize: 13, fontWeight: 600, padding: '12px 20px 6px' }}>Account</h3>
                   <ul className="imss-sheet-group">
@@ -126,6 +162,14 @@ export function MobileNav({ nav, active, setActive, role, badges = {}, account =
                 </section>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {acctOpen && profile && (
+        // Pops up under your initials (top right), like a menu; tap outside or Esc closes it.
+        <div className="imss-acct-scrim" onClick={() => setAcctOpen(null)} onKeyDown={e => e.key === 'Escape' && setAcctOpen(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Your account" className="imss-acct-pop" onClick={e => e.stopPropagation()} style={{ top: acctOpen.bottom + 8, right: Math.max(12, window.innerWidth - acctOpen.right) }}>
+            <AccountCard profile={profile} close={() => setAcctOpen(null)} />
           </div>
         </div>
       )}

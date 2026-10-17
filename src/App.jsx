@@ -83,7 +83,7 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
             <button onClick={onLogout} aria-label="Sign out" style={{ color: C.textFaint }}><LogOut size={13} /></button>
           </div>
         )}
-        {sessionName && <button onClick={() => setActive('account')} className="block mb-3" style={{ color: active === 'account' ? C.amber : C.textDim }}>Sign-in & passkeys</button>}
+        {sessionName && <button onClick={() => setActive('account')} className="block mb-3" style={{ color: active === 'account' ? C.amber : C.textDim }}>Account &amp; security</button>}
         {/* Wiping or reseeding only makes sense on the local test copy, never on shared live data. */}
         {!supabase && <>
         {confirmReset ? (
@@ -356,7 +356,8 @@ function TopBar({ onLogout, openItem, roster, catalog, staff, tasks = [], revenu
           </div>
         )}
       </div>
-      {onLogout && <button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>}
+      {/* Your initials open the account menu (name, Account & security, Sign out). */}
+      {sessionName && <button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + sessionName} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{String(sessionName).trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}</button>}
       </div>
     </div>
   );
@@ -652,7 +653,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     isAdmin && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
   ].filter(Boolean);
 
-  usePageUrl(useMemo(() => [...NAV.map(n => ({ id: n.id, label: n.label })), { id: 'account', label: 'Account' }], [NAV.map(n => n.id).join()]), active, setActive);
+  usePageUrl(useMemo(() => [...NAV.map(n => ({ id: n.id, label: n.label })), { id: 'account', label: 'Account and security' }], [NAV.map(n => n.id).join()]), active, setActive);
 
   useEffect(() => {
     if (session && session.mode === 'team' && NAV.length && !NAV.find(n => n.id === active)) {
@@ -744,17 +745,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
         {active === 'activity' && <AuditSection roster={roster} />}
-        {active === 'account' && <div><SectionHeader title="Sign-in & passkeys" description="Add a passkey to sign in with Face ID, your fingerprint or this device’s screen lock." /><PasskeySettings /><TwoFactorSettings /></div>}
+        {active === 'account' && <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div>}
         <div className="imss-mobile-only mt-8 text-sm" style={{ color: C.textFaint }}>
-          {session && session.name && (
-            <div className="flex items-center justify-between gap-3 py-3 mb-3" style={{ borderTop: '1px solid ' + C.border, borderBottom: '1px solid ' + C.border }}>
-              <span style={{ color: C.textDim }}>{session.name}</span>
-              <span className="flex items-center gap-4">
-                <button onClick={() => setActive('account')} style={{ color: C.textDim }}>Sign-in & passkeys</button>
-                <button onClick={logout} className="inline-flex items-center gap-1.5" style={{ color: C.text }}><LogOut size={15} /> Sign out</button>
-              </span>
-            </div>
-          )}
           {!supabase && <>
           {confirmReset ? (
             <span className="inline-flex gap-2">
@@ -783,7 +775,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       </div>
       <MobileNav nav={NAV} active={active} setActive={setActive} role={session.role}
         badges={attention.reduce((m, i) => (i.tab ? { ...m, [i.tab]: (m[i.tab] || 0) + 1 } : m), {})}
-        account={[{ label: 'Sign-in & passkeys', icon: ShieldCheck, onClick: () => setActive('account') }, { label: 'Sign out', icon: LogOut, onClick: logout, danger: true }]} />
+        profile={{ name: session.name, role: session.role, email: (sessionStaff && sessionStaff.email) || '', onSecurity: () => setActive('account'), onSignOut: logout }} />
     </div>
   );
 }
