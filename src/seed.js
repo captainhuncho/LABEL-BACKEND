@@ -1,13 +1,16 @@
 // Seed data: the real IMSS roster, catalog, revenue and master gross.
 import { ONBOARDING_TASKS_TEMPLATE, defaultPermissionsForRole, todayStr } from './constants.js';
 import { slug } from './finance.js';
+import { DEMO_CATALOG, DEMO_MASTER_GROSS, DEMO_NOTICES, DEMO_REVENUE, DEMO_ROSTER, DEMO_STAFF } from './demoData.js';
 
 // Production builds read live data from Supabase, so the real roster and
 // revenue are left out of the public JS bundle. Dev and tests still get them
 // to seed a fresh database.
 const OMIT_REAL_DATA = import.meta.env?.PROD === true;
+// The demo site (VITE_DEMO=1) uses made-up data from demoData.js instead.
+const DEMO = import.meta.env?.VITE_DEMO === '1';
 
-export const SEED_ROSTER = OMIT_REAL_DATA ? [] : [
+export const SEED_ROSTER = DEMO ? DEMO_ROSTER : OMIT_REAL_DATA ? [] : [
   { id: "aizo-clutch", name: "Aizo Clutch", genre: '', subGenre: '', royaltyRate: 70.0, artistPct: 0.7, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },
   { id: "d-h", name: "D.H", genre: '', subGenre: '', royaltyRate: 70.0, artistPct: 0.7, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },
   { id: "daboy-kenzi", name: "Daboy Kenzi", genre: '', subGenre: '', royaltyRate: 75.0, artistPct: 0.75, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },
@@ -26,7 +29,7 @@ export const SEED_ROSTER = OMIT_REAL_DATA ? [] : [
 
 // Catalog derived from the real royalty history — one release per distinct track,
 // carrying that track's own type and release date.
-export const SEED_CATALOG = OMIT_REAL_DATA ? [] : [
+export const SEED_CATALOG = DEMO ? DEMO_CATALOG : OMIT_REAL_DATA ? [] : [
   { id: "aizo-clutch_first-love-rebass", artistId: "aizo-clutch", title: "First Love (ReBass)", type: "Single", releaseDate: "2024-02-08", isrc: '', upc: '', status: 'Released', enteredBy: 'Ledger import', hasVideo: false, licenseExpiration: '', primaryMarket: '', secondaryMarket: '' },
   { id: "aizo-clutch_ask-me-nothing", artistId: "aizo-clutch", title: "Ask Me Nothing", type: "EP Track", releaseDate: "2024-09-12", isrc: '', upc: '', status: 'Released', enteredBy: 'Ledger import', hasVideo: false, licenseExpiration: '', primaryMarket: '', secondaryMarket: '' },
   { id: "aizo-clutch_intro", artistId: "aizo-clutch", title: "Intro", type: "EP Track", releaseDate: "2025-02-13", isrc: '', upc: '', status: 'Released', enteredBy: 'Ledger import', hasVideo: false, licenseExpiration: '', primaryMarket: '', secondaryMarket: '' },
@@ -122,7 +125,7 @@ export function revenueRow(id, artist, title, month, earning, type, epAlbum, rel
   return { id, artist, artistSlug: slug(artist), title, month, earning, type, epAlbum: epAlbum || null, releaseDate: releaseDate || null, approvalStatus: approvalStatus || 'Approved', approvedBy: approvalStatus === 'Pending' ? '' : 'Maxwell', approvedAt: approvalStatus === 'Pending' ? '' : todayStr() };
 }
 // One row per track per month, exactly as held in the Ledger & Royalties ledger.
-export const SEED_REVENUE = OMIT_REAL_DATA ? [] : [
+export const SEED_REVENUE = DEMO ? DEMO_REVENUE : OMIT_REAL_DATA ? [] : [
   revenueRow("aizo-clutch_100xp_2026-06", "Aizo Clutch", "100XP", "2026-06", 28.18, "EP Track", "Glow Lock", "2026-04-23"),
   revenueRow("aizo-clutch_100xp_2026-07", "Aizo Clutch", "100XP", "2026-07", 36.41, "EP Track", "Glow Lock", "2026-04-23"),
   revenueRow("aizo-clutch_100xp_2026-08", "Aizo Clutch", "100XP", "2026-08", 38.28, "EP Track", "Glow Lock", "2026-04-23"),
@@ -723,7 +726,7 @@ export const SEED_REVENUE = OMIT_REAL_DATA ? [] : [
 
 // masterGross: one row per calendar month, company-wide.
 // Company-wide remittances actually received, one row per calendar month.
-export const SEED_MASTER_GROSS = OMIT_REAL_DATA ? [] : [
+export const SEED_MASTER_GROSS = DEMO ? DEMO_MASTER_GROSS : OMIT_REAL_DATA ? [] : [
   { id: "2023-12", month: "2023-12", totalGross: 0, swiftFee: 0 },
   { id: "2024-01", month: "2024-01", totalGross: 0, swiftFee: 0 },
   { id: "2024-02", month: "2024-02", totalGross: 43.71, swiftFee: 3.98 },
@@ -769,7 +772,7 @@ export const SEED_PAYOUTS = [];
 export const SEED_LABEL_SETTINGS = { swiftFee: 30 };
 export const DATA_VERSION = 'v27-access-control';
 
-export const SEED_STAFF = [
+export const SEED_STAFF = DEMO ? DEMO_STAFF : [
   { id: 'st0', name: 'Maxwell', role: 'Admin', email: 'maxwelladjavon@gmail.com', phone: '', startDate: '2022-01-10', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole('Admin'), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, i) => ({ id: 'ob' + i + '-st0', label, done: true })) },
 ];
 
@@ -813,7 +816,7 @@ export const SEED_INVOICES = [];
 
 export const SEED_RELEASE_SUBMISSIONS = [];
 
-export const SEED_NOTICES = [
+export const SEED_NOTICES = DEMO ? DEMO_NOTICES : [
   { id: 'nt1', title: 'Welcome to your dashboard', message: "You can now see your revenue, streams, releases, payouts, and statements right here. Reach out to your Product Manager with any questions.", audience: 'all', createdBy: 'Maxwell', createdAt: todayStr() },
   { id: 'nt2', title: 'Q3 close is next Friday', message: 'Please get all outstanding expenses and earnings entries submitted for approval before end of day Thursday so the close isn\u2019t delayed.', audience: 'all-team', createdBy: 'Maxwell', createdAt: todayStr() },
 ];
