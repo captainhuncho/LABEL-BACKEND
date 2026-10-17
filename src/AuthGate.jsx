@@ -24,6 +24,7 @@ export default function AuthGate({ children }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
+  const [code, setCode] = useState('');
   // Uninvited: the database refuses to create the account, so nothing about the
   // attempt (not even the email) is kept, and no email is sent.
   const [linkError, setLinkError] = useState(() => {
@@ -94,8 +95,15 @@ export default function AuthGate({ children }) {
     });
     setBusy(false);
     if (err && /Database error|invite_only|not allowed|signups/i.test(err.message)) { setDenied(true); setEmail(''); setEmailMode(false); return; }
-    if (err) setError(/rate|seconds/i.test(err.message) ? 'Please wait a minute before asking for another link.' : 'Something went wrong. Try again.');
-    else setSent(true);
+    if (err) setError(/rate|seconds/i.test(err.message) ? 'Please wait a minute before asking for another code.' : 'Something went wrong. Try again.');
+    else { setSent(true); setCode(''); }
+  }
+  async function verifyCode(e) {
+    e.preventDefault();
+    setError(''); setBusy(true);
+    const { error: err } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+    setBusy(false);
+    if (err) setError(/expired/i.test(err.message) ? 'That code has expired. Send a new one.' : 'That code didn’t work. Check the newest email and try again.');
   }
 
   const G = () => (
@@ -111,15 +119,19 @@ export default function AuthGate({ children }) {
         {isArtistSite() && <div style={{ marginTop: 14, fontSize: 15, fontWeight: 600, letterSpacing: '0.02em', color: C.textDim }}>For Artists</div>}
         <div style={{ height: 1, width: 280, maxWidth: '100%', background: C.border, margin: '36px auto 44px' }} />
         {sent ? (
-          <div role="status">
-            <p style={{ fontSize: 17, lineHeight: 1.5 }}>Check <b>{email.trim()}</b> for your sign-in link.</p>
-            <button type="button" onClick={() => { setSent(false); setError(''); }} style={{ color: C.textDim, fontSize: 14, marginTop: 16 }}>Use a different email</button>
-          </div>
+          <form onSubmit={verifyCode} noValidate style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <p role="status" style={{ fontSize: 17, lineHeight: 1.5, marginBottom: 6 }}>Enter the code we sent to <b>{email.trim()}</b>.</p>
+            <input aria-label="Sign-in code" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={10} value={code} onChange={e => { setCode(e.target.value.replace(/\D/g, '')); setError(''); }} placeholder="Code"
+              style={{ ...btn, width: 280, background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', fontSize: 22, letterSpacing: '0.3em', textAlign: 'center', cursor: 'text', opacity: 1 }} />
+            <button type="submit" disabled={busy || code.length < 6} style={{ ...btn, width: 280, background: C.text, color: C.bg, opacity: busy || code.length < 6 ? 0.6 : 1 }}>{busy ? 'Checking…' : 'Sign in'}</button>
+            <button type="button" disabled={busy} onClick={sendLink} style={{ color: C.textDim, fontSize: 14, marginTop: 6 }}>Send a new code</button>
+            <button type="button" onClick={() => { setSent(false); setError(''); setCode(''); }} style={{ color: C.textDim, fontSize: 14 }}>Use a different email</button>
+          </form>
         ) : emailMode ? (
           <form onSubmit={sendLink} noValidate style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <input aria-label="Email" type="email" required autoFocus autoComplete="email" inputMode="email" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} placeholder="Email address"
               style={{ ...btn, width: 280, background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', fontWeight: 400, textAlign: 'center', cursor: 'text', opacity: 1 }} />
-            <button type="submit" disabled={busy} style={{ ...btn, width: 280, background: C.text, color: C.bg }}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
+            <button type="submit" disabled={busy} style={{ ...btn, width: 280, background: C.text, color: C.bg }}>{busy ? 'Sending…' : 'Email me a sign-in code'}</button>
             <button type="button" onClick={() => { setEmailMode(false); setError(''); }} style={{ color: C.textDim, fontSize: 14, marginTop: 6 }}>Back</button>
           </form>
         ) : (
