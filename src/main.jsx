@@ -8,8 +8,10 @@ const ArtistApp = lazy(() => import('./ArtistApp.jsx'));
 import UpdateBanner from './UpdateBanner.jsx';
 import { LegalPage, LEGAL_PATHS } from './Legal.jsx';
 import './index.css';
+import { stackWideTables } from './stackTables.js';
 
 installStorage();
+stackWideTables();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

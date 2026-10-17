@@ -152,6 +152,43 @@ table thead th { background: var(--panel-2); }
 table tbody tr:last-child td { border-bottom: none !important; }
 td, th { font-variant-numeric: tabular-nums; }
 
+/* Phones: a table too wide for the screen (marked .imss-stack by stackWideTables)
+   becomes one card per row; each value carries its column name. */
+@media (max-width: 767px) {
+  table.imss-stack { display: block; width: 100% !important; min-width: 0 !important; border: 0 !important; }
+  table.imss-stack thead { display: none; }
+  table.imss-stack tbody, table.imss-stack tfoot { display: block; }
+  table.imss-stack tr { display: block; background: var(--panel); border: 1px solid var(--hairline); border-radius: 14px; padding: 6px 14px; margin: 0 0 10px; }
+  table.imss-stack td { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0 !important; border: 0 !important; text-align: right !important; width: auto !important; min-width: 0; white-space: normal !important; }
+  table.imss-stack td + td { border-top: 1px solid var(--hairline) !important; }
+  table.imss-stack td::before { content: attr(data-label); color: var(--text-2); font-size: 13px; font-weight: 400; text-align: left; flex: 0 0 auto; max-width: 45%; }
+  table.imss-stack td:first-child { font-size: 16px; font-weight: 600; justify-content: flex-start; text-align: left !important; }
+  table.imss-stack td:first-child::before, table.imss-stack td[colspan]::before, table.imss-stack td:not([data-label])::before, table.imss-stack td[data-label=""]::before { display: none; }
+  table.imss-stack td[colspan] { display: block; text-align: left !important; }
+  table.imss-stack td:empty { display: none; }
+  table.imss-stack td:last-child:not(:first-child) { justify-content: flex-end; }
+  table.imss-stack td:last-child:not(:first-child)::before { margin-right: auto; }
+  /* A row's checkbox sits top-right; the next cell becomes the card title. Select-all stays. */
+  table.imss-stack tr:has(> td:first-child > input[type=checkbox]:only-child) { position: relative; padding-right: 48px; }
+  table.imss-stack td:first-child:has(> input[type=checkbox]:only-child) { position: absolute; top: 14px; right: 14px; padding: 0 !important; }
+  table.imss-stack td:first-child:has(> input[type=checkbox]:only-child) + td { font-size: 16px; font-weight: 600; justify-content: flex-start; text-align: left !important; border-top: 0 !important; }
+  table.imss-stack td:first-child:has(> input[type=checkbox]:only-child) + td::before { display: none; }
+  table.imss-stack thead:has(input[type=checkbox]) { display: block; margin-bottom: 10px; }
+  table.imss-stack thead:has(input[type=checkbox]) tr { display: flex; }
+  table.imss-stack thead:has(input[type=checkbox]) th { display: none; }
+  table.imss-stack thead:has(input[type=checkbox]) th:has(input[type=checkbox]) { display: flex; align-items: center; gap: 10px; background: none; border: 0 !important; padding: 4px 2px !important; font-size: 15px; color: var(--text) !important; }
+  table.imss-stack thead:has(input[type=checkbox]) th:has(input[type=checkbox])::after { content: 'Select all'; }
+  .imss-stack-wrap { border: 0 !important; background: transparent !important; overflow: visible !important; box-shadow: none !important; border-radius: 0 !important; }
+
+  /* Fingers, not cursors: 44px targets; 16px fields so iOS doesn't zoom. */
+  .imss-btn { min-height: 44px; }
+  .imss-shell input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), .imss-shell select, .imss-shell textarea { font-size: 16px !important; min-height: 44px; }
+  .imss-shell input[type=checkbox], .imss-shell input[type=radio] { width: 20px; height: 20px; }
+  .imss-shell button:has(> svg:only-child) { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .imss-content-inner { overflow-wrap: anywhere; }
+  .imss-content img, .imss-content svg, .imss-content canvas { max-width: 100%; }
+}
+
 /* Legal pages */
 .imss-legal-body { font-size: 17px; line-height: 1.6; color: var(--text); }
 .imss-legal-body h2 { font-size: 19px; font-weight: 600; margin: 36px 0 10px; }
