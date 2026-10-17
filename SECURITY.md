@@ -20,22 +20,45 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 
 ## Sign-in
 
-- Email link only (Supabase magic link). No passwords are stored.
-- Links return only to URLs on Supabase's Redirect URL allow-list
-  (`https://ops.imssrecords.com`, `https://label-backend.vercel.app`,
-  `http://localhost:5173`). Add new hosts there, never a wildcard.
-- Sign-in links expire after 10 minutes (Supabase Auth → Email → Email OTP
-  Expiration = 600 s) and work once; requesting a new link voids the old one.
-- Anyone can request a link and get an account. An account on its own sees
-  nothing: access comes only from the email being on the Team list or on an
-  artist's Roster entry (`my_access()`).
+- No passwords. People sign in with Google or a one-time code emailed to them
+  (Supabase Auth, sent through Resend).
+- Invite only, enforced in the database: an account can only be created for an
+  email on the Team list or an artist's Roster entry (`private.is_invited`, the
+  Before User Created hook). Removing or archiving someone deletes their
+  sign-in account.
+- Second step: team members must pass a passkey or authenticator app
+  (`private.second_factor_ok()`, AAL2) before the database lets them read or
+  write anything; artists need it for the portal and confirm again before
+  invoices and profile changes.
+- Redirects return only to URLs on Supabase's Redirect URL allow-list
+  (`https://ops.imssrecords.com`, `https://artist.imssrecords.com`,
+  `https://label-backend.vercel.app`, `http://localhost:5173`). Add new hosts
+  there, never a wildcard.
+- Every new sign-in sends the person a "New sign-in" email. Admin or the
+  artist's Product Manager can end all of an artist's sessions ("Sign out
+  everywhere"); Admin can for team members. Open tabs notice within a minute.
 
 ## Data access (enforced in the database)
 
 - `app_data` has row-level security on. Signed-out visitors can't read or write
   anything.
-- **Team:** a signed-in user whose email is on the `staff` list
-  (`is_team_member()`) can read and write every section.
+- **Team:** a signed-in user whose email is on the `staff` list and who
+  passed the second step (`is_team_member()`) can read every section and write
+  most of them. A trigger (`private.app_data_write_rules`) adds role rules for
+  the sensitive ones:
+  - `staff`: only an Admin can add or remove members or change anyone's role,
+    access, `canApproveBudgets`, sign-in email or Archived/Inactive status.
+    Others can edit profile fields. Legal's access changes go through
+    `accessRequests` for an Admin to approve.
+  - `publishedRevenue` (what artists see): Admin only, or someone with Artist
+    earnings + Can edit when an Admin has turned on direct publishing. Anyone
+    who can edit may refresh per-store streams on published rows.
+  - `payouts` and `revenuePublish`: Artist earnings + Can edit, or Admin.
+  - `labelSettings`: Artist earnings + Can edit, or Admin; the invoice
+    workflow and the direct-publishing switch are Admin only.
+  Permissions are read the same way as `permissionsFor()` in the app
+  (`private.my_perm`). The notify function, cron jobs and migrations are not
+  affected; a security-definer RPC called by a signed-in user is.
 - **Artists** never read `app_data` directly. `artist_portal()` returns only
   their own catalog, revenue, payouts, expenses and requests, with each month's
   Inbound Banking Charge pre-split to their share, so label-wide totals never
@@ -64,8 +87,8 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   `log_activity()`, which takes the actor from the signed-in session (team
   member from the staff list, or the artist from the roster; an artist's
   entries are always about themselves) and is rate-limited, or by the notify
-  function (service role) for scheduled jobs. Only Admin and Legal can read it
-  (`is_audit_reader()`). Nobody can update, delete or insert directly, Admins
+  function (service role) for scheduled jobs. Only Admin and Legal who passed the second step
+  can read it (`is_audit_reader()`). Nobody can update, delete or insert directly, Admins
   included.
 - **Notifications** (`notifications` table): written only by the notify
   function alongside each email; each person reads only rows addressed to
@@ -136,9 +159,11 @@ Tailwind 4 migration.
 
 These are real and accepted for now. Don't treat them as protected.
 
-1. **Role permissions are enforced in the app, not the database.** Any signed-in
-   team member can technically read or change every section through the API,
-   including staff roles. Admin-only rules in the database would close this.
+1. **Most role permissions are still enforced only in the app.** The database
+   guards the team list, published earnings, payouts, publish requests and
+   label settings (see Data access). Every team member can still read every
+   section, and can change the other sections (roster and deal terms, catalog,
+   revenue, money received, ledger, invoices, budgets) through the API.
 2. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
    Supabase, not this project) as callable by anyone. Review it in the Supabase
    dashboard.
