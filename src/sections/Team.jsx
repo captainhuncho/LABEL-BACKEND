@@ -59,6 +59,8 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
     setEmailError('');
     if (editing) {
       const before = staff.find(s => s.id === editing);
+      // Only an Admin grants or removes budget approval.
+      if (!isTopRole(sessionRole)) form.canApproveBudgets = !!(before && before.canApproveBudgets);
       // Legal outranks nobody where Admin is concerned.
       if (proposesOnly && isTopRole(before && before.role)) { closeForm(); return; }
       const beforePerms = permissionsFor(before);
@@ -182,6 +184,13 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
                 {STAFF_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </Select>
             </Field>
+            {isTopRole(sessionRole) && !isTopRole(form.role) && form.role !== 'Label Rep' && (
+              // Only an Admin grants this. Admins approve budgets anyway.
+              <label className="imss-span-2 flex items-start gap-3 rounded p-3" style={{ background: 'var(--fill)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!form.canApproveBudgets} onChange={e => setForm({ ...form, canApproveBudgets: e.target.checked })} style={{ marginTop: 3 }} />
+                <span><span style={{ fontWeight: 600 }}>Can approve budgets</span><br /><span className="text-sm" style={{ color: C.textDim }}>They can approve new budgets, budget changes and overspends without waiting for an Admin.</span></span>
+              </label>
+            )}
             <Field label="Bio / notes" full><TextArea rows={2} value={form.bio} onChange={e => setForm({ ...form, bio: e.target.value })} placeholder="What they're joining to do, background, anything worth noting." /></Field>
           </div>
 

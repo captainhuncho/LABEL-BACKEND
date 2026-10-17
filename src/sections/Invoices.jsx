@@ -65,7 +65,7 @@ export function InvoiceThread({ inv, artistLabel }) {
   );
 }
 
-export function InvoicesSection({ invoices, update, roster, staff = [], labelSettings = {}, updateLabelSettings, canEdit = true, session = {}, pmScope = null }) {
+export function InvoicesSection({ invoices, update, roster, staff = [], labelSettings = {}, updateLabelSettings, canEdit = true, session = {}, pmScope = null, overheads = [], ledger = [], approver = false }) {
   const workflow = labelSettings.invoiceWorkflow || {};
   const isAdmin = session.role === 'Admin';
   const me = staff.find(m => m.name === session.name);
@@ -262,6 +262,41 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                               </div>
                             )}
                           </section>
+                          {canEdit && inv.kind === 'expense' && (() => {
+                            // Attach an expense claim to the artist's budget. Going over needs someone who can approve budgets.
+                            const choices = overheads.filter(o => o.kind === 'artist' && o.artistId === inv.artistId && (o.status === 'Active' || o.id === inv.overheadId));
+                            if (!choices.length) return null;
+                            const o = overheads.find(x => x.id === inv.overheadId);
+                            function attach(overheadId, categoryId) {
+                              const target = overheads.find(x => x.id === overheadId);
+                              if (target) {
+                                const amt = Number(inv.amount) || 0;
+                                const spentOf = f => ledger.filter(l => l.type === 'expense' && l.overheadId === target.id && (l.approvalStatus || 'Approved') === 'Approved' && f(l)).reduce((t, l) => t + (Number(l.amount) || 0), 0)
+                                  + invoices.filter(i => i.id !== inv.id && i.kind === 'expense' && i.overheadId === target.id && ['Pay Approved', 'Paid'].includes(i.status) && f(i)).reduce((t, i) => t + (Number(i.amount) || 0), 0);
+                                const cat = (target.categories || []).find(c => c.id === categoryId);
+                                const over = spentOf(() => true) + amt > target.total + 1e-9 || (cat && spentOf(x => x.categoryId === cat.id) + amt > cat.allocated + 1e-9);
+                                if (over && !approver) { setError('That takes the budget over. An Admin needs to attach it.'); return; }
+                              }
+                              logActivity('attached an expense claim to a budget', inv.title + (target ? ' → ' + target.title : ' (detached)'), inv.artistId);
+                              update(invoices.map(i => i.id !== inv.id ? i : { ...i, overheadId: overheadId || '', categoryId: categoryId || '' }));
+                            }
+                            return (
+                              <section className="imss-sub-wide">
+                                <h3 className="imss-sub-h">Budget</h3>
+                                <div className="flex gap-2 flex-wrap">
+                                  <Select value={inv.overheadId || ''} onChange={e => attach(e.target.value, '')} aria-label="Budget" style={{ flex: '1 1 200px' }}>
+                                    <option value="">Not attached</option>
+                                    {choices.map(x => <option key={x.id} value={x.id}>{x.title}</option>)}
+                                  </Select>
+                                  {o && <Select value={inv.categoryId || ''} onChange={e => attach(o.id, e.target.value)} aria-label="Budget category" style={{ flex: '1 1 160px' }}>
+                                    <option value="">Unallocated</option>
+                                    {(o.categories || []).map(c => <option key={c.id} value={c.id}>{c.category}</option>)}
+                                  </Select>}
+                                </div>
+                                <div className="text-xs mt-1" style={{ color: C.textDim }}>Counts against the budget once it reaches Pay Approved.</div>
+                              </section>
+                            );
+                          })()}
                           {canEdit && (() => {
                             // The artist's label rep settles it with the partner, then moves it to DP Queue.
                             const rep = staff.find(m => m.id === ((roster.find(a => a.id === inv.artistId) || {}).labelRep) && m.status !== 'Archived');

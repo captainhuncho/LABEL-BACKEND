@@ -112,7 +112,7 @@ export function BudgetSection({ overheads = [], update, roster = [], catalog = [
   if (form) return <OverheadForm form={form} setForm={setForm} submit={submit} problem={formProblem(form)} roster={roster} catalog={catalog} overheads={overheads} approver={approver} onCancel={() => setForm(null)} />;
 
   const open = overheads.find(o => o.id === openId);
-  if (open) return <OverheadDetail o={open} artistName={artistName} catalog={catalog} overheads={overheads} spend={overheadSpend(open, ledger, invoices)} approver={approver} canEdit={canEdit}
+  if (open) return <OverheadDetail o={open} ledger={ledger} invoices={invoices} artistName={artistName} catalog={catalog} overheads={overheads} spend={overheadSpend(open, ledger, invoices)} approver={approver} canEdit={canEdit}
     onBack={() => setOpenId(null)} onEdit={() => editForm(open)} onDecide={ok => decide(open, ok)} onClose={() => close(open)} onReopen={() => reopen(open)} />;
 
   return (
@@ -240,11 +240,16 @@ function OverheadForm({ form, setForm, submit, problem, roster, catalog, overhea
   );
 }
 
-function OverheadDetail({ o, artistName, catalog, overheads, spend, approver, canEdit, onBack, onEdit, onDecide, onClose, onReopen }) {
+function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, overheads, spend, approver, canEdit, onBack, onEdit, onDecide, onClose, onReopen }) {
   const allocated = sum(o.categories || [], c => c.allocated);
   const children = overheads.filter(x => x.parentId === o.id && x.status !== 'Rejected');
   const releaseTitles = (o.releaseIds || []).map(id => (catalog.find(r => r.id === id) || {}).title).filter(Boolean);
   const change = o.pendingChange;
+  // Everything attached: ledger expenses (any status, so pending overspends show) and expense claims.
+  const items = [
+    ...ledger.filter(l => l.type === 'expense' && l.overheadId === o.id && l.approvalStatus !== 'Rejected').map(l => ({ id: l.id, categoryId: l.categoryId || '', date: l.date, text: l.description || l.category, amount: Number(l.amount) || 0, state: (l.approvalStatus || 'Approved') === 'Approved' ? '' : (l.overBudget ? 'Over budget, waiting' : 'Waiting for approval') })),
+    ...invoices.filter(i => i.kind === 'expense' && i.overheadId === o.id && i.status !== 'Rejected').map(i => ({ id: i.id, categoryId: i.categoryId || '', date: String(i.submittedAt || '').slice(0, 10), text: 'Expense claim: ' + i.title, amount: Number(i.amount) || 0, state: ['Pay Approved', 'Paid'].includes(i.status) ? '' : 'Claim ' + i.status })),
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return (
     <div>
       <button onClick={onBack} className="inline-flex items-center gap-1 mb-3" style={{ color: C.textDim }}><ChevronLeft size={16} /> Budget</button>
@@ -270,7 +275,7 @@ function OverheadDetail({ o, artistName, catalog, overheads, spend, approver, ca
       <div className="flex flex-wrap gap-3 mb-4">
         <KPICard icon={Wallet} label="Total" value={money(o.total)} />
         <KPICard icon={Wallet} label="Spent" value={money(spend.total)} tone={spend.total > o.total ? 'red' : 'amber'} />
-        <KPICard icon={Wallet} label="Remaining" value={money(o.total - spend.total)} tone="teal" />
+        <KPICard icon={Wallet} label="Remaining" value={money(o.total - spend.total - sum(children, x => x.total))} sub={children.length ? money(sum(children, x => x.total)) + ' carved out for singles' : undefined} tone="teal" />
         <KPICard icon={Wallet} label="Unallocated" value={money(o.total - allocated)} />
       </div>
 
@@ -285,12 +290,14 @@ function OverheadDetail({ o, artistName, catalog, overheads, spend, approver, ca
                 <li key={c.id}>
                   <div className="flex items-baseline justify-between gap-3 text-sm"><span style={{ fontWeight: 600, fontSize: 15 }}>{c.category}</span><span style={{ color: spent > c.allocated ? C.red : C.textDim, fontVariantNumeric: 'tabular-nums' }}>{money(spent)} of {money(c.allocated)}</span></div>
                   <div className="mt-1.5" style={{ height: 6, borderRadius: 9999, background: 'var(--fill)', overflow: 'hidden' }}><div style={{ width: pct + '%', height: '100%', background: spent > c.allocated ? C.red : C.amberFill }} /></div>
+                  <AttachedItems items={items.filter(x => x.categoryId === c.id)} />
                 </li>
               );
             })}
           </ul>
         )}
-        <p className="text-sm mt-4" style={{ color: C.textDim }}>Attaching expenses and expense claims to a category comes in the next step.</p>
+        {items.some(x => !x.categoryId) && <div className="mt-4"><div className="text-sm" style={{ fontWeight: 600 }}>Unallocated</div><AttachedItems items={items.filter(x => !x.categoryId)} /></div>}
+        {items.length === 0 && <p className="text-sm mt-4" style={{ color: C.textDim }}>Nothing attached yet. Choose this budget when you add an expense in Expenses &amp; income, or on an expense claim in Invoices.</p>}
       </div>
 
       {children.length > 0 && (
@@ -312,5 +319,20 @@ function OverheadDetail({ o, artistName, catalog, overheads, spend, approver, ca
         <ul className="text-sm flex flex-col gap-1.5">{[...(o.history || [])].reverse().map((h, i) => <li key={i}><span style={{ color: C.textDim }}>{formatDate(String(h.at).slice(0, 10))}</span> · {h.by} {h.action}{h.note ? ': “' + h.note + '”' : ''}</li>)}</ul>
       </div>
     </div>
+  );
+}
+
+// Expenses and claims attached to a category; ones not yet counted say why.
+function AttachedItems({ items }) {
+  if (!items.length) return null;
+  return (
+    <ul className="mt-2 flex flex-col" style={{ borderTop: '1px solid var(--hairline)' }}>
+      {items.map(x => (
+        <li key={x.id} className="flex items-baseline justify-between gap-3 text-sm" style={{ padding: '6px 0', borderBottom: '1px solid var(--hairline)' }}>
+          <span style={{ minWidth: 0 }}><span style={{ color: C.textDim }}>{x.date ? formatDate(x.date) : ''}</span> {x.text}{x.state && <span style={{ color: C.amber }}> · {x.state}</span>}</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', flex: '0 0 auto' }}>{money(x.amount)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

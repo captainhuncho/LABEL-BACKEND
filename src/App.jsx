@@ -22,7 +22,7 @@ import { AccessRequestsSection } from './sections/AccessRequests.jsx';
 import { ArtistPortalShell } from './sections/ArtistPortal.jsx';
 import { ArtistRequestsSection } from './sections/ArtistRequests.jsx';
 import { BackupSection } from './sections/Backup.jsx';
-import { BudgetSection } from './sections/Budget.jsx';
+import { BudgetSection, canApproveBudgets } from './sections/Budget.jsx';
 import { CatalogSection } from './sections/Catalog.jsx';
 import { ImportSection } from './sections/Import.jsx';
 import { invoiceStage, invoiceReviewers, InvoicesSection } from './sections/Invoices.jsx';
@@ -710,11 +710,11 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'streams' && <StreamsSection streams={streamsView} update={updateStreams} catalog={catalogView} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
-        {active === 'invoices' && <InvoicesSection invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
+        {active === 'invoices' && <InvoicesSection overheads={overheads} ledger={ledger} approver={canApproveBudgets(session, staff)} invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
         {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={approvedLedger} invoices={invoices} />}
         {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection invoices={invoices} payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
-        {active === 'ledger' && <LedgerSection invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
+        {active === 'ledger' && <LedgerSection overheads={overheads} approver={canApproveBudgets(session, staff)} invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection overheads={overheads} update={updateOverheads} roster={roster} catalog={catalogView} staff={staff} ledger={ledger} invoices={invoices} session={session} canEdit={canEdit} />}
         {active === 'notices' && <NoticesSection notices={notices} update={updateNotices} roster={roster} staff={staff} sessionName={session.name} />}
         {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
