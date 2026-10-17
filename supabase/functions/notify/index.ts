@@ -108,13 +108,13 @@ async function audit(action: string, detail: string, artistId: string | null = n
 }
 
 // Safety lock: artists are emailed only about royalties, statements (payouts),
-// invoices, noticeboard posts, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
+// invoices, noticeboard posts, new sign-in notices, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
 // whatever the calling code asked for.
 // Email addresses never appear in full in an email body: ma•••@g•••.com.
 const maskEmail = (e: string) => e.replace(/^([^@]{1,2})[^@]*@([^.@])[^@]*?(\.[a-z]{2,})$/i, '$1•••@$2•••$3');
 const maskEmails = (html: string) => html.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, maskEmail);
-const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice'];
-async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string) {
+const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice', 'security'];
+async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
   if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
     const artists = new Set((await section('roster')).map(a => lower(a.email)).filter(e => e.includes('@')));
@@ -127,7 +127,7 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   if (!recipients.length) return { skipped: 'no recipients' };
   if (artistTopic) html = html.split(APP_URL).join(ARTIST_URL);
   html = maskEmails(html);
-  const inApp = await notifyInApp(recipients, subject);
+  const inApp = bell ? await notifyInApp(recipients, subject) : null;
   if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp };
   // Only emails with a reply address (submissions, requests, invoices) say replies work.
   const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
@@ -413,6 +413,30 @@ async function sendWelcome(artistId: string) {
   return await send([email], 'Welcome to your IMSS Records artist portal', html, undefined, 'welcome');
 }
 
+// "New sign-in" email to the person who just signed in (private.signin_alert).
+// Only people on the Team list or a Roster entry; nobody else can sign in anyway.
+function deviceName(ua: string) {
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '';
+  return [browser, os].filter(Boolean).join(' on ') || 'an unknown device';
+}
+async function sendSigninNotice(email: string, ua: string) {
+  if (!email.includes('@')) return { skipped: 'no email' };
+  const [staff, roster] = await Promise.all([section('staff'), section('roster')]);
+  const member = staff.find(m => lower(m.email) === email && m.status !== 'Archived');
+  const artist = !member && roster.find(a => lower(a.email) === email && a.status !== 'Archived');
+  if (!member && !artist) return { skipped: 'not on the Team list or Roster' };
+  const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+  const who = member ? member.name : (artist as Item).name;
+  const help = member ? 'tell an Admin straight away so they can sign you out everywhere and secure your account.' : 'contact your Product Manager straight away so they can sign you out everywhere and secure your account.';
+  const html = page('New sign-in to IMSS Records', [
+    `Hi ${esc(who)},`,
+    `Your account was signed in on <b>${esc(when)}</b> from <b>${esc(deviceName(ua))}</b>.`,
+    `If this was you, there's nothing to do. <b>If it wasn't you</b>, ${help} Also change the password of the email account you sign in with.`,
+  ], { label: member ? 'Open the dashboard' : 'Open your portal', url: `${APP_URL}/` });
+  return await send([email], 'New sign-in to your IMSS Records account', html, undefined, artist ? 'security' : undefined, false);
+}
+
 // ---------- entry ----------
 Deno.serve(async req => {
   if (req.method !== 'POST') return new Response('ok');
@@ -428,6 +452,7 @@ Deno.serve(async req => {
     if (!ok) return new Response('forbidden', { status: 403 });
     const body = JSON.parse(raw || '{}');
     if (body.action === 'due') return Response.json(await sendDueStatements());
+    if (body.action === 'signinNotice') return Response.json(await sendSigninNotice(lower(body.email), String(body.device || '')));
     if (body.action === 'signinAlert') {
       // A watched account signed in (private.signin_alert): tell every Admin.
       const admins = (await section('staff')).filter(m => m.role === 'Admin' && m.status !== 'Archived').map(m => lower(m.email)).filter(e => e.includes('@'));
