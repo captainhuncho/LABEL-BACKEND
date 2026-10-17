@@ -6,7 +6,7 @@ import { SOCIAL_LINKS } from '../seed.js';
 import DealChanges from './DealChanges.jsx';
 import { C, HEADING_FONT, MONO_FONT } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
-import { ArtistDetailPanel, SendLinkButton } from './ArtistDetail.jsx';
+import { ArtistDetailPanel } from './ArtistDetail.jsx';
 
 export function RosterSection({ updateStatementFiles, focus = null, updateCatalog, updateTasks, invoices = [], dealChanges = [], updateDealChanges, session = {}, publishedRevenue = [], statementFiles = [], roster, update, catalog, staff, canEdit = true, pmScope = null, revenue = [], streams = [], masterGross = [], payouts = [], ledger = [], labelSettings, canViewRoyalties = true, canViewSpend = true, tasks = [], sessionName = '', isAdmin = false, profileRequests = [], updateProfileRequests }) {
   const [detailId, setDetailId] = useState(focus && focus.artistId || null);
@@ -194,7 +194,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
           )}
           <Field label="Signed date"><Input type="date" value={form.signedDate} onChange={e => setForm({ ...form, signedDate: e.target.value })} /></Field>
           <Field label="Contract expiration"><Input type="date" value={form.contractExpiration} onChange={e => setForm({ ...form, contractExpiration: e.target.value })} /></Field>
-          <Field label="Email (also their portal sign-in)"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Sign-in email (artist portal)"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label="Dropbox / Drive folder" full><Input type="url" value={form.driveFolder} onChange={e => setForm({ ...form, driveFolder: e.target.value })} placeholder="https://drive.google.com/... or Dropbox link" /></Field>
           <Field label="Product Manager">
             <Select value={form.productManager} onChange={e => setForm({ ...form, productManager: e.target.value })}>
@@ -218,7 +218,6 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
           <div className="imss-span-2 flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add artist'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
-            {isAdmin && editing && <SendLinkButton labeled email={(roster.find(x => x.id === editing) || {}).email} />}
           </div>
         </form>
       )}
@@ -327,7 +326,6 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
                         <ConfirmInline label="Archive? They lose sign-in; their history stays." onConfirm={() => remove(a.id)} onCancel={() => setConfirmId(null)} />
                       ) : canEdit ? (
                         <span className="inline-flex gap-3 justify-end">
-                          {isAdmin && <SendLinkButton email={a.email} />}
                           <button onClick={() => openEdit(a)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                           {a.status === 'Archived' ? <button onClick={() => restore(a.id)} style={{ color: C.amber, fontSize: 13 }}>Restore</button> : <button onClick={() => setConfirmId(a.id)} aria-label={'Archive ' + a.name} title="Archive" style={{ color: C.textDim }}><Archive size={14} /></button>}
                         </span>

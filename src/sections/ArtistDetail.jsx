@@ -1,5 +1,5 @@
 import { CheckCircle2, ChevronLeft, ChevronRight, Disc3, DollarSign, Globe, Mail, Pencil, Radio, Trash2, Wallet, ExternalLink } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PLATFORM_COLORS, artistStatusTone, expirationStatus, formatCurrency, formatDate, formatNumber, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { artistLifetime, recoupmentForArtist, revenueRowSplit, artistSpend, pctAt, slug } from '../finance.js';
@@ -195,6 +195,7 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
             <div>{artist.email || '—'}</div>
           </div>
         </div>
+        <PortalAccess artist={artist} isAdmin={isAdmin} canEdit={canEdit} onEdit={onEdit} />
         {artist.notes && (
           <div className="mt-3 pt-3 text-sm" style={{ borderTop: '1px solid ' + C.border, color: C.textDim }}>{artist.notes}</div>
         )}
@@ -379,6 +380,47 @@ export function ArtistDetailPanel({ updateStatementFiles, invoices = [], dealSec
         </div>
           )}
       </div>
+      )}
+    </div>
+  );
+}
+
+// Portal access: the artist's sign-in email and (Admin) the welcome email that
+// points them to artist.imssrecords.com. Last send comes from the audit log.
+function PortalAccess({ artist, isAdmin, canEdit, onEdit }) {
+  const [last, setLast] = useState(null);
+  const [state, setState] = useState('idle');
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.from('audit_log').select('at').eq('artist_id', artist.id).eq('action', 'sent portal welcome').order('at', { ascending: false }).limit(1)
+      .then(({ data }) => setLast(data && data[0] ? data[0].at : null));
+  }, [artist.id]);
+  const archived = artist.status === 'Archived';
+  async function send() {
+    setState('sending');
+    const { error } = await supabase.rpc('send_portal_welcome', { artist_id: artist.id });
+    if (error) { setState('error'); return; }
+    setState('sent'); setLast(new Date().toISOString());
+    logActivity('sent portal welcome', artist.name);
+  }
+  return (
+    <div className="mt-3 pt-3" style={{ borderTop: '1px solid ' + C.border }}>
+      <div style={{ color: C.textFaint }} className="text-xs mb-1">Portal access</div>
+      {!artist.email ? (
+        <div className="flex items-center gap-3 flex-wrap text-sm">
+          <span style={{ color: C.amber }}>No sign-in email yet, so they can’t open the artist portal.</span>
+          {canEdit && <Btn variant="ghost" onClick={() => onEdit(artist)}><Pencil size={14} /> Add email</Btn>}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap text-sm">
+          <span>Signs in at <b>artist.imssrecords.com</b> as <span style={{ fontFamily: 'monospace' }}>{artist.email}</span></span>
+          {isAdmin && supabase && !archived && (
+            <Btn variant="ghost" onClick={send} disabled={state === 'sending'}><Mail size={14} /> {state === 'sending' ? 'Sending…' : last ? 'Send welcome email again' : 'Send welcome email'}</Btn>
+          )}
+          <span className="text-xs" role="status" style={{ color: state === 'error' ? C.red : state === 'sent' ? C.teal : C.textDim }}>
+            {state === 'error' ? 'Could not send. Try again shortly.' : state === 'sent' ? 'Welcome email sent.' : archived ? 'Archived: no sign-in.' : last ? 'Welcome sent ' + formatDate(String(last).slice(0, 10)) : 'Welcome email not sent yet'}
+          </span>
+        </div>
       )}
     </div>
   );

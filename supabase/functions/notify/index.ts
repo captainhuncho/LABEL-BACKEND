@@ -71,10 +71,10 @@ function page(title: string, lines: string[], cta: { label: string; url: string 
   // Apple-style: soft grey ground, white card, system type, amber pill. Dark in mail apps that support it.
   const font = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif";
   return `<!doctype html><html><head><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">
-<style>@media (prefers-color-scheme: dark){.bg{background:#000!important}.card{background:#1c1c1e!important}.t{color:#f5f5f7!important}.t2{color:#a1a1a6!important}.q{background:#2c2c2e!important;color:#f5f5f7!important}.logo{color:#f5f5f7!important}}</style></head>
+<style>@media (prefers-color-scheme: dark){.bg{background:#000!important}.card{background:#1c1c1e!important}.t{color:#f5f5f7!important}.t2{color:#a1a1a6!important}.q{background:#2c2c2e!important;color:#f5f5f7!important}.lg-l{display:none!important}.lg-d{display:block!important;max-height:none!important}}</style></head>
 <body class="bg" style="margin:0;background:#f5f5f7;padding:32px 16px;font-family:${font};color:#1d1d1f;-webkit-font-smoothing:antialiased">
 <table role="presentation" width="100%" style="max-width:560px;margin:0 auto"><tr><td>
-<div class="logo" style="font-weight:700;font-size:15px;letter-spacing:-0.01em;color:#1d1d1f;padding:0 4px 16px">IMSS Records</div>
+<div style="padding:0 4px 18px"><img class="lg-l" src="${APP_URL}/email-logo-dark.png" width="88" height="40" alt="IMSS Records" style="display:block;border:0;height:40px;width:auto"><!--[if !mso]><!--><img class="lg-d" src="${APP_URL}/email-logo-light.png" width="88" height="40" alt="" style="display:none;border:0;height:40px;width:auto;max-height:0;overflow:hidden"><!--<![endif]--></div>
 <table role="presentation" width="100%" class="card" style="background:#ffffff;border-radius:18px"><tr><td style="padding:32px 28px">
 <h1 class="t" style="font-size:28px;line-height:1.15;letter-spacing:-0.025em;font-weight:700;margin:0 0 16px;color:#1d1d1f">${esc(title)}</h1>
 ${lines.map(l => `<p class="t2" style="margin:0 0 12px;font-size:17px;line-height:1.5;color:#424245">${l}</p>`).join('')}
@@ -107,10 +107,13 @@ async function audit(action: string, detail: string, artistId: string | null = n
   await db.from('audit_log').insert({ actor_email: 'system', actor_name: 'Scheduler', actor_kind: 'system', action, detail, artist_id: artistId });
 }
 
-// Safety lock: artists are emailed only about royalties, statements (payouts) and
-// invoices. Any other email to an address on the roster is dropped and logged,
+// Safety lock: artists are emailed only about royalties, statements (payouts),
+// invoices, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
 // whatever the calling code asked for.
-const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice'];
+// Email addresses never appear in full in an email body: ma•••@g•••.com.
+const maskEmail = (e: string) => e.replace(/^([^@]{1,2})[^@]*@([^.@])[^@]*?(\.[a-z]{2,})$/i, '$1•••@$2•••$3');
+const maskEmails = (html: string) => html.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, maskEmail);
+const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome'];
 async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
   if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
@@ -123,6 +126,7 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   }
   if (!recipients.length) return { skipped: 'no recipients' };
   if (artistTopic) html = html.split(APP_URL).join(ARTIST_URL);
+  html = maskEmails(html);
   const inApp = await notifyInApp(recipients, subject);
   if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp };
   // Only emails with a reply address (submissions, requests, invoices) say replies work.
@@ -372,6 +376,19 @@ async function handleInbound(data: Item) {
   return { added: msg.from };
 }
 
+// Admin pressed "Send welcome email" on the artist's page (send_portal_welcome).
+async function sendWelcome(artistId: string) {
+  const a = (await section('roster')).find(x => x.id === artistId);
+  const email = lower(a?.email);
+  if (!a || a.status === 'Archived' || !email.includes('@')) return { skipped: 'no artist email' };
+  const html = page('Your artist portal is ready', [
+    `Hi ${esc(a.name)},`,
+    'Your IMSS Records artist portal is where you see your royalties, statements, releases and invoices.',
+    `Sign in at <b>artist.imssrecords.com</b> with this email address (${esc(email)}): continue with Google, or ask for a sign-in code by email.`,
+  ], { label: 'Open your portal', url: ARTIST_URL });
+  return await send([email], 'Welcome to your IMSS Records artist portal', html, undefined, 'welcome');
+}
+
 // ---------- entry ----------
 Deno.serve(async req => {
   if (req.method !== 'POST') return new Response('ok');
@@ -387,6 +404,7 @@ Deno.serve(async req => {
     if (!ok) return new Response('forbidden', { status: 403 });
     const body = JSON.parse(raw || '{}');
     if (body.action === 'due') return Response.json(await sendDueStatements());
+    if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));
     if (body.action === 'events') {
       const results = [];
       for (const ev of (body.events || []) as Event[]) results.push(await handleEvent(ev).catch(e => ({ error: String(e) })));
