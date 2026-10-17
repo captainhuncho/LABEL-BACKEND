@@ -38,7 +38,7 @@ export function artistStatusTone(status) {
   if (status === 'Former') return 'red';
   return 'default';
 }
-export const STAFF_ROLES = ['Admin', 'Legal', 'Finance', 'Product Manager', 'A&R', 'Label Manager', 'Marketing', 'Other'];
+export const STAFF_ROLES = ['Admin', 'Legal', 'Finance', 'Product Manager', 'A&R', 'Label Manager', 'Marketing', 'Label Rep', 'Other'];
 // Admin and Legal both see everything. The difference is what happens when they
 // change someone's access: an Admin's change applies at once, Legal's is queued
 // for an Admin to approve.
@@ -65,6 +65,8 @@ export function defaultPermissionsForRole(role) {
   // budget and spend — but not what the artist earns.
   if (role === 'Product Manager') return { royalties: false, spend: true, analytics: true, roster: true, catalog: true, notices: false, edits: true };
   if (role === 'A&R' || role === 'Label Manager') return { royalties: false, spend: false, analytics: true, roster: true, catalog: true, notices: false, edits: true };
+  // A Label Rep is an outside partner: no team pages; the database gives them only rep_portal().
+  if (role === 'Label Rep') return { ...NO_PERMISSIONS };
   if (role === 'Marketing') return { royalties: false, spend: false, analytics: true, roster: false, catalog: true, notices: true, edits: false };
   return { ...NO_PERMISSIONS, analytics: true };
 }

@@ -20,7 +20,7 @@ const ARTIST_URL = Deno.env.get('ARTIST_URL') ?? 'https://artist.imssrecords.com
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice' | 'repRelease' | 'repInvoice'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -219,6 +219,19 @@ async function handleEvent(ev: Event) {
     }
     await audit('sent a notice', `"${item.title}" to ${artists.length + team.length} ${artists.length + team.length === 1 ? 'person' : 'people'}`);
     return results.length ? results : { skipped: 'no one in the audience has an email' };
+  }
+
+  // A PM confirmed a release for, or sent an invoice to, the artist's label rep.
+  if (ev.type === 'repRelease' || ev.type === 'repInvoice') {
+    const a = roster.find(r => r.id === item.artistId);
+    const rep = (await section('staff')).find(m => a && m.id === a.labelRep && m.role === 'Label Rep' && m.status !== 'Archived');
+    if (!rep || !lower(rep.email).includes('@')) return { skipped: 'no label rep' };
+    const updated = ev.type === 'repRelease' && item.repFirstConfirmedAt && item.repFirstConfirmedAt !== item.repConfirmedAt;
+    return ev.type === 'repRelease'
+      ? send([lower(rep.email)], `${updated ? 'Release updated' : 'Release confirmed'}: “${item.title}” by ${a.name}`,
+          page(`${updated ? 'Updated' : 'Confirmed'}: ${item.title}`, [`Hi ${esc(rep.name)},`, `IMSS Records ${updated ? 'updated the details of' : 'confirmed'} <b>${esc(item.title)}</b> by ${esc(a.name)}${item.releaseDate ? ', releasing <b>' + esc(item.releaseDate) + '</b>' : ''}.`, 'The full release sheet is in your Release schedule, ready to download.'], { label: 'Open Release schedule', url: `${APP_URL}/release-schedule` }))
+      : send([lower(rep.email)], `Invoice to settle: “${item.title}” (${a.name}, $${Number(item.amount || 0).toFixed(2)})`,
+          page('An invoice to settle', [`Hi ${esc(rep.name)},`, `IMSS Records sent you <b>${esc(item.title)}</b> for ${esc(a.name)}, <b>$${Number(item.amount || 0).toFixed(2)}</b>.`, 'Download it, send it to the partner, then mark it sent in Invoices.'], { label: 'Open Invoices', url: `${APP_URL}/invoices` }));
   }
 
   // A deal or license change approved: Legal gets the record. Nothing goes to the artist.

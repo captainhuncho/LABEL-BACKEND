@@ -1,4 +1,4 @@
-import { ChevronRight, Disc3, FileSpreadsheet, Globe, Pencil, Plus, Trash2, Video } from 'lucide-react';
+import { ChevronRight, Disc3, FileSpreadsheet, Globe, Pencil, Plus, Send, Trash2, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
@@ -119,6 +119,14 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
     ].filter(Boolean);
     const body = encodeURIComponent(bodyLines.join('\n'));
     window.open('mailto:' + distributorEmail.trim() + '?subject=' + subject + '&body=' + body, '_blank');
+  }
+  // The PM confirms the release details for the artist's label rep: the rep sees
+  // it (and gets an email). Saving again after edits re-sends it as Updated.
+  function confirmForRep() {
+    if (!form.title.trim()) return;
+    const at = new Date().toISOString();
+    update(catalog.map(r => r.id === editing ? { ...form, id: editing, repConfirmedAt: at, repFirstConfirmedAt: form.repFirstConfirmedAt || at, repConfirmedBy: sessionName } : r));
+    closeForm();
   }
   function save(e) {
     e.preventDefault();
@@ -389,6 +397,12 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
           <div className="imss-span-2 flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add release'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
+            {editing && canEdit && (roster.find(a => a.id === form.artistId) || {}).labelRep && (
+              <span className="inline-flex items-center gap-2 flex-wrap">
+                <Btn variant="ghost" onClick={confirmForRep}><Send size={14} /> {form.repConfirmedAt ? 'Save and re-send to label rep' : 'Save and confirm for label rep'}</Btn>
+                {form.repConfirmedAt && <span className="text-xs" style={{ color: C.textDim }}>Confirmed {String(form.repConfirmedAt).slice(0, 10)}{form.repConfirmedBy ? ' by ' + form.repConfirmedBy : ''}</span>}
+              </span>
+            )}
           </div>
         </form>
       )}

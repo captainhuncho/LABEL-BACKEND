@@ -53,7 +53,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
     const previousEmail = editing ? ((staff.find(x => x.id === editing) || {}).email || '') : null;
     const email = (form.email || '').trim();
     if (!email) { setEmailError('Add their work email. It’s how they sign in.'); return; }
-    if (email.toLowerCase() !== String(previousEmail || '').toLowerCase() && !isStaffEmailAllowed(email)) {
+    if (email.toLowerCase() !== String(previousEmail || '').toLowerCase() && form.role !== 'Label Rep' && !isStaffEmailAllowed(email)) {
       setEmailError('Use a label email ending in ' + STAFF_EMAIL_DOMAINS.map(d => '@' + d).join(' or ') + '.'); return;
     }
     setEmailError('');
@@ -170,6 +170,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
                 {STAFF_ROLES.filter(r => !proposesOnly || editingAdmin || !isTopRole(r)).map(r => <option key={r} value={r}>{r}</option>)}
               </Select>
             </Field>
+            {form.role === 'Label Rep' && <Field label="Company"><Input value={form.company || ''} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="e.g. the distributor they work for" /></Field>}
             <Field label="Work email">
               <Input type="email" required value={form.email} onChange={e => { setForm({ ...form, email: e.target.value }); setEmailError(''); }} placeholder={'name@' + STAFF_EMAIL_DOMAINS[0]} aria-invalid={!!emailError} />
               {emailError && <span className="text-xs" role="alert" style={{ color: C.red }}>{emailError}</span>}

@@ -5,6 +5,7 @@ import { installStorage } from './storage.js';
 const RecordLabelDashboard = lazy(() => import('./App.jsx'));
 import AuthGate from './AuthGate.jsx';
 const ArtistApp = lazy(() => import('./ArtistApp.jsx'));
+const RepApp = lazy(() => import('./RepApp.jsx'));
 import UpdateBanner from './UpdateBanner.jsx';
 import { LegalPage, LEGAL_PATHS } from './Legal.jsx';
 import './index.css';
@@ -21,6 +22,6 @@ createRoot(document.getElementById('root')).render(
     {/* Legal pages are for people signed in to the platform only. */}
     {LEGAL_PATHS.includes(window.location.pathname.replace(/\/$/, ''))
       ? <AuthGate>{() => <LegalPage page={window.location.pathname.replace(/\/$/, '').slice(1)} />}</AuthGate>
-      : <AuthGate>{auth => <Suspense fallback={null}>{auth.access === 'artist' ? <ArtistApp signOut={auth.signOut} /> : <RecordLabelDashboard {...auth} />}</Suspense>}</AuthGate>}
+      : <AuthGate>{auth => <Suspense fallback={null}>{auth.access === 'artist' ? <ArtistApp signOut={auth.signOut} /> : auth.access === 'rep' ? <RepApp signOut={auth.signOut} /> : <RecordLabelDashboard {...auth} />}</Suspense>}</AuthGate>}
   </React.StrictMode>
 );

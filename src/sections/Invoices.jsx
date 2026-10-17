@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, UserCog, Wallet } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, Send, UserCog, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
 import React, { useState } from 'react';
 import { formatCents, formatCurrency, formatDate } from '../constants.js';
@@ -262,6 +262,19 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                               </div>
                             )}
                           </section>
+                          {canEdit && (() => {
+                            // The artist's label rep settles it with the partner, then moves it to DP Queue.
+                            const rep = staff.find(m => m.id === ((roster.find(a => a.id === inv.artistId) || {}).labelRep) && m.status !== 'Archived');
+                            if (!rep || ['DP Queue', 'Pay Approved', 'Paid', 'Rejected'].includes(st)) return inv.sentToRepAt ? <section className="imss-sub-wide text-sm" style={{ color: C.textDim }}>Sent to label rep {String(inv.sentToRepAt).slice(0, 10)}{inv.repSentAt ? '; they sent it to the partner ' + String(inv.repSentAt).slice(0, 10) + (inv.repRef ? ' (ref ' + inv.repRef + ')' : '') : ''}.</section> : null;
+                            return (
+                              <section className="imss-sub-wide">
+                                <h3 className="imss-sub-h">Label rep</h3>
+                                {inv.sentToRepAt
+                                  ? <div className="text-sm" style={{ color: C.textDim }}>Sent to {rep.name}{rep.company ? ' (' + rep.company + ')' : ''} on {String(inv.sentToRepAt).slice(0, 10)}. Waiting for them to send it to the partner.</div>
+                                  : <Btn variant="ghost" onClick={() => { logActivity('sent an invoice to the label rep', inv.title + ' → ' + rep.name, inv.artistId); update(invoices.map(i => i.id !== inv.id ? i : { ...i, sentToRepAt: new Date().toISOString(), sentToRepBy: session.name, history: [...(i.history || []), { at: new Date().toISOString(), by: session.name, action: 'sent to label rep', from: st, to: st, note: rep.name }] })); }}><Send size={14} /> Send to label rep ({rep.name})</Btn>}
+                              </section>
+                            );
+                          })()}
                           {canAct(inv) && (
                             <section className="imss-sub-wide">
                               <h3 className="imss-sub-h">{st}: your decision{isAdmin && !reviewers.some(m => me && m.id === me.id) ? ' (as Admin)' : ''}</h3>

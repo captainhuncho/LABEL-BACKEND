@@ -60,7 +60,7 @@ export default function AuthGate({ children }) {
   useEffect(() => {
     if (!supabase || !authEmail || access === undefined) return;
     if (access === 'error') { setError('We couldn’t open your account just now. Try again in a moment.'); supabase.auth.signOut(); return; }
-    if (access === 'team' && isArtistSite()) { window.location.replace(OPS_URL); return; }
+    if ((access === 'team' || access === 'rep') && isArtistSite()) { window.location.replace(OPS_URL); return; }
     if (access === null || (access === 'artist' && !isArtistSite())) { setDenied(true); supabase.auth.signOut(); }
   }, [authEmail, access]);
 
@@ -68,7 +68,7 @@ export default function AuthGate({ children }) {
   if (checking) return null;
   const signOut = () => supabase.auth.signOut();
   if (authEmail && access === undefined) return null;
-  if (authEmail && access && access !== 'error' && !(access === 'artist' && !isArtistSite()) && !(access === 'team' && isArtistSite())) return <MfaGate access={access} signOut={signOut}>{children({ authEmail, access, signOut })}</MfaGate>;
+  if (authEmail && access && access !== 'error' && !(access === 'artist' && !isArtistSite()) && !((access === 'team' || access === 'rep') && isArtistSite())) return <MfaGate access={access} signOut={signOut}>{children({ authEmail, access, signOut })}</MfaGate>;
   if (authEmail) return null; // not invited: the effect above signs them out
 
   // Google sign-in: the Google account's email must be on the Team list or an

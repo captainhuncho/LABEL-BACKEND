@@ -208,6 +208,12 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
               {staff.filter(s => s.role === 'A&R').map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </Select>
           </Field>
+          <Field label="Label rep">
+            <Select value={form.labelRep || ''} onChange={e => setForm({ ...form, labelRep: e.target.value })}>
+              <option value="">— none —</option>
+              {staff.filter(s => s.role === 'Label Rep' && s.status !== 'Archived').map(s => <option key={s.id} value={s.id}>{s.name}{s.company ? ' · ' + s.company : ''}</option>)}
+            </Select>
+          </Field>
           <Field label="Status">
             <Select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
               {ARTIST_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
