@@ -646,6 +646,13 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   useEffect(() => {
     if (!loading && authMember && !session) setSession({ mode: 'team', name: authMember.name, role: authMember.role, permissions: permissionsFor(authMember) });
   }, [loading, authMember, session]);
+  // The staff list reloads live when someone changes it: an Admin's change to
+  // this person's role, access or name applies to their open tab at once.
+  useEffect(() => {
+    if (!authMember || !session || session.mode !== 'team') return;
+    const next = { name: authMember.name, role: authMember.role, permissions: permissionsFor(authMember) };
+    if (next.name !== session.name || next.role !== session.role || JSON.stringify(next.permissions) !== JSON.stringify(session.permissions)) setSession(s => ({ ...s, ...next }));
+  }, [authMember, session]);
   const logout = () => { setSession(null); if (signOut) signOut(); };
 
   if (loading) {
