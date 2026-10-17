@@ -1,4 +1,4 @@
-import { Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
+import { Calendar, ChevronDown, Megaphone, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
 import { DOC_MAX_BYTES, uploadDocument } from '../storage.js';
 import React, { useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -403,7 +403,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
       <aside className="imss-sidebar imss-print-hide shrink-0" style={{ borderColor: C.border, background: C.panel }} aria-label="Artist navigation">
         <div className="imss-desktop-only px-5 pt-6 pb-5" style={{ borderBottom: '1px solid ' + C.border }}>
-          <button type="button" onClick={() => setTab('overview')} aria-label="IMSS Records, go to Dashboard" style={{ display: 'block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 24, width: 'auto' }} /></button>
+          <button type="button" onClick={() => setTab('overview')} aria-label="IMSS Records, go to Dashboard" style={{ display: 'block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 24, width: 'auto', filter: 'var(--logo-filter)' }} /></button>
           <div className="flex items-center gap-3 mt-5">
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={40} />
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -469,7 +469,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div style={{ fontWeight: 600, fontSize: 15 }}>{artist.name}</div>
               <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
-            <NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
+            <NotificationBell routes={{ notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
             <button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
           </div>
         </div>
@@ -477,7 +477,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         {tab !== 'overview' && (
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>
-            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
+            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
           </div>
         )}
 
@@ -487,7 +487,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <h1 className="imss-portal-title">Dashboard</h1>
               <div className="flex items-center gap-2">
                 <Badge tone={isFunded ? 'teal' : 'default'}>{dealLabel(artist)}</Badge>
-                <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
+                <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
               </div>
             </div>
 
@@ -544,12 +544,15 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                   <div key={'k' + i} className="rounded border px-4 py-3 text-sm" style={{ borderColor: C.amber, background: C.amberSoft, color: C.text }}>{n.text}</div>
                 ))}
                 {myNotices.map(n => (
-                  <div key={n.id} className="rounded border px-4 py-3" style={{ borderColor: C.border, background: C.panel }}>
-                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{n.title}</div>
-                      <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(n.createdAt)}</div>
+                  <div key={n.id} role="note" className="rounded border flex gap-3" style={{ borderColor: C.amberLine || 'var(--amber-line)', background: C.amberSoft, padding: '14px 16px' }}>
+                    <span aria-hidden="true" style={{ flex: '0 0 auto', width: 36, height: 36, borderRadius: 9999, background: C.amberFill, color: C.onAmber, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Megaphone size={18} /></span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                        <div style={{ fontWeight: 700, fontSize: 16, color: C.text }}>{n.title}</div>
+                        <div className="text-xs" style={{ color: C.textDim }}>{formatDate(n.createdAt)}</div>
+                      </div>
+                      <div className="mt-1" style={{ color: C.text, fontSize: 15, lineHeight: 1.45, maxWidth: '70ch', whiteSpace: 'pre-wrap' }}>{n.message}</div>
                     </div>
-                    <div className="text-sm mt-1" style={{ color: C.textDim, maxWidth: '70ch' }}>{n.message}</div>
                   </div>
                 ))}
               </section>

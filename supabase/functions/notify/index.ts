@@ -20,7 +20,7 @@ const ARTIST_URL = Deno.env.get('ARTIST_URL') ?? 'https://artist.imssrecords.com
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -89,7 +89,7 @@ ${quote ? `<div class="q" style="margin:18px 0;padding:14px 16px;background:#f5f
 // Every email is also an in-app notification. The topic lets each side open the right screen.
 function topicOf(subject: string) {
   const s = subject.toLowerCase();
-  return s.includes('deal') ? 'deal' : s.includes('earnings') ? 'earnings' : s.includes('statement') ? 'statement'
+  return s.includes('notice') ? 'notice' : s.includes('deal') ? 'deal' : s.includes('earnings') ? 'earnings' : s.includes('statement') ? 'statement'
     : s.includes('invoice') || s.includes('claim') ? 'invoice' : s.includes('submission') || s.includes('release') ? 'submission' : s.includes('request') ? 'request' : '';
 }
 async function notifyInApp(recipients: string[], subject: string) {
@@ -108,12 +108,12 @@ async function audit(action: string, detail: string, artistId: string | null = n
 }
 
 // Safety lock: artists are emailed only about royalties, statements (payouts),
-// invoices, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
+// invoices, noticeboard posts, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
 // whatever the calling code asked for.
 // Email addresses never appear in full in an email body: ma•••@g•••.com.
 const maskEmail = (e: string) => e.replace(/^([^@]{1,2})[^@]*@([^.@])[^@]*?(\.[a-z]{2,})$/i, '$1•••@$2•••$3');
 const maskEmails = (html: string) => html.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, maskEmail);
-const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome'];
+const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice'];
 async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
   if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
@@ -195,6 +195,30 @@ async function handleEvent(ev: Event) {
           { label: 'See your earnings', url: `${APP_URL}/` }), undefined, 'earnings'));
     }
     return results;
+  }
+
+  // A noticeboard post: each person in its audience gets their own email (no
+  // shared To: line) and a bell notification.
+  if (ev.type === 'notice') {
+    const staff = await section('staff');
+    const aud = item.audience;
+    const artists = roster.filter(a => a.status !== 'Archived' && (aud === 'all' || a.id === aud));
+    const team = staff.filter(m => (m.status || 'Active') !== 'Inactive' && m.status !== 'Archived' && (aud === 'all-team' || m.id === aud));
+    const results = [];
+    for (const a of artists) {
+      const email = lower(a.email);
+      if (!email.includes('@')) continue;
+      results.push(await send([email], `Notice from IMSS Records: ${item.title}`,
+        page(item.title || 'Notice from IMSS Records', [`Hi ${esc(a.name)},`, esc(item.message || '').replace(/\n/g, '<br>')], { label: 'Open your portal', url: `${APP_URL}/` }), undefined, 'notice'));
+    }
+    for (const m of team) {
+      const email = lower(m.email);
+      if (!email.includes('@')) continue;
+      results.push(await send([email], `Notice: ${item.title}`,
+        page(item.title || 'Notice', [esc(item.message || '').replace(/\n/g, '<br>')], { label: 'Open the dashboard', url: `${APP_URL}/` })));
+    }
+    await audit('sent a notice', `"${item.title}" to ${artists.length + team.length} ${artists.length + team.length === 1 ? 'person' : 'people'}`);
+    return results.length ? results : { skipped: 'no one in the audience has an email' };
   }
 
   // A deal or license change approved: Legal gets the record. Nothing goes to the artist.

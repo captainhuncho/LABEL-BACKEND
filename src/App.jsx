@@ -44,7 +44,7 @@ function Sidebar({ active, setActive, nav, onClearAll, confirmReset, setConfirmR
     <div className="imss-sidebar shrink-0" style={{ borderColor: C.border, background: C.panel }}>
       <div className="imss-desktop-only px-5 pt-6 pb-4">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setActive('overview')} aria-label="IMSS Records, go to Overview" style={{ display: 'block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 26, width: 'auto' }} /></button>
+          <button type="button" onClick={() => setActive('overview')} aria-label="IMSS Records, go to Overview" style={{ display: 'block' }}><img src={LOGO_DATA_URI} alt="" style={{ height: 26, width: 'auto', filter: 'var(--logo-filter)' }} /></button>
         </div>
         <div className="text-xs mt-1" style={{ color: C.textFaint }}>Label operations</div>
       </div>
@@ -335,7 +335,7 @@ function TopBar({ onLogout, openItem, roster, catalog, staff, tasks = [], revenu
         )}
       </div>
       <div className="flex items-center gap-2">
-      <NotificationBell routes={{ deal: 'deals', earnings: 'publish', statement: 'payouts', invoice: 'invoices', submission: 'submissions', request: 'artist-requests' }} onOpen={setActive} />
+      <NotificationBell routes={{ notice: 'notices', deal: 'deals', earnings: 'publish', statement: 'payouts', invoice: 'invoices', submission: 'submissions', request: 'artist-requests' }} onOpen={setActive} />
       <div style={{ position: 'relative' }}>
         {/* Alerts (things to act on) are a warning sign; the bell is for updates sent to you. */}
         <button onClick={() => setShowNotifs(s => !s)} aria-label={'Needs your attention' + (notifications.length ? ', ' + notifications.length : '')} title="Needs your attention" className="imss-alerts inline-flex items-center gap-1.5" style={{ background: notifications.length ? (notifications.some(n => n.tone === 'red') ? C.redSoft : C.amberSoft) : C.fill, color: notifications.length ? (notifications.some(n => n.tone === 'red') ? C.red : C.amber) : C.text, borderRadius: 980, padding: '8px 14px', fontSize: 14, fontWeight: 600 }}>
