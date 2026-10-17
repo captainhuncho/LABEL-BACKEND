@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { ArtistPortalShell } from './sections/ArtistPortal.jsx';
 import { supabase } from './storage.js';
 import { logActivity, logSignIn } from './audit.js';
+import { useStepUp } from './Mfa.jsx';
+
+// Invoices and profile changes (payout details) need a fresh passkey or code.
+const SENSITIVE = new Set(['invoices', 'profileRequests']);
 
 const WHAT = { profileRequests: 'requested a profile change', artistRequests: 'sent a request', releaseSubmissions: 'submitted a release', invoices: 'submitted an invoice' };
 
@@ -12,6 +16,7 @@ import { C, HEADING_FONT } from './theme.js';
 export default function ArtistApp({ signOut }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [stepUpDialog, askStepUp] = useStepUp();
 
   async function load() {
     const { data: portal, error: err } = await supabase.rpc('artist_portal');
@@ -24,8 +29,11 @@ export default function ArtistApp({ signOut }) {
   const adder = (section) => async (next) => {
     const known = new Set((data[section] || []).map(x => x.id));
     for (const item of next.filter(x => !known.has(x.id))) {
-      const { error: err } = await supabase.rpc('artist_add', { section_key: section, item });
-      if (err) { setError('Could not send that. Please try again.'); return; }
+      if (SENSITIVE.has(section) && !(await askStepUp())) { load(); return; }
+      let { error: err } = await supabase.rpc('artist_add', { section_key: section, item });
+      // The database says the check is too old: ask once more, then retry.
+      if (err && /confirm_identity/.test(err.message || '') && await askStepUp()) ({ error: err } = await supabase.rpc('artist_add', { section_key: section, item }));
+      if (err) { setError(/confirm_identity/.test(err.message || '') ? 'Not sent: confirm it’s you with your passkey or code, then try again.' : 'Could not send that. Please try again.'); return; }
       logActivity(WHAT[section] || 'added to ' + section, item.title || item.category || item.description || '');
     }
     load();
@@ -35,6 +43,7 @@ export default function ArtistApp({ signOut }) {
   if (!data) return null;
 
   return (
+    <>{stepUpDialog}
     <ArtistPortalShell
       artist={data.artist} roster={[data.artist]} catalog={data.catalog} revenue={data.revenue}
       streams={data.streams} masterGross={data.masterGross} payouts={data.payouts} ledger={data.ledger}
@@ -58,6 +67,6 @@ export default function ArtistApp({ signOut }) {
         load();
       }}
       onLogout={signOut}
-    />
+    /></>
   );
 }
