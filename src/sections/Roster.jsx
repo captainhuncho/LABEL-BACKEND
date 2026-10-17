@@ -251,7 +251,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
       {filtered.length === 0 ? (
         <EmptyState icon={Users} title={filtersActive ? 'No matching artists' : 'No artists yet'} description={filtersActive ? 'Try a different filter or search term.' : 'Add your first signing to start tracking releases and royalties.'} />
       ) : view === 'grid' ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div className="grid gap-4 imss-card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
           {filtered.map(a => {
             const releaseCount = catalog.filter(c => c.artistId === a.id).length;
             return (

@@ -196,6 +196,13 @@ td, th { font-variant-numeric: tabular-nums; }
   table.imss-stack thead:has(input[type=checkbox]) th:has(input[type=checkbox])::after { content: 'Select all'; }
   .imss-stack-wrap { border: 0 !important; background: transparent !important; overflow: visible !important; box-shadow: none !important; border-radius: 0 !important; }
 
+  /* Card grids (Catalog, Roster, Team): two side by side, compact. */
+  .imss-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+  .imss-card-grid > * { min-width: 0; }
+  .imss-card-grid > * > div:not(:first-child), .imss-card-grid > button > div + div { padding: 10px !important; }
+  .imss-card-grid :is(h3, .text-base, [style*="font-size: 17px"], [style*="font-size: 16px"]) { font-size: 15px !important; }
+  .imss-card-grid * { overflow-wrap: anywhere; }
+
   /* Fingers, not cursors: 44px targets; 16px fields so iOS doesn't zoom. */
   .imss-btn { min-height: 44px; }
   .imss-shell input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), .imss-shell select, .imss-shell textarea { font-size: 16px !important; min-height: 44px; }

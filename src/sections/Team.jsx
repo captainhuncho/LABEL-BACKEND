@@ -245,7 +245,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
       {sorted.length === 0 ? (
         <EmptyState icon={UserCog} title="No team members yet" description="Add the people on your side of the label — this list is also what populates sign-in, roster assignments, and access control." />
       ) : view === 'grid' ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div className="grid gap-4 imss-card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
           {sorted.map(s => {
             const prog = onboardingProgress(s);
             const status = s.status || 'Active';

@@ -488,7 +488,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
       {view !== 'pipeline' && (sorted.length === 0 ? (
         <EmptyState icon={Disc3} title={filtersActive ? 'No matching releases' : 'No releases yet'} description={filtersActive ? 'Try a different filter or search term.' : 'Add a single, EP, or album to start building the catalog.'} />
       ) : view === 'grid' ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
+        <div className="grid gap-4 imss-card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
           {sorted.map(r => {
             const lic = r.licenseExpiration ? r.license : null;
             const prog = checklistProgress(r.checklist);
