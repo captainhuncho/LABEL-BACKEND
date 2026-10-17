@@ -209,7 +209,14 @@ td, th { font-variant-numeric: tabular-nums; }
   .imss-shell input[type=checkbox], .imss-shell input[type=radio] { width: 20px; height: 20px; }
   .imss-shell button:has(> svg:only-child) { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
   .imss-content-inner { overflow-wrap: anywhere; }
-  .imss-content img, .imss-content svg, .imss-content canvas { max-width: 100%; }
+  .imss-content img, .imss-content canvas { max-width: 100%; }
+  .imss-shell svg { flex-shrink: 0; } /* icons keep their size in tight rows */
+  /* iPhone date and month fields ignore width unless their native look is reset. */
+  .imss-shell input[type=date], .imss-shell input[type=month], .imss-shell input[type=time], .imss-shell input[type=datetime-local] { -webkit-appearance: none; appearance: none; display: block; width: 100% !important; min-width: 0 !important; max-width: 100%; box-sizing: border-box; text-align: left; }
+  .imss-shell input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  .imss-kpi { max-width: none !important; min-width: 0 !important; }
+  /* Pop-overs (notifications) sit inside the screen, under the top of the page. */
+  .imss-pop { position: fixed !important; left: 12px !important; right: 12px !important; top: 64px !important; width: auto !important; max-height: 70dvh !important; }
 }
 
 /* Legal pages */

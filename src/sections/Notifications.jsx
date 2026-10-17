@@ -51,7 +51,7 @@ export function NotificationBell({ routes = {}, onOpen, openLeft = false }) {
         {unread > 0 && <span style={{ background: C.amberFill, color: C.onAmber, borderRadius: 9999, fontSize: 11, fontWeight: 700, minWidth: 18, height: 18, padding: '0 5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>}
       </button>
       {open && (
-        <div role="dialog" aria-label="Notifications" className="rounded" style={{ position: 'absolute', ...(openLeft ? { left: 0 } : { right: 0 }), top: 'calc(100% + 8px)', width: 'min(360px, calc(100vw - 32px))', maxHeight: 440, overflowY: 'auto', background: C.panel, boxShadow: 'var(--shadow)', border: '1px solid ' + C.border, zIndex: 30 }}>
+        <div role="dialog" aria-label="Notifications" className="rounded imss-pop" style={{ position: 'absolute', ...(openLeft ? { left: 0 } : { right: 0 }), top: 'calc(100% + 8px)', width: 'min(360px, calc(100vw - 32px))', maxHeight: 440, overflowY: 'auto', background: C.panel, boxShadow: 'var(--shadow)', border: '1px solid ' + C.border, zIndex: 30 }}>
           <div className="flex items-center justify-between" style={{ padding: '14px 16px 10px' }}>
             <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.02em' }}>Notifications</div>
             {unread > 0 && <button onClick={readAll} className="inline-flex items-center gap-1" style={{ color: C.amber, fontSize: 13 }}><CheckCheck size={14} /> Mark all read</button>}
