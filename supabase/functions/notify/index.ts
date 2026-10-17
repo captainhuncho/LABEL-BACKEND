@@ -18,6 +18,8 @@ const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
 // Artists use their own address; emails to them link there.
 const ARTIST_URL = Deno.env.get('ARTIST_URL') ?? 'https://artist.imssrecords.com';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
+// A real mailbox the team reads; emails without a thread reply address reply here.
+const REPLY_TO = Deno.env.get('REPLY_TO') ?? '';
 
 type Item = Record<string, any>;
 type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice' | 'repRelease' | 'repInvoice' | 'budgetSent'; key: string; id: string };
@@ -113,6 +115,16 @@ async function audit(action: string, detail: string, artistId: string | null = n
 // Email addresses never appear in full in an email body: ma•••@g•••.com.
 const maskEmail = (e: string) => e.replace(/^([^@]{1,2})[^@]*@([^.@])[^@]*?(\.[a-z]{2,})$/i, '$1•••@$2•••$3');
 const maskEmails = (html: string) => html.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, maskEmail);
+// Plain-text twin of the HTML (mail apps, and Gmail sorting, expect both).
+function toText(html: string) {
+  const body = html.replace(/[\s\S]*<body[^>]*>/i, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+  return body
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2: $1')
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|h1|div|tr)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+    .replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice', 'security'];
 async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
@@ -132,8 +144,10 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   // Only emails with a reply address (submissions, requests, invoices) say replies work.
   const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
   const note = replyable ? '<p class="t2" style="margin:20px 0 0;font-size:14px;color:#6e6e73">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
-  const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html: html.replace('<!--REPLY_NOTE-->', note) };
+  const finalHtml = html.replace('<!--REPLY_NOTE-->', note);
+  const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html: finalHtml, text: toText(finalHtml) };
   if (replyable) body.reply_to = `reply-${replyKey}@${RECEIVE_DOMAIN}`;
+  else if (REPLY_TO) body.reply_to = REPLY_TO;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });

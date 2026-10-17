@@ -413,15 +413,19 @@ function PortalAccess({ artist, isAdmin, isPm, canEdit, onEdit }) {
           {canEdit && <Btn variant="ghost" onClick={() => onEdit(artist)}><Pencil size={14} /> Add email</Btn>}
         </div>
       ) : (
-        <div className="flex items-center gap-3 flex-wrap text-sm">
-          <span>Signs in at <b>artist.imssrecords.com</b> as <span style={{ fontFamily: 'monospace' }}>{artist.email}</span></span>
-          {isAdmin && supabase && !archived && (
-            <Btn variant="ghost" onClick={send} disabled={state === 'sending'}><Mail size={14} /> {state === 'sending' ? 'Sending…' : last ? 'Send welcome email again' : 'Send welcome email'}</Btn>
-          )}
-          <span className="text-xs" role="status" style={{ color: state === 'error' ? C.red : state === 'sent' ? C.teal : C.textDim }}>
-            {state === 'error' ? 'Could not send. Try again shortly.' : state === 'sent' ? 'Welcome email sent.' : archived ? 'Archived: no sign-in.' : last ? 'Welcome sent ' + formatDate(String(last).slice(0, 10)) : 'Welcome email not sent yet'}
-          </span>
-          {(isAdmin || isPm) && !archived && <SignOutEverywhere kind="artist" id={artist.id} name={artist.name} />}
+        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{artist.email}</div>
+            <div className="text-xs mt-1" role="status" style={{ color: state === 'error' ? C.red : state === 'sent' ? C.teal : C.textDim }}>
+              {state === 'error' ? 'Could not send. Try again shortly.' : state === 'sent' ? 'Welcome email sent.' : archived ? 'Archived: no sign-in.' : 'Signs in at artist.imssrecords.com · ' + (last ? 'welcome sent ' + formatDate(String(last).slice(0, 10)) : 'welcome not sent yet')}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {isAdmin && supabase && !archived && (
+              <Btn variant="ghost" onClick={send} disabled={state === 'sending'}><Mail size={14} /> {state === 'sending' ? 'Sending…' : last ? 'Resend welcome' : 'Send welcome email'}</Btn>
+            )}
+            {(isAdmin || isPm) && !archived && <SignOutEverywhere kind="artist" id={artist.id} name={artist.name} />}
+          </div>
         </div>
       )}
     </div>
