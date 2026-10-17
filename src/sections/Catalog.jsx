@@ -1,4 +1,4 @@
-import { ChevronRight, Disc3, FileSpreadsheet, Globe, Pencil, Plus, Send, Trash2, Video } from 'lucide-react';
+import { ChevronRight, Disc3, FileSpreadsheet, Globe, ImagePlus, Pencil, Plus, Send, Trash2, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
@@ -493,9 +493,17 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
             const lic = r.licenseExpiration ? r.license : null;
             const prog = checklistProgress(r.checklist);
             return (
-              <button key={r.id} data-focus={r.id} onClick={() => canEdit && openEdit(r)} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
+              <div key={r.id} data-focus={r.id} role={canEdit ? 'button' : undefined} tabIndex={canEdit ? 0 : undefined} onClick={() => canEdit && openEdit(r)} onKeyDown={e => { if (canEdit && (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); openEdit(r); } }} className="text-left rounded border overflow-hidden" style={{ background: C.panel, borderColor: C.border, cursor: canEdit ? 'pointer' : 'default' }}>
                 <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative' }}>
                   <ArtworkThumb release={r} size="100%" radius={0} />
+                  {canEdit && (
+                    // Cover art straight from the card: pick an image, it's resized and saved.
+                    <label onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1" style={{ position: 'absolute', right: 8, bottom: 8, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 980, padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                      <ImagePlus size={13} aria-hidden="true" /> {r.artworkUrl ? 'Change' : 'Add cover art'}
+                      <input type="file" accept="image/*" aria-label={(r.artworkUrl ? 'Change' : 'Add') + ' cover art for ' + r.title} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+                        onChange={e => { const f = e.target.files && e.target.files[0]; if (f) resizeImageFile(f, 600, url => update(catalog.map(c => c.id === r.id ? { ...c, artworkUrl: url } : c))); e.target.value = ''; }} />
+                    </label>
+                  )}
                   {r.status !== 'Released' && prog.total > 0 && (
                     <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'var(--fill)' }}>
                       <div style={{ height: 3, width: prog.pct + '%', background: C.amber }} />
@@ -529,7 +537,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
                   )}
                   {r.enteredBy && <div className="text-xs mt-1.5" style={{ color: C.textFaint }}>Entered by {r.enteredBy}</div>}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
