@@ -426,6 +426,21 @@ async function sendWelcome(artistId: string) {
   return await send([email], 'Welcome to your IMSS Records artist portal', html, undefined, 'welcome');
 }
 
+// Admin pressed "Send welcome email" for a team member or label rep (send_team_welcome).
+async function sendTeamWelcome(staffId: string) {
+  const m = (await section('staff')).find(x => x.id === staffId);
+  const email = lower(m?.email);
+  if (!m || m.status === 'Archived' || !email.includes('@')) return { skipped: 'no email' };
+  const rep = m.role === 'Label Rep';
+  const html = page(rep ? 'You’re invited to IMSS Records' : 'Welcome to the IMSS Records team', [
+    `Hi ${esc(m.name)},`,
+    rep ? 'IMSS Records has set you up as a label rep. You’ll see the release schedule for your artists, with release sheets to download, and the invoices we send you to settle.'
+        : `You’ve been added to the IMSS Records label dashboard as <b>${esc(m.role || 'a team member')}</b>.`,
+    `Sign in at <b>ops.imssrecords.com</b> with this email address (${esc(email)}): continue with Google, or ask for a sign-in code by email. The first time, you’ll add a passkey or an authenticator app for a second step.`,
+  ], { label: 'Sign in', url: `${APP_URL}/` });
+  return await send([email], rep ? 'You’re invited to IMSS Records' : 'Welcome to the IMSS Records team', html);
+}
+
 // "New sign-in" email to the person who just signed in (private.signin_alert).
 // Only people on the Team list or a Roster entry; nobody else can sign in anyway.
 function deviceName(ua: string) {
@@ -473,6 +488,7 @@ Deno.serve(async req => {
       const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
       return Response.json(await send(admins, `${label} signed in`, page(`${label} signed in`, [`They signed in to IMSS Records at <b>${esc(when)}</b>.`, 'You asked to be told when this account signs in.'], { label: 'Open the dashboard', url: `${APP_URL}/` })));
     }
+    if (body.action === 'teamWelcome') return Response.json(await sendTeamWelcome(String(body.staffId || '')));
     if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));
     if (body.action === 'events') {
       const results = [];

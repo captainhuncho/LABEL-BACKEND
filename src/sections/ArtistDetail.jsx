@@ -426,35 +426,6 @@ function PortalAccess({ artist, isAdmin, canEdit, onEdit }) {
   );
 }
 
-// Admin-only: emails someone a fresh sign-in link (same email they'd get from the sign-in page).
-export function SendLinkButton({ email, labeled = false }) {
-  const [state, setState] = useState('idle');
-  if (!supabase || !email) return null;
-  async function send() {
-    setState('sending');
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-    setState(error ? 'error' : 'sent');
-    setTimeout(() => setState('idle'), 4000);
-  }
-  const label = state === 'sent' ? 'Sign-in link sent to ' + email : state === 'error' ? 'Could not send. Try again shortly.' : 'Email ' + email + ' a sign-in link';
-  // In edit forms: a full button naming the saved address the link goes to.
-  if (labeled) {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <Btn variant="ghost" onClick={send} disabled={state === 'sending'}><Mail size={14} /> {state === 'sending' ? 'Sending…' : 'Send sign-in link'}</Btn>
-        <span className="text-xs" role="status" style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textFaint }}>
-          {state === 'idle' || state === 'sending' ? 'to ' + email : label}
-        </span>
-      </span>
-    );
-  }
-  return (
-    <button onClick={send} disabled={state === 'sending'} title={label} aria-label={label}
-      style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textDim }}>
-      {state === 'sent' ? <CheckCircle2 size={14} /> : <Mail size={14} />}
-    </button>
-  );
-}
 
 // PDF statements from the distributor (royalty statements, Label Access extracts).
 // Kept with the artist's statement files for the team; artists don't see them.

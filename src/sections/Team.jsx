@@ -1,10 +1,10 @@
-import { Pencil, Plus, Trash2, UserCog, Users, Archive } from 'lucide-react';
+import { Archive, Mail, Pencil, Plus, Trash2, UserCog, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { BlockedSignins } from './BlockedSignins.jsx';
 import { STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
-import { SendLinkButton } from './ArtistDetail.jsx';
+import { supabase } from '../storage.js';
 
 export function TeamSection({ roster = [], updateRoster, staff, update, sessionRole = 'Admin', sessionName = '', accessRequests = [], updateAccessRequests }) {
   // Legal has Admin-level reach, but access changes it makes are proposals:
@@ -228,7 +228,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
           <div className="flex gap-2 mt-1">
             <Btn variant="primary" type="submit">{editing ? 'Save changes' : 'Add team member'}</Btn>
             <Btn variant="ghost" onClick={closeForm}>Cancel</Btn>
-            {isTopRole(sessionRole) && editing && <SendLinkButton labeled email={(staff.find(x => x.id === editing) || {}).email} />}
+            {isTopRole(sessionRole) && editing && <WelcomeButton labeled member={staff.find(x => x.id === editing)} />}
           </div>
         </form>
       )}
@@ -293,7 +293,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
                     <Td align="right">
                       {confirmId === s.id ? <ConfirmInline label="Archive? They lose sign-in; their work stays." onConfirm={() => remove(s.id)} onCancel={() => setConfirmId(null)} /> : (
                         <span className="inline-flex gap-3 justify-end">
-                          {isTopRole(sessionRole) && <SendLinkButton email={s.email} />}
+                          {isTopRole(sessionRole) && <WelcomeButton member={s} />}
                           <button onClick={() => openEdit(s)} style={{ color: C.textDim }}><Pencil size={14} /></button>
                           {s.status === 'Archived' ? <button onClick={() => restore(s.id)} style={{ color: C.amber, fontSize: 13 }}>Restore</button> : !isTopRole(s.role) && <button onClick={() => setConfirmId(s.id)} aria-label={'Archive ' + s.name} title="Archive" style={{ color: C.textDim }}><Archive size={14} /></button>}
                         </span>
@@ -308,4 +308,24 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
       )}
     </div>
   );
+}
+
+// Admin: email a team member or label rep where and how to sign in.
+function WelcomeButton({ member, labeled = false }) {
+  const [state, setState] = useState('idle');
+  if (!supabase || !member || !member.email || member.status === 'Archived') return null;
+  async function send() {
+    setState('sending');
+    const { error } = await supabase.rpc('send_team_welcome', { staff_id: member.id });
+    setState(error ? 'error' : 'sent');
+    setTimeout(() => setState('idle'), 5000);
+  }
+  const label = state === 'sent' ? 'Welcome email sent to ' + member.name : state === 'error' ? 'Could not send. Save first, then try again.' : 'Email ' + member.name + ' how to sign in';
+  if (labeled) return (
+    <span className="inline-flex items-center gap-2 flex-wrap">
+      <Btn variant="ghost" onClick={send} disabled={state === 'sending'}><Mail size={14} /> {state === 'sending' ? 'Sending…' : 'Send welcome email'}</Btn>
+      <span className="text-xs" role="status" style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textDim }}>{state === 'idle' || state === 'sending' ? 'Tells them to sign in at ops.imssrecords.com' : label}</span>
+    </span>
+  );
+  return <button onClick={send} disabled={state === 'sending'} title={label} aria-label={label} style={{ color: state === 'sent' ? C.teal : state === 'error' ? C.red : C.textDim }}><Mail size={14} /></button>;
 }
