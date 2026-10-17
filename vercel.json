@@ -52,7 +52,7 @@
       ]
     },
     {
-      "source": "/(index.html|version.json)",
+      "source": "/(index.html|artist.html|version.json)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -62,6 +62,16 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json|email-logo-dark.png|email-logo-light.png).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "artist.imssrecords.com"
+        }
+      ],
+      "destination": "/artist.html"
+    },
     {
       "source": "/((?!assets/|robots.txt|favicon.png|apple-touch-icon.png|version.json).*)",
       "destination": "/index.html"

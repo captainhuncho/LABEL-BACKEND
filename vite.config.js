@@ -6,6 +6,19 @@ const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now());
 
 export default defineConfig({
   plugins: [react(), {
+    // artist.imssrecords.com is served artist.html (vercel.json): the same app,
+    // with its own tab title and link-preview text.
+    name: 'imss-artist-page',
+    enforce: 'post',
+    generateBundle(_, bundle) {
+      const page = bundle['index.html'];
+      if (!page) return;
+      const html = String(page.source)
+        .replaceAll('IMSS Records — Label Operations', 'IMSS Records — For Artists')
+        .replaceAll('IMSS Records Ops. Invite only.', 'The IMSS Records artist portal. Invite only.');
+      this.emitFile({ type: 'asset', fileName: 'artist.html', source: html });
+    },
+  }, {
     name: 'imss-version',
     generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: BUILD_ID }) }); },
   }],
