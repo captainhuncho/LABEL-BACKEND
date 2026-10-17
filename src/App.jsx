@@ -1,5 +1,6 @@
 import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
 import { logActivity, logSignIn } from './audit.js';
+import { MobileNav } from './MobileNav.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
 import { streamsFromRevenue } from './streams.js';
@@ -743,6 +744,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         <LegalFooter />
         </div>
       </div>
+      <MobileNav nav={NAV} active={active} setActive={setActive} role={session.role}
+        badges={attention.reduce((m, i) => (i.tab ? { ...m, [i.tab]: (m[i.tab] || 0) + 1 } : m), {})}
+        account={[{ label: 'Sign-in & passkeys', icon: ShieldCheck, onClick: () => setActive('account') }, { label: 'Sign out', icon: LogOut, onClick: logout, danger: true }]} />
     </div>
   );
 }

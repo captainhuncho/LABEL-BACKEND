@@ -17,6 +17,7 @@ import { SUBMISSION_LABELS, SUBMISSION_TONES } from './Submissions.jsx';
 import { licenseFor, rightsLine } from '../licenses.js';
 import { streamsFromRevenue } from '../streams.js';
 import { PasskeySettings } from '../Passkeys.jsx';
+import { MobileNav } from '../MobileNav.jsx';
 import { TwoFactorSettings } from '../Mfa.jsx';
 
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null }) {
@@ -1609,6 +1610,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         <LegalFooter />
         </div>
       </main>
+      <MobileNav nav={TABS} active={tab} setActive={setTab} role="artist" badges={{ requests: openRequestCount }}
+        account={[{ label: 'Sign out', icon: LogOut, onClick: onLogout, danger: true }]} />
     </div>
   );
 }

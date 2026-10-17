@@ -141,10 +141,26 @@ input[type="month"]::-webkit-datetime-edit-fields-wrapper { color: inherit; }
 .imss-nav button:active { transform: scale(0.98); }
 .imss-sidebar, .imss-content { position: relative !important; z-index: 1 !important; }
 /* Phones: the tab bar floats over the content, frosted, and content scrolls under it (bar is 53px). */
+/* Phones: the sidebar gives way to a bottom tab bar (MobileNav) inside the
+   shell, above the home indicator; it steps aside while someone is typing. */
+.imss-bottombar, .imss-sheet-scrim { display: none; }
 @media (max-width: 767px) {
-  .imss-shell > .imss-sidebar { position: absolute !important; top: 0; left: 0; right: 0; z-index: 5 !important; }
-  .imss-shell > .imss-content, .imss-shell main.imss-content { padding-top: 69px !important; }
+  .imss-shell > .imss-sidebar, .imss-portal > .imss-sidebar { display: none !important; }
+  .imss-bottombar { display: flex; flex: 0 0 auto; align-items: stretch; gap: 2px; padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); background: var(--chrome); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 1px solid var(--hairline); position: relative; z-index: 5; }
+  .imss-bottombar button { border-radius: 10px; -webkit-tap-highlight-color: transparent; }
+  .imss-bottombar button:active { background: var(--hover); }
+  body:has(input:focus:not([type=checkbox]):not([type=radio]):not([type=range]), textarea:focus) .imss-bottombar { display: none; }
+  .imss-sheet-scrim { display: flex; position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.35); align-items: flex-end; animation: imss-fade 200ms ease-out; }
+  .imss-sheet { width: 100%; max-height: 86dvh; display: flex; flex-direction: column; background: var(--panel); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); outline: none; animation: imss-sheet-up 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .imss-sheet-list { overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
+  .imss-sheet-group { list-style: none; margin: 0 12px; padding: 0; background: var(--panel-2); border-radius: 12px; overflow: hidden; }
+  .imss-sheet-group li + li { border-top: 1px solid var(--hairline); }
+  .imss-sheet-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; font-size: 16px; }
+  .imss-sheet-row:active { background: var(--hover) !important; }
 }
+@keyframes imss-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes imss-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .imss-sheet, .imss-sheet-scrim { animation: none; } }
 
 /* Tables: hairline grid, quiet header band. */
 table th:not(:last-child), table td:not(:last-child) { border-right: 1px solid var(--hairline); }
