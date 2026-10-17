@@ -34,11 +34,13 @@ export function BackupSection({ allData, updaters, onClearAll = null, onReseed =
   const [busy, setBusy] = useState(false);
   const [restored, setRestored] = useState(false);
   const [autos, setAutos] = useState(null);
+  const [appErrors, setAppErrors] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!supabase) return;
     supabase.rpc('backups_list').then(({ data }) => setAutos((data || []).filter(b => String(b.archive_id).startsWith('auto-'))));
+    supabase.rpc('client_errors_list').then(({ data }) => setAppErrors(data || []));
   }, []);
 
   async function current() { return supabase ? liveSections() : allData; }
@@ -140,6 +142,23 @@ export function BackupSection({ allData, updaters, onClearAll = null, onReseed =
                 <li key={b.archive_id} className="flex items-center justify-between gap-3" style={{ padding: '10px 0', borderBottom: '1px solid ' + C.border, fontSize: 14 }}>
                   <span>{formatDate(String(b.taken_at).slice(0, 10))} <span style={{ color: C.textDim }}>· {b.sections} sections</span></span>
                   <button onClick={() => downloadAuto(b)} style={{ color: C.amber, fontSize: 14 }}>Download</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {supabase && (
+        <div className="rounded p-5 mb-6" style={{ background: C.panel }}>
+          <div style={{ fontWeight: 600 }} className="mb-1">App errors</div>
+          <div className="text-sm mb-3" style={{ color: C.textDim }}>Errors people hit in their browser, on ops and the artist portal. Last 30 days, newest first.</div>
+          {appErrors === null ? <div className="text-sm" style={{ color: C.textDim }}>Loading…</div> : appErrors.length === 0 ? <div className="text-sm" style={{ color: C.teal }}>No errors reported.</div> : (
+            <ul style={{ borderTop: '1px solid ' + C.border }}>
+              {appErrors.map((e, i) => (
+                <li key={i} style={{ padding: '10px 0', borderBottom: '1px solid ' + C.border, fontSize: 14 }}>
+                  <div style={{ overflowWrap: 'anywhere' }}>{e.message}</div>
+                  <div className="text-xs mt-1" style={{ color: C.textDim, overflowWrap: 'anywhere' }}>{new Date(e.at).toLocaleString()} · {e.email} · {e.site}</div>
                 </li>
               ))}
             </ul>

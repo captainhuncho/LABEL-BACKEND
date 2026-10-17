@@ -10,8 +10,10 @@ import UpdateBanner from './UpdateBanner.jsx';
 import { LegalPage, LEGAL_PATHS } from './Legal.jsx';
 import './index.css';
 import { stackWideTables } from './stackTables.js';
+import { installErrorReport } from './errorReport.js';
 
 installStorage();
+installErrorReport();
 // One app, two addresses: the artist address names itself in the browser tab.
 if (window.location.hostname.startsWith('artist.')) document.title = 'IMSS Records — For Artists';
 stackWideTables();
