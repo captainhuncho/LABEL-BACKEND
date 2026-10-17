@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { licenseFor, licenseFlags } from './licenses.js';
 import { streamsFromRevenue } from './streams.js';
 import { PasskeySettings } from './Passkeys.jsx';
+import { TwoFactorSettings } from './Mfa.jsx';
 import { isStale } from './UpdateBanner.jsx';
 import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
@@ -705,7 +706,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'statements' && <StatementsSection invoices={invoices} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} payouts={payouts} statementFiles={statementFiles} />}
         {active === 'tasks' && <TasksSection tasks={tasks} update={updateTasks} staff={staff} roster={roster} catalog={catalogView} />}
         {active === 'activity' && <AuditSection roster={roster} />}
-        {active === 'account' && <div><SectionHeader title="Sign-in & passkeys" description="Add a passkey to sign in with Face ID, your fingerprint or this device’s screen lock." /><PasskeySettings /></div>}
+        {active === 'account' && <div><SectionHeader title="Sign-in & passkeys" description="Add a passkey to sign in with Face ID, your fingerprint or this device’s screen lock." /><PasskeySettings /><TwoFactorSettings /></div>}
         <div className="imss-mobile-only mt-8 text-sm" style={{ color: C.textFaint }}>
           {session && session.name && (
             <div className="flex items-center justify-between gap-3 py-3 mb-3" style={{ borderTop: '1px solid ' + C.border, borderBottom: '1px solid ' + C.border }}>

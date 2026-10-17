@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, Mail } from 'lucide-react';
 import { passkeysSupported } from './Passkeys.jsx';
+import { MfaGate } from './Mfa.jsx';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 
@@ -66,7 +67,7 @@ export default function AuthGate({ children }) {
   if (checking) return null;
   const signOut = () => supabase.auth.signOut();
   if (authEmail && access === undefined) return null;
-  if (authEmail && access && access !== 'error' && !(access === 'artist' && !isArtistSite()) && !(access === 'team' && isArtistSite())) return children({ authEmail, access, signOut });
+  if (authEmail && access && access !== 'error' && !(access === 'artist' && !isArtistSite()) && !(access === 'team' && isArtistSite())) return <MfaGate access={access} signOut={signOut}>{children({ authEmail, access, signOut })}</MfaGate>;
   if (authEmail) return null; // not invited: the effect above signs them out
 
   // Google sign-in: the Google account's email must be on the Team list or an
