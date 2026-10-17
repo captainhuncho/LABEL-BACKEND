@@ -9,12 +9,23 @@
 // overhead when the product is done: no new spend, history kept.
 import { CheckCircle2, ChevronLeft, Lock, Plus, Trash2, Wallet, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { LEDGER_CATEGORIES, formatCurrency, formatDate, uid } from '../constants.js';
+import { formatCurrency, formatDate, uid } from '../constants.js';
 import { logActivity } from '../audit.js';
 import { C } from '../theme.js';
 import { Badge, Btn, EmptyState, Field, Input, KPICard, SectionHeader, Select, TextArea } from '../ui.jsx';
 
-const CATS = LEDGER_CATEGORIES.filter(c => c !== 'Cash repayment');
+// Budget types and their sub-categories. Any sub-category can also be named freely.
+export const BUDGET_TYPES = {
+  Advance: ['Advance payment', 'Recording / Studio', 'Mixing & mastering', 'Marketing (radio, TV, PR, ads)', 'Legal / Other'],
+  'Marketing Advance': ['Marketing / Ads', 'Video production', 'Tour support', 'Distro / Software & tools'],
+};
+// "Advance · Recording / Studio"; older categories without a type show their name.
+export const catLabel = c => (c.type ? c.type + ' · ' : '') + c.category;
+// Categories grouped by type, in type order, for display.
+export function byType(categories = []) {
+  const order = [...Object.keys(BUDGET_TYPES), ''];
+  return order.map(t => ({ type: t, cats: categories.filter(c => (c.type || '') === t) })).filter(g => g.cats.length);
+}
 const TONE = { Active: 'teal', Pending: 'amber', Closed: 'default', Rejected: 'red' };
 const money = n => formatCurrency(Number(n) || 0);
 const sum = (xs, f) => xs.reduce((s, x) => s + (Number(f(x)) || 0), 0);
@@ -62,13 +73,15 @@ export function BudgetSection({ overheads = [], update, roster = [], catalog = [
   function stamp(o, entry) { return { ...o, history: [...(o.history || []), { at: now(), by: session.name, ...entry }] }; }
 
   // ---- create / edit ----
-  function newForm() { setForm({ id: null, kind: 'artist', artistId: '', title: '', releaseIds: [], parentId: '', total: '', categories: [{ id: uid(), category: 'Recording', allocated: '' }], note: '' }); }
-  function editForm(o) { setForm({ ...o, total: String(o.total), categories: (o.categories || []).map(c => ({ ...c, allocated: String(c.allocated) })), note: '' }); }
+  function newForm() { setForm({ id: null, kind: 'artist', artistId: '', title: '', releaseIds: [], parentId: '', total: '', types: [], categories: [], note: '' }); }
+  function editForm(o) { setForm({ ...o, types: o.types || [...new Set((o.categories || []).map(c => c.type).filter(Boolean))], total: String(o.total), categories: (o.categories || []).map(c => ({ ...c, allocated: String(c.allocated) })), note: '' }); }
   function formProblem(f) {
     const total = Number(f.total);
     if (!f.title.trim()) return 'Give it a name, e.g. the release title.';
     if (f.kind === 'artist' && !f.artistId) return 'Choose the artist.';
     if (!(total > 0)) return 'Enter the total budget.';
+    if (!(f.types || []).length) return 'Pick a budget type: Advance, Marketing Advance, or both.';
+    if (f.categories.some(c => !String(c.category).trim())) return 'Name every sub-category.';
     const allocated = sum(f.categories, c => c.allocated);
     if (allocated > total + 1e-9) return 'Categories add up to ' + money(allocated) + ', more than the ' + money(total) + ' total.';
     if (f.parentId) {
@@ -85,7 +98,8 @@ export function BudgetSection({ overheads = [], update, roster = [], catalog = [
     const clean = {
       kind: form.kind, artistId: form.kind === 'artist' ? form.artistId : '', title: form.title.trim(),
       releaseIds: form.kind === 'artist' ? form.releaseIds : [], parentId: form.parentId || '', total: Number(form.total),
-      categories: form.categories.filter(c => c.category).map(c => ({ id: c.id || uid(), category: c.category, allocated: Number(c.allocated) || 0 })),
+      types: form.types || [],
+      categories: form.categories.filter(c => String(c.category).trim()).map(c => ({ id: c.id || uid(), type: c.type || '', category: String(c.category).trim(), allocated: Number(c.allocated) || 0 })),
       // The deal term in force when it was set up (non-funded artists included).
       dealTerm: form.dealTerm || (artist ? { artistPct: artist.artistPct, fundingTier: artist.fundingTier || 'Non-Funded', dealType: artist.dealType || '', at: now() } : null),
     };
@@ -214,21 +228,45 @@ function OverheadForm({ form, setForm, submit, problem, roster, catalog, overhea
 
       <div className="rounded p-5 mb-4" style={{ background: C.panel }}>
         <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
-          <h2 style={{ fontWeight: 600, fontSize: 17 }}>Categories</h2>
+          <h2 style={{ fontWeight: 600, fontSize: 17 }}>Budget type</h2>
           <span className="text-sm" style={{ color: allocated > total ? C.red : C.textDim, fontVariantNumeric: 'tabular-nums' }}>{money(allocated)} of {money(total)} · {money(total - allocated)} unallocated</span>
         </div>
-        <ul className="flex flex-col gap-2">
-          {form.categories.map((c, i) => (
-            <li key={c.id || i} className="flex gap-2 items-center">
-              <Select value={c.category} onChange={e => set({ categories: form.categories.map((x, j) => j === i ? { ...x, category: e.target.value } : x) })} aria-label="Category" style={{ flex: '1 1 50%' }}>
-                {CATS.map(k => <option key={k} value={k}>{k}</option>)}
-              </Select>
-              <Input type="number" min="0" step="0.01" inputMode="decimal" value={c.allocated} onChange={e => set({ categories: form.categories.map((x, j) => j === i ? { ...x, allocated: e.target.value } : x) })} aria-label={c.category + ' amount'} placeholder="Amount" style={{ flex: '1 1 40%' }} />
-              <button type="button" onClick={() => set({ categories: form.categories.filter((_, j) => j !== i) })} aria-label={'Remove ' + c.category} style={{ color: C.textDim }}><Trash2 size={16} /></button>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3"><Btn variant="ghost" onClick={() => set({ categories: [...form.categories, { id: uid(), category: CATS.find(k => !form.categories.some(x => x.category === k)) || 'Other', allocated: '' }] })}><Plus size={14} /> Add category</Btn></div>
+        <div className="flex gap-2 flex-wrap mb-2" role="group" aria-label="Budget type">
+          {Object.keys(BUDGET_TYPES).map(t => {
+            const on = (form.types || []).includes(t);
+            return <button type="button" key={t} aria-pressed={on} onClick={() => set(on
+              ? { types: form.types.filter(x => x !== t), categories: form.categories.filter(c => c.type !== t) }
+              : { types: [...(form.types || []), t], categories: [...form.categories, { id: uid(), type: t, category: BUDGET_TYPES[t][0], allocated: '' }] })}
+              style={{ padding: '10px 16px', borderRadius: 980, minHeight: 44, background: on ? C.amberFill : 'var(--fill)', color: on ? C.onAmber : C.text, fontWeight: 600, fontSize: 15 }}>{t}</button>;
+          })}
+        </div>
+        {(form.types || []).length === 0 && <p className="text-sm" style={{ color: C.textDim }}>Pick one or both, then split each into sub-categories.</p>}
+        {(form.types || []).map(t => {
+          const rows = form.categories.map((c, i) => ({ c, i })).filter(x => x.c.type === t);
+          return (
+            <section key={t} aria-label={t} className="mt-4 pt-4" style={{ borderTop: '1px solid var(--hairline)' }}>
+              <div className="flex items-baseline justify-between gap-3 mb-2"><h3 style={{ fontWeight: 600, fontSize: 16 }}>{t}</h3><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{money(sum(rows, x => x.c.allocated))}</span></div>
+              <ul className="flex flex-col gap-2">
+                {rows.map(({ c, i }) => {
+                  const custom = !BUDGET_TYPES[t].includes(c.category);
+                  const put = patch => set({ categories: form.categories.map((x, j) => j === i ? { ...x, ...patch } : x) });
+                  return (
+                    <li key={c.id || i} className="imss-budget-row">
+                      <Select value={custom ? '__custom' : c.category} onChange={e => put({ category: e.target.value === '__custom' ? '' : e.target.value })} aria-label={t + ' sub-category'}>
+                        {BUDGET_TYPES[t].map(k => <option key={k} value={k}>{k}</option>)}
+                        <option value="__custom">Other (name it)…</option>
+                      </Select>
+                      {custom && <Input value={c.category} onChange={e => put({ category: e.target.value })} placeholder="Sub-category name" aria-label="Sub-category name" />}
+                      <Input type="number" min="0" step="0.01" inputMode="decimal" value={c.allocated} onChange={e => put({ allocated: e.target.value })} aria-label={(c.category || 'Sub-category') + ' amount'} placeholder="Amount" />
+                      <button type="button" onClick={() => set({ categories: form.categories.filter((_, j) => j !== i) })} aria-label={'Remove ' + (c.category || 'sub-category')} style={{ color: C.textDim, minWidth: 44, minHeight: 44 }}><Trash2 size={16} /></button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-2"><Btn variant="ghost" onClick={() => set({ categories: [...form.categories, { id: uid(), type: t, category: BUDGET_TYPES[t].find(k => !rows.some(x => x.c.category === k)) || '', allocated: '' }] })}><Plus size={14} /> Add to {t}</Btn></div>
+            </section>
+          );
+        })}
       </div>
 
       {(form.id || !approver) && <Field label={approver ? 'Note (optional)' : 'Why (shown to the Admin)'}><TextArea rows={2} value={form.note} onChange={e => set({ note: e.target.value })} /></Field>}
@@ -284,7 +322,7 @@ function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, ov
         <h2 className="mb-3" style={{ fontWeight: 600, fontSize: 17 }}>Categories</h2>
         {(o.categories || []).length === 0 ? <p style={{ color: C.textDim }}>No categories yet.</p> : (
           <ul className="flex flex-col gap-3">
-            {o.categories.map(c => {
+            {byType(o.categories).flatMap(g => [g.type && <li key={'t-' + g.type} className="flex items-baseline justify-between gap-3" style={{ paddingTop: 6 }}><span style={{ fontWeight: 700, fontSize: 15 }}>{g.type}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{money(sum(g.cats, c => c.allocated))} allocated</span></li>, ...g.cats.map(c => {
               const spent = spend.byCat[c.id] || 0;
               const pct = c.allocated > 0 ? Math.min(100, Math.round(spent / c.allocated * 100)) : 0;
               return (
@@ -294,7 +332,7 @@ function OverheadDetail({ o, ledger = [], invoices = [], artistName, catalog, ov
                   <AttachedItems items={items.filter(x => x.categoryId === c.id)} />
                 </li>
               );
-            })}
+            })])}
           </ul>
         )}
         {items.some(x => !x.categoryId) && <div className="mt-4"><div className="text-sm" style={{ fontWeight: 600 }}>Unallocated</div><AttachedItems items={items.filter(x => !x.categoryId)} /></div>}
@@ -344,7 +382,7 @@ function AttachedItems({ items, fmt = money }) {
 export function artistBudgetsFor(artistId, overheads = [], ledger = [], invoices = []) {
   return overheads.filter(o => o.kind === 'artist' && o.artistId === artistId && o.sentToArtistAt && ['Active', 'Closed'].includes(o.status)).map(o => ({
     id: o.id, title: o.title, status: o.status, total: o.total, releaseIds: o.releaseIds || [], parentId: o.parentId || '', closedAt: o.closedAt || '', sentToArtistAt: o.sentToArtistAt,
-    categories: (o.categories || []).map(c => ({ id: c.id, category: c.category, allocated: c.allocated })),
+    categories: (o.categories || []).map(c => ({ id: c.id, type: c.type || '', category: c.category, allocated: c.allocated })),
     items: [
       ...ledger.filter(l => l.type === 'expense' && l.overheadId === o.id && (l.approvalStatus || 'Approved') === 'Approved').map(l => ({ id: l.id, categoryId: l.categoryId || '', date: l.date, text: l.description || l.category, amount: l.amount })),
       ...invoices.filter(i => i.kind === 'expense' && i.overheadId === o.id && ['Pay Approved', 'Paid'].includes(i.status)).map(i => ({ id: i.id, categoryId: i.categoryId || '', date: String(i.submittedAt || '').slice(0, 10), text: 'Expense claim: ' + i.title, amount: i.amount })),
@@ -373,7 +411,7 @@ export function ArtistBudgets({ budgets = [], catalog = [], fmt = money }) {
               ))}
             </dl>
             <ul className="mt-4 flex flex-col gap-3">
-              {b.categories.map(c => {
+              {byType(b.categories).flatMap(g => [g.type && <li key={'t-' + g.type} className="flex items-baseline justify-between gap-3" style={{ paddingTop: 6 }}><span style={{ fontWeight: 700, fontSize: 15 }}>{g.type}</span><span className="text-sm" style={{ color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>{fmt(sum(g.cats, c => c.allocated))} allocated</span></li>, ...g.cats.map(c => {
                 const its = b.items.filter(x => x.categoryId === c.id);
                 const cs = sum(its, x => x.amount);
                 const pct = c.allocated > 0 ? Math.min(100, Math.round(cs / c.allocated * 100)) : 0;
@@ -384,7 +422,7 @@ export function ArtistBudgets({ budgets = [], catalog = [], fmt = money }) {
                     <AttachedItems fmt={fmt} items={its.map(x => ({ ...x, amount: Number(x.amount) || 0 }))} />
                   </li>
                 );
-              })}
+              })])}
               {b.items.some(x => !x.categoryId) && <li><span style={{ fontWeight: 600 }}>Other spend</span><AttachedItems fmt={fmt} items={b.items.filter(x => !x.categoryId).map(x => ({ ...x, amount: Number(x.amount) || 0 }))} /></li>}
             </ul>
             <p className="text-sm mt-4" style={{ color: C.textDim }}>Only money actually spent is recouped from your earnings, never the unspent budget.</p>

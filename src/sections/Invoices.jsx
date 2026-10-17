@@ -1,5 +1,6 @@
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, Send, UserCog, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
+import { catLabel } from './Budget.jsx';
 import React, { useState } from 'react';
 import { formatCents, formatCurrency, formatDate } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
@@ -290,7 +291,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                                   </Select>
                                   {o && <Select value={inv.categoryId || ''} onChange={e => attach(o.id, e.target.value)} aria-label="Budget category" style={{ flex: '1 1 160px' }}>
                                     <option value="">Unallocated</option>
-                                    {(o.categories || []).map(c => <option key={c.id} value={c.id}>{c.category}</option>)}
+                                    {(o.categories || []).map(c => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
                                   </Select>}
                                 </div>
                                 <div className="text-xs mt-1" style={{ color: C.textDim }}>Counts against the budget once it reaches Pay Approved.</div>

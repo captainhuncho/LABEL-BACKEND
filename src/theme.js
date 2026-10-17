@@ -154,6 +154,11 @@ input[type="month"]::-webkit-datetime-edit-fields-wrapper { color: inherit; }
   .imss-sheet { width: 100%; max-height: 86dvh; display: flex; flex-direction: column; background: var(--panel); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); outline: none; animation: imss-sheet-up 260ms cubic-bezier(0.32, 0.72, 0, 1); }
   .imss-sheet-list { overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
 }
+/* Budget sub-category row: picker, optional name, amount, remove, all one height. */
+.imss-budget-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 44px; gap: 8px; align-items: stretch; }
+.imss-budget-row:has(> input:nth-of-type(2)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr) 44px; }
+.imss-budget-row > select, .imss-budget-row > input { height: 44px !important; min-height: 44px; box-sizing: border-box; }
+@media (max-width: 767px) { .imss-budget-row, .imss-budget-row:has(> input:nth-of-type(2)) { grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 44px; } .imss-budget-row > input:nth-of-type(1):not([type=number]) { grid-column: 1 / -1; grid-row: 2; } }
 /* Rows in the More sheet and the account menu (all sizes). */
 .imss-sheet-group { list-style: none; margin: 0 12px; padding: 0; background: var(--panel-2); border-radius: 12px; overflow: hidden; }
 .imss-sheet-group li + li { border-top: 1px solid var(--hairline); }

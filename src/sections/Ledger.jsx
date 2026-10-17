@@ -1,5 +1,6 @@
 import { ClipboardList, DollarSign, Pencil, Plus, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { catLabel } from './Budget.jsx';
 import { LEDGER_CATEGORIES, formatCurrency, formatDate, todayStr, uid } from '../constants.js';
 import { ledgerTotals, recoupmentForArtist } from '../finance.js';
 import { C } from '../theme.js';
@@ -142,7 +143,7 @@ export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster
               {chosen && <Field label="Budget category">
                 <Select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })}>
                   <option value="">Unallocated</option>
-                  {(chosen.categories || []).map(c => <option key={c.id} value={c.id}>{c.category}</option>)}
+                  {(chosen.categories || []).map(c => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
                 </Select>
               </Field>}
               {chosen && overBudget({ ...form, amount: Number(form.amount) || 0, id: editing }) && <div className="imss-span-2" role="alert" style={{ color: C.red, fontSize: 14 }}>{overBudget({ ...form, amount: Number(form.amount) || 0, id: editing })} {approver ? 'You can approve this.' : 'It waits for an Admin to approve the overspend.'}</div>}
