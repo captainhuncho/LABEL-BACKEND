@@ -18,7 +18,7 @@ import { licenseFor, rightsLine } from '../licenses.js';
 import { streamsFromRevenue } from '../streams.js';
 import { PasskeySettings } from '../Passkeys.jsx';
 import { MobileNav } from '../MobileNav.jsx';
-import { ArtistBudgets, catLabel, categoryChoices } from './Budget.jsx';
+import { ArtistBudgets, BUDGET_TYPES } from './Budget.jsx';
 import { usePageUrl } from '../pageUrl.js';
 import { TwoFactorSettings } from '../Mfa.jsx';
 
@@ -196,7 +196,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
   const myInvoices = useMemo(() => [...invoices.filter(i => i.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [invoices, artist.id]);
   const myExpenseClaims = myInvoices.filter(i => i.kind === 'expense');
   const invoicesDue = myInvoices.filter(i => invoiceStatus(i) === 'Pay Approved').reduce((t, i) => t + (Number(i.amount) || 0), 0);
-  const emptyInvoice = { kind: 'expense', title: '', invoiceNumber: '', invoiceDate: todayStr(), amount: '', payTo: '', details: '', attachment: '', attachmentName: '', overheadId: '', categoryId: '' };
+  const emptyInvoice = { kind: 'expense', title: '', invoiceNumber: '', invoiceDate: todayStr(), amount: '', payTo: '', details: '', attachment: '', attachmentName: '', overheadId: '', categoryId: '', budgetCategory: '' };
   const [resubmittingId, setResubmittingId] = useState(null); // a returned invoice being fixed
   const [invoiceForm, setInvoiceForm] = useState(emptyInvoice);
   const [invoiceError, setInvoiceError] = useState('');
@@ -213,8 +213,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     const amount = Math.round(parseFloat(invoiceForm.amount) * 100) / 100;
     if (!invoiceForm.title.trim()) { setInvoiceError('Add a short description of what the invoice is for.'); return; }
     if (!(amount > 0)) { setInvoiceError('Enter the amount in USD, for example 120.50.'); return; }
+    if (!invoiceForm.budgetCategory) { setInvoiceError('Choose what it’s for.'); return; }
+    // The chosen category also places it in the budget, if one is picked.
+    const [bt, bn] = invoiceForm.budgetCategory.split('|');
+    const ob = budgets.find(b => b.id === invoiceForm.overheadId);
+    const line = ob ? ((ob.categories || []).find(c => c.type === bt && c.category === bn) || { id: bt === 'Other' ? '' : 'x:' + bt + '|' + bn }).id : '';
+    invoiceForm.categoryId = line; invoiceForm.category = bt === 'Other' ? 'Other' : bt + ' · ' + bn;
     if (resubmittingId) {
-      const changes = { title: invoiceForm.title.trim(), amount, invoiceDate: invoiceForm.invoiceDate, invoiceNumber: invoiceForm.invoiceNumber, payTo: invoiceForm.payTo, details: invoiceForm.details, attachment: invoiceForm.attachment, attachmentName: invoiceForm.attachmentName, overheadId: invoiceForm.overheadId, categoryId: invoiceForm.categoryId };
+      const changes = { budgetCategory: invoiceForm.budgetCategory, category: invoiceForm.category, title: invoiceForm.title.trim(), amount, invoiceDate: invoiceForm.invoiceDate, invoiceNumber: invoiceForm.invoiceNumber, payTo: invoiceForm.payTo, details: invoiceForm.details, attachment: invoiceForm.attachment, attachmentName: invoiceForm.attachmentName, overheadId: invoiceForm.overheadId, categoryId: invoiceForm.categoryId };
       if (resubmitInvoice) resubmitInvoice(resubmittingId, changes);
       else updateInvoices(invoices.map(i => i.id !== resubmittingId ? i : { ...i, ...changes, status: 'PM Approval', reviewNote: '', history: [...(i.history || []), { at: new Date().toISOString(), by: artist.name, action: 'resubmitted', from: 'Needs changes', to: 'PM Approval', note: '' }] }));
       setResubmittingId(null); setInvoiceForm(emptyInvoice); setInvoiceError(''); setInvoiceSent(true);
@@ -1552,25 +1558,26 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                 </div>
               </fieldset>
               <div className="imss-form-grid gap-3">
-                <Field label="Description" full><Input required value={invoiceForm.title} onChange={e => setInvoiceForm(f => ({ ...f, title: e.target.value }))} placeholder={invoiceForm.kind === 'expense' ? 'e.g. Studio session, 12 March' : 'e.g. Feature verse on “Wave”'} /></Field>
+                <Field label="Description (be specific)" full><Input required value={invoiceForm.title} onChange={e => setInvoiceForm(f => ({ ...f, title: e.target.value }))} placeholder={invoiceForm.kind === 'expense' ? 'e.g. Studio session, 12 March' : 'e.g. Feature verse on “Wave”'} /></Field>
                 <Field label="Amount (USD)"><Input required inputMode="decimal" value={invoiceForm.amount} onChange={e => setInvoiceForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" /></Field>
                 <Field label="Invoice date"><Input type="date" value={invoiceForm.invoiceDate} onChange={e => setInvoiceForm(f => ({ ...f, invoiceDate: e.target.value }))} /></Field>
                 <Field label="Invoice number (optional)"><Input value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value }))} placeholder="e.g. AC-2026-004" /></Field>
                 <Field label="Pay to (name on the account)"><Input value={invoiceForm.payTo} onChange={e => setInvoiceForm(f => ({ ...f, payTo: e.target.value }))} placeholder="Your name or company" /></Field>
-                {budgets.filter(b => b.status === 'Active').length > 0 && <>
+                <Field label="What it’s for">
+                  <Select value={invoiceForm.budgetCategory} onChange={e => setInvoiceForm(f => ({ ...f, budgetCategory: e.target.value }))}>
+                    <option value="">Choose…</option>
+                    {Object.entries(BUDGET_TYPES).map(([t, names]) => <optgroup key={t} label={t}>{names.map(n => <option key={n} value={t + '|' + n}>{n}</option>)}</optgroup>)}
+                    <option value="Other|Other">Something else</option>
+                  </Select>
+                </Field>
+                {budgets.filter(b => b.status === 'Active').length > 0 && (
                   <Field label="Budget (optional)">
-                    <Select value={invoiceForm.overheadId} onChange={e => setInvoiceForm(f => ({ ...f, overheadId: e.target.value, categoryId: '' }))}>
+                    <Select value={invoiceForm.overheadId} onChange={e => setInvoiceForm(f => ({ ...f, overheadId: e.target.value }))}>
                       <option value="">Not part of a budget</option>
                       {budgets.filter(b => b.status === 'Active').map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                     </Select>
                   </Field>
-                  {invoiceForm.overheadId && <Field label="What it’s for">
-                    <Select value={invoiceForm.categoryId} onChange={e => setInvoiceForm(f => ({ ...f, categoryId: e.target.value }))}>
-                      <option value="">Not sure (the label will choose)</option>
-                      {categoryChoices(budgets.find(b => b.id === invoiceForm.overheadId) || {}).map(c => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
-                    </Select>
-                  </Field>}
-                </>}
+                )}
                 <Field label="Details (optional)" full><TextArea rows={3} value={invoiceForm.details} onChange={e => setInvoiceForm(f => ({ ...f, details: e.target.value }))} placeholder="Anything the label needs to know: who agreed it, what it covers." /></Field>
                 <Field label={invoiceForm.kind === 'expense' ? 'Receipt (PDF or photo, up to 10 MB)' : 'Invoice file (PDF or photo, up to 10 MB, optional)'} full>
                   <input ref={invoiceFileRef} type="file" accept="application/pdf,image/*" onChange={handleInvoiceFile} className="text-sm" style={{ color: C.textDim }} />
@@ -1594,7 +1601,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
                       <tr>
                         <Td mono>{formatDate(i.invoiceDate)}</Td>
                         <Td>{INVOICE_KINDS[i.kind] || i.kind}</Td>
-                        <Td>{i.title}{i.reviewNote ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>Label: {i.reviewNote}</div> : null}</Td>
+                        <Td>{i.title}{i.category ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{i.category}</div> : null}{i.reviewNote ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>Label: {i.reviewNote}</div> : null}</Td>
                         <Td align="right" mono>{formatCents(i.amount)}</Td>
                         <Td><Badge tone={INVOICE_TONES[invoiceStatus(i)]}>{artistInvoiceStatus(i)}</Badge></Td>
                         <Td align="right"><button onClick={() => setOpenInvoiceId(openInvoiceId === i.id ? null : i.id)} aria-expanded={openInvoiceId === i.id} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{openInvoiceId === i.id ? 'Close' : (i.messages || []).length ? 'Messages (' + i.messages.length + ')' : 'Message'}</button></Td>

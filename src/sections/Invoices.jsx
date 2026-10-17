@@ -1,6 +1,6 @@
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, Send, UserCog, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
-import { catLabel, categoryChoices } from './Budget.jsx';
+import { BUDGET_TYPES, catLabel, categoryChoices } from './Budget.jsx';
 import React, { useState } from 'react';
 import { formatCents, formatCurrency, formatDate } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
@@ -84,17 +84,18 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
   // The artist's PM corrects or returns an invoice up to Pay Approved; an Admin at any stage before Paid.
   const canFix = inv => canEdit && !['Paid', 'Rejected', 'Needs changes'].includes(invoiceStatus(inv))
     && (isAdmin || (pmOf(inv) && pmOf(inv) === session.name && invoiceStatus(inv) !== 'Pay Approved'));
-  const FIX_FIELDS = [['title', 'Description'], ['amount', 'Amount'], ['invoiceDate', 'Invoice date'], ['invoiceNumber', 'Invoice number'], ['payTo', 'Pay to'], ['details', 'Details']];
+  const FIX_FIELDS = [['budgetCategory', 'What it’s for'], ['title', 'Description'], ['amount', 'Amount'], ['invoiceDate', 'Invoice date'], ['invoiceNumber', 'Invoice number'], ['payTo', 'Pay to'], ['details', 'Details']];
   function saveFix(inv) {
     const amount = Math.round(parseFloat(fixing.amount) * 100) / 100;
     if (!String(fixing.title).trim()) { setError('The description can’t be empty.'); return; }
     if (!(amount > 0)) { setError('Enter a valid amount.'); return; }
-    const next = { ...fixing, amount, title: String(fixing.title).trim() };
+    const [bt, bn] = String(fixing.budgetCategory || '').split('|');
+    const next = { ...fixing, amount, title: String(fixing.title).trim(), category: !fixing.budgetCategory ? (inv.category || '') : bt === 'Other' ? 'Other' : bt + ' · ' + bn };
     const diffs = FIX_FIELDS.filter(([k]) => String(inv[k] ?? '') !== String(next[k] ?? '')).map(([k, label]) => label + (k === 'amount' ? ' $' + Number(inv.amount || 0).toFixed(2) + ' → $' + amount.toFixed(2) : ' changed'));
     if (!diffs.length) { setFixing(null); return; }
     const entry = { at: new Date().toISOString(), by: session.name, action: 'corrected', from: invoiceStatus(inv), to: invoiceStatus(inv), note: diffs.join('; ') + (fixing.why ? ' (' + fixing.why + ')' : '') };
     logActivity('corrected an invoice', inv.title + ': ' + entry.note, inv.artistId);
-    update(invoices.map(i => i.id !== inv.id ? i : { ...i, ...Object.fromEntries(FIX_FIELDS.map(([k]) => [k, next[k]])), correctedNote: entry.note, history: [...(i.history || []), entry] }));
+    update(invoices.map(i => i.id !== inv.id ? i : { ...i, ...Object.fromEntries(FIX_FIELDS.map(([k]) => [k, next[k]])), category: next.category, correctedNote: entry.note, history: [...(i.history || []), entry] }));
     setFixing(null); setError('');
   }
   function returnToArtist(inv) {
@@ -222,7 +223,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                       <Td>{artistName(inv.artistId)}</Td>
                       <Td>{pmOf(inv) || <span style={{ color: C.amber }}>No PM set</span>}</Td>
                       <Td>{INVOICE_KINDS[inv.kind] || inv.kind}</Td>
-                      <Td>{inv.title}</Td>
+                      <Td>{inv.title}{inv.category ? <div className="text-xs mt-0.5" style={{ color: C.textDim }}>{inv.category}</div> : null}</Td>
                       <Td align="right" mono>{formatCents(inv.amount)}</Td>
                       <Td><Badge tone={INVOICE_TONES[st]}>{st}</Badge></Td>
                       <Td>{stage ? (reviewers.length ? reviewers.map(m => m.name).join(', ') : <span style={{ color: C.amber }}>Unassigned</span>) : '—'}</Td>
@@ -295,7 +296,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                               <h3 className="imss-sub-h">Correct or return</h3>
                               {fixing && fixing.id === inv.id ? (
                                 <div className="imss-form-grid gap-3">
-                                  {FIX_FIELDS.map(([k, label]) => <Field key={k} label={label} full={k === 'details' || k === 'title'}>{k === 'details' ? <TextArea rows={2} value={fixing[k] || ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })} /> : <input className="w-full" type={k === 'invoiceDate' ? 'date' : 'text'} inputMode={k === 'amount' ? 'decimal' : undefined} value={fixing[k] ?? ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })} style={{ background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} />}</Field>)}
+                                  {FIX_FIELDS.map(([k, label]) => <Field key={k} label={label} full={k === 'details' || k === 'title'}>{k === 'budgetCategory' ? <Select value={fixing[k] || ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })}><option value="">Not set</option>{Object.entries(BUDGET_TYPES).map(([t, names]) => <optgroup key={t} label={t}>{names.map(n => <option key={n} value={t + '|' + n}>{n}</option>)}</optgroup>)}<option value="Other|Other">Something else</option></Select> : k === 'details' ? <TextArea rows={2} value={fixing[k] || ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })} /> : <input className="w-full" type={k === 'invoiceDate' ? 'date' : 'text'} inputMode={k === 'amount' ? 'decimal' : undefined} value={fixing[k] ?? ''} onChange={e => setFixing({ ...fixing, [k]: e.target.value })} style={{ background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} />}</Field>)}
                                   <Field label="Why (shown in the history)" full><input className="w-full" value={fixing.why || ''} onChange={e => setFixing({ ...fixing, why: e.target.value })} placeholder="e.g. Receipt total is $120" style={{ background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} /></Field>
                                   <div className="imss-span-2 flex gap-2"><Btn variant="primary" onClick={() => saveFix(inv)}>Save correction</Btn><Btn variant="ghost" onClick={() => setFixing(null)}>Cancel</Btn></div>
                                 </div>
