@@ -13,6 +13,7 @@ import { MobileNav } from './MobileNav.jsx';
 import { usePageUrl } from './pageUrl.js';
 import { NotificationBell } from './sections/Notifications.jsx';
 import { RELEASE_SHEET_HEADERS, exportRecordsToWord, releaseSheetRow } from './releaseSheet.js';
+import LoadingScreen from './LoadingScreen.jsx';
 
 const PAGES = [
   { id: 'releases', label: 'Release schedule', icon: Calendar },
@@ -35,7 +36,7 @@ export default function RepApp({ signOut }) {
   useEffect(() => { load(); }, []);
 
   if (error) return <div className="p-8 text-sm" role="alert" style={{ color: C.text, fontFamily: HEADING_FONT }}>{error}</div>;
-  if (!data) return null;
+  if (!data) return <LoadingScreen variant="rep" />;
   const artistById = Object.fromEntries((data.artists || []).map(a => [a.id, a]));
 
   return (

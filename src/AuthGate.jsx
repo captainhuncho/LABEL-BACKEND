@@ -6,6 +6,7 @@ import { passkeysSupported } from './Passkeys.jsx';
 import { MfaGate } from './Mfa.jsx';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
+import LoadingScreen from './LoadingScreen.jsx';
 
 // Two addresses, one app: artist.imssrecords.com is the artist portal ("For
 // Artists"), ops.imssrecords.com is for the team. Artists who sign in on ops
@@ -80,11 +81,11 @@ export default function AuthGate({ children }) {
   }, [authEmail, access]);
 
   if (!supabase) return children({ authEmail: null, access: 'team', signOut: null });
-  if (checking) return null;
+  if (checking) return <LoadingScreen variant={isArtistSite() ? 'artist' : 'ops'} />;
   const signOut = () => supabase.auth.signOut();
-  if (authEmail && access === undefined) return null;
+  if (authEmail && access === undefined) return <LoadingScreen variant={isArtistSite() ? 'artist' : 'ops'} />;
   if (authEmail && access && access !== 'error' && !(access === 'artist' && !isArtistSite()) && !((access === 'team' || access === 'rep') && isArtistSite())) return <MfaGate access={access} signOut={signOut}>{children({ authEmail, access, signOut })}</MfaGate>;
-  if (authEmail) return null; // not invited: the effect above signs them out
+  if (authEmail) return <LoadingScreen variant={isArtistSite() ? 'artist' : 'ops'} />; // not invited: the effect above signs them out
 
   // Google sign-in: the Google account's email must be on the Team list or an
   // artist's Roster entry, exactly as with an email link (my_access decides).

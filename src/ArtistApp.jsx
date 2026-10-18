@@ -12,6 +12,7 @@ const SENSITIVE = new Set(['invoices', 'profileRequests']);
 const WHAT = { profileRequests: 'requested a profile change', artistRequests: 'sent a request', releaseSubmissions: 'submitted a release', invoices: 'submitted an invoice' };
 
 import { C, HEADING_FONT } from './theme.js';
+import LoadingScreen from './LoadingScreen.jsx';
 
 export default function ArtistApp({ signOut }) {
   const [data, setData] = useState(null);
@@ -40,7 +41,7 @@ export default function ArtistApp({ signOut }) {
   };
 
   if (error) return <div className="p-8 text-sm" role="alert" style={{ color: C.text, fontFamily: HEADING_FONT }}>{error}</div>;
-  if (!data) return null;
+  if (!data) return <LoadingScreen variant="artist" />;
 
   return (
     <>{stepUpDialog}

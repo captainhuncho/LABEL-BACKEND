@@ -9,6 +9,7 @@ import { supabase } from './storage.js';
 import { logActivity } from './audit.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 import { Btn } from './ui.jsx';
+import LoadingScreen from './LoadingScreen.jsx';
 
 const isFactor = m => /webauthn|passkey|totp/i.test(typeof m === 'string' ? m : m.method);
 const canPasskey = () => typeof window !== 'undefined' && !!window.PublicKeyCredential;
@@ -114,7 +115,7 @@ function Shell({ title, children, onSignOut }) {
 export function MfaGate({ access, signOut, children }) {
   const [st, setSt] = useState(null);
   useEffect(() => { mfaState().then(setSt, () => setSt({ done: false, totp: null, passkeys: [] })); }, []);
-  if (!st) return null;
+  if (!st) return <LoadingScreen variant={access === 'artist' ? 'artist' : access === 'rep' ? 'rep' : 'ops'} />;
   if (st.done) return children;
   const has = st.passkeys.length > 0 || st.totp;
   return (

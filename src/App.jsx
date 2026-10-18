@@ -39,6 +39,7 @@ import { StreamsSection } from './sections/Streams.jsx';
 import { SubmissionsSection } from './sections/Submissions.jsx';
 import { TasksSection } from './sections/Tasks.jsx';
 import { TeamSection } from './sections/Team.jsx';
+import LoadingScreen from './LoadingScreen.jsx';
 
 function Sidebar({ active, setActive, nav, sessionName, onLogout }) {
   return (
@@ -655,21 +656,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }, [authMember, session]);
   const logout = () => { setSession(null); if (signOut) signOut(); };
 
-  if (loading) {
-    return (
-      <div style={shellStyle} className="w-full rounded-lg border flex flex-col items-center justify-center gap-2 imss-gate" >
-        <style>{GLOBAL_STYLES}</style>
-        <div className="imss-bg-blob imss-bg-blob-1"></div>
-        <div className="imss-bg-blob imss-bg-blob-2"></div>
-        <div className="imss-glass-layer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 28, width: 'auto' }} />
-          <div className="text-sm" style={{ color: C.textDim }}>Loading…</div>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
-  if (authEmail && !session) return null;
+  if (authEmail && !session) return <LoadingScreen />;
 
   if (!session) {
     return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
