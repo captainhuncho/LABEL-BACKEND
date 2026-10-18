@@ -41,6 +41,7 @@ import { TasksSection } from './sections/Tasks.jsx';
 import { TeamSection } from './sections/Team.jsx';
 import LoadingScreen from './LoadingScreen.jsx';
 import { EmailSwitches } from './sections/EmailSwitches.jsx';
+import RepApp from './RepApp.jsx';
 
 function Sidebar({ active, setActive, nav, sessionName, onLogout }) {
   return (
@@ -91,7 +92,7 @@ function Sidebar({ active, setActive, nav, sessionName, onLogout }) {
   );
 }
 
-function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
+function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist, onEnterRep = null }) {
   const [mode, setMode] = useState(null);
   const [teamId, setTeamId] = useState(staff[0] ? staff[0].id : '');
   const [artistId, setArtistId] = useState(roster[0] ? roster[0].id : '');
@@ -128,6 +129,12 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
               <div className="flex items-center gap-2 mb-1"><Eye size={16} color={C.teal} /><span style={{ fontWeight: 600 }}>Artist</span></div>
               <div className="text-xs" style={{ color: C.textFaint }}>View-only — your catalog and your statements, nothing else.</div>
             </button>
+            {onEnterRep && staff.some(s => s.role === 'Label Rep') && (
+              <button onClick={() => onEnterRep(staff.find(s => s.role === 'Label Rep').id)} className="rounded border p-4 text-left" style={{ background: C.panel, borderColor: C.borderLight }}>
+                <div className="flex items-center gap-2 mb-1"><Users size={16} color={C.textDim} /><span style={{ fontWeight: 600 }}>Label rep</span></div>
+                <div className="text-xs" style={{ color: C.textFaint }}>Release schedule and invoices for the artists you look after.</div>
+              </button>
+            )}
           </div>
         )}
 
@@ -145,7 +152,7 @@ function IdentityGate({ roster, staff, onEnterTeam, onEnterArtist }) {
               <>
                 <Field label="Your name">
                   <Select value={teamId} onChange={e => setTeamId(e.target.value)}>
-                    {staff.map(s => <option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
+                    {staff.filter(s => s.role !== 'Label Rep').map(s => <option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
                   </Select>
                 </Field>
                 <div className="flex gap-2 mt-3">
@@ -663,7 +670,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   if (authEmail && !session) return <LoadingScreen />;
 
   if (!session) {
-    return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
+    return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} onEnterRep={(repId) => setSession({ mode: 'rep', repId })} />;
   }
 
   // The artist portal from a published snapshot. Publish to artists uses it to
@@ -680,9 +687,26 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     return <ArtistPortalShell preview={preview} artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={preview ? noop : updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={preview ? noop : updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={preview ? noop : updateReleaseSubmissions} invoices={invoices} updateInvoices={preview ? noop : updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} budgets={artistBudgetsFor(artist.id, overheads, ledger, invoices)} labelSettings={labelSettings} onLogout={onClose || logout} />;
   }
 
+  // Local preview only (demo / no database): the label rep view from local data,
+  // shaped like rep_portal(). Marking sent updates the invoice here.
+  if (session.mode === 'rep') {
+    const rep = staff.find(s => s.id === session.repId);
+    const mine = roster.filter(a => a.labelRep === session.repId && a.status !== 'Archived');
+    const ids = new Set(mine.map(a => a.id));
+    const repData = rep && {
+      rep: { id: rep.id, name: rep.name },
+      artists: mine.map(a => ({ id: a.id, name: a.name })),
+      releases: catalogView.filter(r => ids.has(r.artistId) && r.repConfirmedAt),
+      invoices: invoices.filter(i => ids.has(i.artistId) && i.sentToRepAt).map(i => ({ ...i, payee: i.payTo || '' })),
+    };
+    const markSent = (inv, ref) => updateInvoices(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'DP Queue', repSentAt: new Date().toISOString(), repRef: ref,
+      history: [...(i.history || []), { at: new Date().toISOString(), by: rep.name, action: 'sent to partner', from: i.status, to: 'DP Queue', note: ref }] }));
+    if (repData) return <RepApp demo={{ data: repData, markSent }} signOut={logout} />;
+  }
+
   if (session.mode === 'artist') {
     const artist = roster.find(a => a.id === session.artistId);
-    if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
+    if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} onEnterRep={(repId) => setSession({ mode: 'rep', repId })} />;
     return portalFor(artist, publishedRevenue);
   }
 

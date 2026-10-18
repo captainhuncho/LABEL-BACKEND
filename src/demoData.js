@@ -16,7 +16,7 @@ const TITLES = ['Golden Hour', 'Lagos Rain', 'Slow Motion', 'Midnight Call', 'Co
 const MONTHS = Array.from({ length: 12 }, (_, i) => { const d = new Date(Date.UTC(2025, 9 + i, 1)); return d.toISOString().slice(0, 7); });
 
 export const DEMO_STAFF = [
-  ['Demo Admin', 'Admin'], ['Sam Okafor', 'Product Manager'], ['Rita Mensah', 'Finance'], ['Leo Hart', 'A&R'],
+  ['Demo Admin', 'Admin'], ['Sam Okafor', 'Product Manager'], ['Rita Mensah', 'Finance'], ['Leo Hart', 'A&R'], ['Kojo Asante', 'Label Rep'],
 ].map(([name, role], i) => ({ id: 'demo-st' + i, name, role, email: slug(name) + '@example.com', phone: '', startDate: '2024-01-15', status: 'Active', bio: '', photoUrl: '', permissions: defaultPermissionsForRole(role), onboarding: ONBOARDING_TASKS_TEMPLATE.map((label, j) => ({ id: 'ob' + j + '-demo-st' + i, label, done: true })) }));
 
 export const DEMO_ROSTER = ARTISTS.map(([name, pct, genre, tier, budget], i) => ({
@@ -74,3 +74,14 @@ export const DEMO_PUBLISH_LOG = [{
   items: [{ key: slug('Ama Vesper') + '|' + HELD[0], artistSlug: slug('Ama Vesper'), artistId: slug('Ama Vesper'), artist: 'Ama Vesper', month: HELD[0], gross: Math.round(asked.reduce((a, r) => a + r.earning, 0) * 100) / 100, state: 'New' }],
   requestedBy: 'Rita Mensah', requestedAt: new Date(Date.UTC(2026, 9, 17, 9, 30)).toISOString(), scheduledFor: '',
 }];
+
+// Label rep preview: Kojo Asante (demo-st4) looks after Nova Reign and Kofi
+// Lume. Their releases are confirmed to him, and two invoices were sent to him.
+const REP_ID = 'demo-st4';
+const repArtists = [slug('Nova Reign'), slug('Kofi Lume')];
+DEMO_ROSTER.forEach(a => { if (repArtists.includes(a.id)) a.labelRep = REP_ID; });
+DEMO_CATALOG.forEach((r, i) => { if (repArtists.includes(r.artistId)) { r.repConfirmedAt = r.releaseDate + 'T10:00:00Z'; r.repFirstConfirmedAt = r.repConfirmedAt; r.isrc = r.isrc || 'GH-IMS-26-' + String(101 + i).padStart(5, '0'); r.upc = r.upc || String(198004500000 + i); } });
+export const DEMO_INVOICES = [
+  { id: 'demo-inv1', artistId: slug('Nova Reign'), kind: 'service', title: 'Music video shoot, Ocean Drive', amount: 1800, invoiceNumber: 'NR-2026-07', payTo: 'Reel Motion Studios', details: 'Two-day shoot in Accra, crew and gear.', status: 'Finance Queue', submittedAt: '2026-10-10T09:00:00Z', sentToRepAt: '2026-10-14T12:00:00Z', history: [] },
+  { id: 'demo-inv2', artistId: slug('Kofi Lume'), kind: 'expense', title: 'Studio session, Highlife EP', amount: 450, invoiceNumber: 'KL-114', payTo: 'Kofi Lume', details: 'Six hours at Bliss Studio.', status: 'DP Queue', submittedAt: '2026-09-28T09:00:00Z', sentToRepAt: '2026-10-02T12:00:00Z', repSentAt: '2026-10-03T08:00:00Z', repRef: 'Sent to partner, ref 8841', history: [] },
+];

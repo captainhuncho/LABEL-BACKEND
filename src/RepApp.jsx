@@ -23,18 +23,20 @@ const PAGES = [
 const day = s => String(s || '').slice(0, 10);
 const TONE = { 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red' };
 
-export default function RepApp({ signOut }) {
+// demo: { data, markSent(invoice, ref) } for the local preview (no database).
+export default function RepApp({ signOut, demo = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [page, setPage] = useState('releases');
   usePageUrl(PAGES, page, setPage);
 
   async function load() {
+    if (demo) { setData(demo.data); return; }
     const { data: d, error: err } = await supabase.rpc('rep_portal');
     if (err || !d) { setError('Could not load your releases and invoices. Try again in a moment.'); return; }
     setData(d); logSignIn('rep', d.rep.name);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [demo && demo.data]);
 
   if (error) return <div className="p-8 text-sm" role="alert" style={{ color: C.text, fontFamily: HEADING_FONT }}>{error}</div>;
   if (!data) return <LoadingScreen variant="rep" />;
@@ -65,7 +67,7 @@ export default function RepApp({ signOut }) {
             <NotificationBell routes={{ release: 'releases', submission: 'releases', invoice: 'invoices' }} onOpen={setPage} />
             <button onClick={signOut} className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
           </div>
-          {page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} /> : <Invoices invoices={data.invoices || []} artistById={artistById} reload={load} />}
+          {page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} /> : <Invoices demoMarkSent={demo && demo.markSent} invoices={data.invoices || []} artistById={artistById} reload={load} />}
         </div>
       </div>
       <MobileNav nav={PAGES} active={page} setActive={setPage} role="rep" account={[{ label: 'Sign out', icon: LogOut, onClick: signOut, danger: true }]} />
@@ -130,7 +132,7 @@ function Releases({ releases, artistById }) {
 const INVOICE_HEADERS = ['Invoice', 'Artist', 'Type', 'Amount', 'Invoice number', 'Payee', 'Details', 'Submitted', 'Sent to you', 'Status'];
 const invoiceRow = (i, a) => [i.title, a.name || '', i.kind === 'expense' ? 'Expense claim' : 'Service invoice', Number(i.amount || 0).toFixed(2), i.invoiceNumber || '', i.payee || '', i.details || '', day(i.submittedAt), day(i.sentToRepAt), i.status];
 
-function Invoices({ invoices, artistById, reload }) {
+function Invoices({ invoices, artistById, reload, demoMarkSent = null }) {
   const [openId, setOpenId] = useState(null);
   const [ref, setRef] = useState('');
   const [busy, setBusy] = useState(false);
@@ -140,7 +142,7 @@ function Invoices({ invoices, artistById, reload }) {
   const done = sorted.filter(i => !waiting.includes(i));
   async function markSent(inv) {
     setBusy(true); setMsg('');
-    const { error } = await supabase.rpc('rep_mark_sent', { invoice_id: inv.id, ref: ref.trim() });
+    const { error } = demoMarkSent ? (demoMarkSent(inv, ref.trim()), {}) : await supabase.rpc('rep_mark_sent', { invoice_id: inv.id, ref: ref.trim() });
     setBusy(false);
     if (error) { setMsg('Couldn’t update it. Refresh and try again.'); return; }
     setRef(''); setOpenId(null); setMsg('Marked as sent to the partner. It’s now in DP Queue.'); reload();

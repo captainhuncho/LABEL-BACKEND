@@ -1,7 +1,7 @@
 // Seed data: the real IMSS roster, catalog, revenue and master gross.
 import { ONBOARDING_TASKS_TEMPLATE, defaultPermissionsForRole, todayStr } from './constants.js';
 import { slug } from './finance.js';
-import { DEMO_CATALOG, DEMO_MASTER_GROSS, DEMO_NOTICES, DEMO_PUBLISHED, DEMO_PUBLISH_LOG, DEMO_REVENUE, DEMO_ROSTER, DEMO_STAFF } from './demoData.js';
+import { DEMO_CATALOG, DEMO_INVOICES, DEMO_MASTER_GROSS, DEMO_NOTICES, DEMO_PUBLISHED, DEMO_PUBLISH_LOG, DEMO_REVENUE, DEMO_ROSTER, DEMO_STAFF } from './demoData.js';
 
 // Production builds read live data from Supabase, so the real roster and
 // revenue are left out of the public JS bundle. Dev and tests still get them
@@ -815,7 +815,7 @@ export const REQUEST_STATUSES = ['Open', 'In Progress', 'Resolved'];
 export const SEED_ARTIST_REQUESTS = [];
 
 // Artist invoices: expense claims and service fees, reviewed by the label.
-export const SEED_INVOICES = [];
+export const SEED_INVOICES = DEMO ? DEMO_INVOICES : [];
 
 export const SEED_RELEASE_SUBMISSIONS = [];
 
