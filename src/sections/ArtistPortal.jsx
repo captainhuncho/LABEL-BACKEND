@@ -1,5 +1,5 @@
-import { Calendar, ChevronDown, Megaphone, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
-import { DOC_MAX_BYTES, uploadDocument } from '../storage.js';
+import { Calendar, ChevronDown, Megaphone, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, History, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
+import { DOC_MAX_BYTES, uploadDocument, supabase } from '../storage.js';
 import React, { useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, SPLIT_REQUIRED_ROLES, dealLabel, RELEASE_TYPES, checklistProgress, emptyCredits, formatCents, formatDate, formatNumber, makeDistributionDocs, missingRequiredDocs, monthKey, monthLabel, releaseStatusTone, todayStr, uid } from '../constants.js';
@@ -31,6 +31,7 @@ import { RequestsTab } from './portal/RequestsTab.jsx';
 import { ProfileTab } from './portal/ProfileTab.jsx';
 import { ReleasesTab } from './portal/ReleasesTab.jsx';
 import { OverviewTab } from './portal/OverviewTab.jsx';
+import { MyActivity } from '../RepApp.jsx';
 
 export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [], resubmitInvoice = null, preview = false }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
@@ -283,6 +284,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     { id: 'releases', label: 'Releases', icon: Disc3 },
     { id: 'requests', label: 'Requests', icon: MessageSquare },
     { id: 'profile', label: 'Profile', icon: UserCog },
+    { id: 'activity', label: 'My activity', icon: History },
   ].filter(Boolean);
 
   // A team preview (Publish to artists) leaves the team page's address alone.
@@ -500,14 +502,14 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
               <div className="text-xs" style={{ color: C.textDim }}>{Math.round(myPct * 100)}% royalty rate</div>
             </div>
             <NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} />
-            <button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
+            <button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + artist.name} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{String(artist.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}</button>
           </div>
         </div>
 
         {tab !== 'overview' && (
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h1 className="imss-portal-title">{(TABS.find(t => t.id === tab) || {}).label}</h1>
-            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
+            <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + artist.name} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{String(artist.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}</button></span></span>
           </div>
         )}
         {['revenue', 'earnings', 'payouts'].includes(tab) && <ReportingLagNote />}
@@ -516,6 +518,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'releases' && <ReleasesTab addSubmitCollaborator={addSubmitCollaborator} addSubmitPrimaryArtist={addSubmitPrimaryArtist} artist={artist} artistAddError={artistAddError} artistCatalog={artistCatalog} artistCategory={artistCategory} collabError={collabError} featuredPct={featuredPct} handleSplitSheet={handleSplitSheet} handleSubmitArtwork={handleSubmitArtwork} licenseCtx={licenseCtx} mySubmissions={mySubmissions} newSubmitCollab={newSubmitCollab} newSubmitPrimaryArtist={newSubmitPrimaryArtist} pickedReleases={pickedReleases} removeSubmitCollaborator={removeSubmitCollaborator} removeSubmitPrimaryArtist={removeSubmitPrimaryArtist} replyDrafts={replyDrafts} replyError={replyError} rightsArtist={rightsArtist} sendSubmissionReply={sendSubmissionReply} sendsTo={sendsTo} setArtistAddError={setArtistAddError} setArtistCategory={setArtistCategory} setCollabError={setCollabError} setFeaturedPct={setFeaturedPct} setNewSubmitCollab={setNewSubmitCollab} setNewSubmitPrimaryArtist={setNewSubmitPrimaryArtist} setPickedReleases={setPickedReleases} setReplyDrafts={setReplyDrafts} setShowSubmitForm={setShowSubmitForm} setSubmitDocNote={setSubmitDocNote} setSubmitError={setSubmitError} setSubmitForm={setSubmitForm} showSubmitForm={showSubmitForm} splitSheetRef={splitSheetRef} splitsTotal={splitsTotal} submitArtworkRef={submitArtworkRef} submitError={submitError} submitForm={submitForm} submitReleaseSubmission={submitReleaseSubmission} toggleSubmitDoc={toggleSubmitDoc} />}
 
+        {tab === 'activity' && <MyActivity title={false} demo={!supabase} repName={artist.name} rpc="artist_my_activity" intro="What you’ve done here: sign-ins, requests, invoices and messages. Only you and the label’s Admins can see this." empty="As you send requests, invoices and messages, they show here." />}
         {tab === 'profile' && <ProfileTab artist={artist} cropFile={cropFile} handleProfilePhoto={handleProfilePhoto} monthLong={monthLong} myPendingRequest={myPendingRequest} myProfileRequests={myProfileRequests} paid={paid} pctLabel={pctLabel} profileForm={profileForm} profileInputRef={profileInputRef} profileSaved={profileSaved} saveProfile={saveProfile} setCropFile={setCropFile} setProfileForm={setProfileForm} submitProfileRequest={submitProfileRequest} />}
 
         {tab === 'requests' && <RequestsTab artist={artist} expandedRequestId={expandedRequestId} myArtistRequests={myArtistRequests} requestForm={requestForm} setExpandedRequestId={setExpandedRequestId} setRequestForm={setRequestForm} submitArtistRequest={submitArtistRequest} />}
@@ -635,7 +638,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
         </div>
       </main>
       <MobileNav nav={TABS} active={tab} setActive={setTab} role="artist" badges={{ requests: openRequestCount }}
-        account={[{ label: 'Sign out', icon: LogOut, onClick: onLogout, danger: true }]} />
+        account={[{ label: 'Sign out', icon: LogOut, onClick: onLogout, danger: true }]} profile={{ name: artist.name, role: 'Artist', email: artist.email || '', onSecurity: () => setTab('profile'), onSignOut: onLogout }} />
     </div>
   );
 }

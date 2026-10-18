@@ -185,19 +185,19 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
 }
 
 // Everything the rep did here, newest first (their own entries only).
-function MyActivity({ demo, repName }) {
+export function MyActivity({ demo, repName, title = true, rpc = 'rep_my_activity', intro = 'What you’ve done here: sign-ins, what you opened, downloaded, emailed and confirmed. Only you and the label’s Admins can see this.', empty = 'As you open, download and confirm releases and invoices, it shows here.' }) {
   const [rows, setRows] = useState(null);
   useEffect(() => {
     if (demo) { readAudit({ limit: 300 }).then(list => setRows(list.filter(e => e.actor_name === repName)), () => setRows([])); return; }
-    supabase.rpc('rep_my_activity').then(({ data }) => setRows(data || []), () => setRows([]));
-  }, [demo, repName]);
+    supabase.rpc(rpc).then(({ data }) => setRows(data || []), () => setRows([]));
+  }, [demo, repName, rpc]);
   const label = a => String(a || '').replace(/^exported /, 'downloaded ').replace(/^./, c => c.toUpperCase());
   return (
     <div>
-      <h1 className="imss-title">My activity</h1>
-      <p className="mb-5" style={{ color: C.textDim, fontSize: 17 }}>What you’ve done here: sign-ins, what you opened, downloaded, emailed and confirmed. Only you and the label’s Admins can see this.</p>
+      {title && <h1 className="imss-title">My activity</h1>}
+      <p className="mb-5" style={{ color: C.textDim, fontSize: 17 }}>{intro}</p>
       {rows === null ? <div className="text-sm" style={{ color: C.textDim }}>Loading…</div>
-        : rows.length === 0 ? <EmptyState icon={History} title="Nothing yet" description="As you open, download and confirm releases and invoices, it shows here." />
+        : rows.length === 0 ? <EmptyState icon={History} title="Nothing yet" description={empty} />
         : (
           <ul className="rounded" style={{ background: C.panel, listStyle: 'none', margin: 0, padding: 0 }}>
             {rows.map((e, i) => (
