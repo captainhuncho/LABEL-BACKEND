@@ -50,6 +50,31 @@ export function installPullToRefresh() {
     startY = null; pull = 0;
   }, { passive: true });
 
+  // Desktop mouse: press on the page (not a control or text field), drag down,
+  // let go. Only the release refreshes; dragging back up before letting go cancels.
+  let mStartY = null, mBox = null, mPull = 0;
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const b = e.target.closest && e.target.closest('.imss-content');
+    const busy = e.target.closest && e.target.closest('input, textarea, select, button, a, label, [contenteditable], [role="dialog"], .imss-sheet-list, table');
+    mStartY = b && !busy && settledAtTop(b) ? e.clientY : null; mBox = b; mPull = 0;
+  });
+  document.addEventListener('pointermove', e => {
+    if (mStartY === null || e.pointerType !== 'mouse') return;
+    if (mBox.scrollTop > 0) { mStartY = null; hide(); return; }
+    mPull = (e.clientY - mStartY) * RESIST * 1.4;
+    if (mPull < DEAD_ZONE) { hide(); return; }
+    window.getSelection && window.getSelection().removeAllRanges(); // a pull, not a text selection
+    pill.textContent = mPull >= TRIGGER ? 'Release to refresh' : 'Pull to refresh';
+    show(mPull);
+  });
+  const mouseUp = () => {
+    if (mStartY !== null && mPull >= TRIGGER) { pill.textContent = 'Refreshing…'; window.location.reload(); } else hide();
+    mStartY = null; mPull = 0;
+  };
+  document.addEventListener('pointerup', mouseUp);
+  document.addEventListener('pointercancel', () => { mStartY = null; mPull = 0; hide(); });
+
   // Desktop: keep scrolling up (trackpad or wheel) past the top. A gesture only
   // counts if the page was already resting at the top when it began, so
   // scrolling up to the top never reloads.
@@ -67,7 +92,8 @@ export function installPullToRefresh() {
     if (!atTopAtStart || b.scrollTop > 0 || e.deltaY >= 0) { if (e.deltaY > 0) { wheel = 0; hide(); } return; }
     wheel += -e.deltaY * 0.12;
     if (wheel < DEAD_ZONE) return;
-    pill.textContent = wheel >= TRIGGER ? 'Let go to refresh' : 'Keep pulling up to refresh';
+    // Trackpad: lifting the fingers (the gesture ending) is the release.
+    pill.textContent = wheel >= TRIGGER ? 'Release to refresh' : 'Pull to refresh';
     show(wheel);
   }, { passive: true });
 }
