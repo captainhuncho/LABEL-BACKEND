@@ -14,6 +14,7 @@ import { usePageUrl } from './pageUrl.js';
 import { NotificationBell } from './sections/Notifications.jsx';
 import { RELEASE_SHEET_HEADERS, exportRecordsToWord, releaseSheetRow } from './releaseSheet.js';
 import LoadingScreen from './LoadingScreen.jsx';
+import { AppearancePicker } from './appearance.js';
 
 const PAGES = [
   { id: 'releases', label: 'Release schedule', icon: Calendar },
@@ -59,7 +60,8 @@ export default function RepApp({ signOut }) {
       </div>
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner" style={{ maxWidth: 1120 }}>
-          <div className="flex items-center justify-end gap-2 mb-4">
+          <div className="flex items-center justify-end gap-2 mb-4 flex-wrap">
+            <AppearancePicker style={{ marginRight: 'auto' }} />
             <NotificationBell routes={{ release: 'releases', submission: 'releases', invoice: 'invoices' }} onOpen={setPage} />
             <button onClick={signOut} className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
           </div>
