@@ -1,7 +1,7 @@
 // Made-up label for the demo site (built with VITE_DEMO=1): fictional artists,
 // songs and money. Nothing here is real; the real data is never in a demo build.
 import { ONBOARDING_TASKS_TEMPLATE, defaultPermissionsForRole } from './constants.js';
-import { slug } from './finance.js';
+import { publishSnapshot, slug } from './finance.js';
 
 // Same numbers on every build (a small seeded generator, not Math.random).
 let s = 20261017;
@@ -48,3 +48,18 @@ export const DEMO_MASTER_GROSS = MONTHS.map(m => {
 export const DEMO_NOTICES = [
   { id: 'demo-nt1', title: 'Welcome to the IMSS Records demo', message: 'Everything here is made up. Click around freely: nothing you change reaches the real label.', audience: 'all', createdBy: 'Demo Admin', createdAt: '2026-10-01' },
 ];
+
+// Publish to artists has work waiting: artists have seen everything up to two
+// months ago; the last two months are not published yet, one older month was
+// corrected after it was published, and Finance has asked an Admin to approve one.
+const HELD = MONTHS.slice(-2);
+const seen = DEMO_REVENUE.filter(r => !HELD.includes(r.month));
+export const DEMO_PUBLISHED = publishSnapshot(seen.map(r => ({ ...r })), DEMO_REVENUE, DEMO_MASTER_GROSS, DEMO_ROSTER);
+const corrected = DEMO_REVENUE.find(r => r.artistSlug === slug('Kofi Lume') && r.month === MONTHS[7]);
+if (corrected) corrected.earning = Math.round((corrected.earning + 42.5) * 100) / 100;
+const asked = DEMO_REVENUE.filter(r => r.artistSlug === slug('Ama Vesper') && r.month === HELD[0]);
+export const DEMO_PUBLISH_LOG = [{
+  id: 'demo-pub1', status: 'Awaiting approval', scope: 'selected', note: 'Ama Vesper, first of the new months. Figures checked against the EMPIRE statement.',
+  items: [{ key: slug('Ama Vesper') + '|' + HELD[0], artistSlug: slug('Ama Vesper'), artistId: slug('Ama Vesper'), artist: 'Ama Vesper', month: HELD[0], gross: Math.round(asked.reduce((a, r) => a + r.earning, 0) * 100) / 100, state: 'New' }],
+  requestedBy: 'Rita Mensah', requestedAt: new Date(Date.UTC(2026, 9, 17, 9, 30)).toISOString(), scheduledFor: '',
+}];

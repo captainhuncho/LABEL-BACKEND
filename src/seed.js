@@ -1,7 +1,7 @@
 // Seed data: the real IMSS roster, catalog, revenue and master gross.
 import { ONBOARDING_TASKS_TEMPLATE, defaultPermissionsForRole, todayStr } from './constants.js';
 import { slug } from './finance.js';
-import { DEMO_CATALOG, DEMO_MASTER_GROSS, DEMO_NOTICES, DEMO_REVENUE, DEMO_ROSTER, DEMO_STAFF } from './demoData.js';
+import { DEMO_CATALOG, DEMO_MASTER_GROSS, DEMO_NOTICES, DEMO_PUBLISHED, DEMO_PUBLISH_LOG, DEMO_REVENUE, DEMO_ROSTER, DEMO_STAFF } from './demoData.js';
 
 // Production builds read live data from Supabase, so the real roster and
 // revenue are left out of the public JS bundle. Dev and tests still get them
@@ -9,6 +9,9 @@ import { DEMO_CATALOG, DEMO_MASTER_GROSS, DEMO_NOTICES, DEMO_REVENUE, DEMO_ROSTE
 const OMIT_REAL_DATA = import.meta.env?.PROD === true;
 // The demo site (VITE_DEMO=1) uses made-up data from demoData.js instead.
 const DEMO = import.meta.env?.VITE_DEMO === '1';
+// Demo only: what artists have already seen, and a publish waiting for approval.
+export const SEED_PUBLISHED = DEMO ? DEMO_PUBLISHED : null;
+export const SEED_PUBLISH_LOG = DEMO ? DEMO_PUBLISH_LOG : [];
 
 export const SEED_ROSTER = DEMO ? DEMO_ROSTER : OMIT_REAL_DATA ? [] : [
   { id: "aizo-clutch", name: "Aizo Clutch", genre: '', subGenre: '', royaltyRate: 70.0, artistPct: 0.7, distroLabel: "IMSS Records", signedDate: '', contractExpiration: '', email: '', status: 'Active', notes: "", productManager: '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: 0 },

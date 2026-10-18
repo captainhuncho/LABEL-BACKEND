@@ -10,7 +10,7 @@ import { TwoFactorSettings } from './Mfa.jsx';
 import { isStale } from './UpdateBanner.jsx';
 import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
-import { DATA_VERSION, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
+import { DATA_VERSION, SEED_PUBLISHED, SEED_PUBLISH_LOG, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
 import { supabase, isConflict, subscribeToChanges } from './storage.js';
 import { LegalFooter } from './Legal.jsx';
 import PublishToArtists from './sections/PublishToArtists.jsx';
@@ -418,8 +418,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['invoices', setInvoices, SEED_INVOICES],
         ['statementFiles', setStatementFiles, []],
         // Without a saved snapshot (local mode), artists start out seeing all approved seed revenue.
-        ['publishedRevenue', setPublishedRevenue, publishSnapshot(SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_MASTER_GROSS, SEED_ROSTER)],
-        ['revenuePublish', setRevenuePublish, []],
+        ['publishedRevenue', setPublishedRevenue, SEED_PUBLISHED || publishSnapshot(SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_REVENUE.filter(r => (r.approvalStatus || 'Approved') === 'Approved'), SEED_MASTER_GROSS, SEED_ROSTER)],
+        ['revenuePublish', setRevenuePublish, SEED_PUBLISH_LOG],
         ['dealChanges', setDealChanges, []],
         ['releaseSubmissions', setReleaseSubmissions, SEED_RELEASE_SUBMISSIONS],
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
