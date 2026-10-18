@@ -31,7 +31,7 @@ import { ProfileTab } from './portal/ProfileTab.jsx';
 import { ReleasesTab } from './portal/ReleasesTab.jsx';
 import { OverviewTab } from './portal/OverviewTab.jsx';
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [], resubmitInvoice = null }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [], resubmitInvoice = null, preview = false }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
   const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
   // A rights return shows to the artist only once Admin or Legal has sent it to their dashboard.
@@ -284,7 +284,8 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     { id: 'profile', label: 'Profile', icon: UserCog },
   ].filter(Boolean);
 
-  usePageUrl(TABS, tab, setTab);
+  // A team preview (Publish to artists) leaves the team page's address alone.
+  usePageUrl(preview ? [] : TABS, tab, setTab);
 
   const myArtistRequests = useMemo(() => [...artistRequests.filter(r => r.artistId === artist.id)].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')), [artistRequests, artist.id]);
   const openRequestCount = myArtistRequests.filter(r => r.status !== 'Resolved').length;

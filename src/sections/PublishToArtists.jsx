@@ -2,7 +2,8 @@
 // the snapshot published here. Finance picks what to publish and sends it to an
 // Admin to approve; only an Admin publishes directly.
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { CheckCircle2, Eye, Send, ShieldCheck } from 'lucide-react';
 import { applyPublish, pctAt, publishChecks, publishDiff, revenueRowSplit, slug } from '../finance.js';
 import { formatCents, formatDate, monthLabel, uid } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
@@ -13,12 +14,14 @@ import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextAr
 const STATE_TONE = { New: 'amber', Changed: 'amber', Removed: 'red', 'Awaiting approval': 'default' };
 const STATE_LABEL = { New: 'Not published yet', Changed: 'Changed since publish', Removed: 'Removed from the books' };
 
-export default function PublishToArtists({ roster, approvedRevenue, masterGross, published, updatePublished, log, updateLog, labelSettings = {}, updateLabelSettings, session = {}, canEdit = true }) {
+export default function PublishToArtists({ renderPreview = null, roster, approvedRevenue, masterGross, published, updatePublished, log, updateLog, labelSettings = {}, updateLabelSettings, session = {}, canEdit = true }) {
   const isAdmin = session.role === 'Admin';
   // Only an Admin publishes directly; Finance always sends it to an Admin to approve.
   const direct = isAdmin;
   const [selected, setSelected] = useState(() => new Set());
   const [artistFilter, setArtistFilter] = useState('');
+  // Preview one artist's portal: as it is now, or after publishing what's listed for them.
+  const [preview, setPreview] = useState(null); // { artistSlug, after }
   const [note, setNote] = useState('');
   const [declineNote, setDeclineNote] = useState({});
   const [done, setDone] = useState('');
@@ -175,6 +178,9 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
             </Select>
           </Field>
         )}
+        {renderPreview && artistsInDiff.length > 0 && (
+          <Btn variant="ghost" onClick={() => setPreview({ artistSlug: artistFilter || artistsInDiff[0][0], after: true })}><Eye size={14} /> Preview what the artist sees</Btn>
+        )}
       </div>
 
       {done && <div className="text-sm mb-3" role="status" style={{ color: C.teal }}>{done}</div>}
@@ -255,6 +261,35 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
           </div>
         </section>
       )}
+      {preview && renderPreview && (() => {
+        // After: this artist's listed months as they'd publish (ticked ones only, if any are ticked).
+        const theirs = diff.filter(d => d.artistSlug === preview.artistSlug).map(d => d.key);
+        const picked = theirs.filter(k => selected.has(k));
+        const rows = preview.after ? applyPublish(published, picked.length ? picked : theirs, approvedRevenue, masterGross, roster) : published;
+        const name = (artistsInDiff.find(([s]) => s === preview.artistSlug) || [])[1] || '';
+        // Rendered at page level so it covers the whole window, not just this panel.
+        return createPortal(
+          <div role="dialog" aria-modal="true" aria-label={'Preview of ' + name + "'s portal"} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg, #f5f5f7)', display: 'flex', flexDirection: 'column' }}>
+            <div className="flex items-center gap-3 flex-wrap" style={{ padding: '10px 16px', background: C.amberSoft, borderBottom: '1px solid ' + C.amber, color: C.text }}>
+              <Eye size={16} aria-hidden="true" />
+              <b>Preview: what {name} sees</b>
+              <Select value={preview.artistSlug} onChange={e => setPreview(p => ({ ...p, artistSlug: e.target.value }))} aria-label="Artist" style={{ minWidth: 160 }}>
+                {artistsInDiff.map(([s, n]) => <option key={s} value={s}>{n}</option>)}
+              </Select>
+              <span className="inline-flex rounded border overflow-hidden" style={{ borderColor: C.border }}>
+                {[[false, 'Now'], [true, picked.length ? 'After publishing ticked' : 'After publishing']].map(([v, l]) => (
+                  <button key={l} onClick={() => setPreview(p => ({ ...p, after: v }))} aria-pressed={preview.after === v} style={{ padding: '6px 12px', minHeight: 36, background: preview.after === v ? C.amber : 'transparent', color: preview.after === v ? 'var(--on-amber, #1d1d1f)' : C.text, fontWeight: 600, fontSize: 13 }}>{l}</button>
+                ))}
+              </span>
+              <span className="text-xs" style={{ color: C.textDim }}>Nothing here is sent or saved.</span>
+              <span style={{ flex: 1 }} />
+              <Btn variant="primary" onClick={() => setPreview(null)}>Close preview</Btn>
+            </div>
+            <div key={preview.artistSlug + preview.after} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+              {renderPreview(preview.artistSlug, rows, () => setPreview(null))}
+            </div>
+          </div>, document.body);
+      })()}
     </div>
   );
 }

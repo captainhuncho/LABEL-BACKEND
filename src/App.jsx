@@ -675,16 +675,24 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
   }
 
-  if (session.mode === 'artist') {
-    const artist = roster.find(a => a.id === session.artistId);
-    if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
-    const view = artistPublishedView(publishedRevenue, slug(artist.name));
+  // The artist portal from a published snapshot. Publish to artists uses it to
+  // preview exactly what an artist sees now and after publishing.
+  function portalFor(artist, published, preview = false, onClose = null) {
+    // A preview never saves anything an artist could do in it.
+    const noop = () => {};
+    const view = artistPublishedView(published, slug(artist.name));
     // Same rules as artist_portal(): only sent statements, expenses up to the latest published month.
     const lastPub = view.revenue.reduce((m, r) => r.month > m ? r.month : m, '');
     const shownPayouts = payouts.filter(p => p.artistSlug === slug(artist.name) && p.sentAt);
     const shownLedger = approvedLedger.filter(l => lastPub && String(l.date || '').slice(0, 7) <= lastPub);
     const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
-    return <ArtistPortalShell artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} invoices={invoices} updateInvoices={updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} budgets={artistBudgetsFor(artist.id, overheads, ledger, invoices)} labelSettings={labelSettings} onLogout={logout} />;
+    return <ArtistPortalShell preview={preview} artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={preview ? noop : updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={preview ? noop : updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={preview ? noop : updateReleaseSubmissions} invoices={invoices} updateInvoices={preview ? noop : updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} budgets={artistBudgetsFor(artist.id, overheads, ledger, invoices)} labelSettings={labelSettings} onLogout={onClose || logout} />;
+  }
+
+  if (session.mode === 'artist') {
+    const artist = roster.find(a => a.id === session.artistId);
+    if (!artist) return <IdentityGate roster={roster} staff={staff} onEnterTeam={(info) => setSession({ mode: 'team', ...info })} onEnterArtist={(artistId) => setSession({ mode: 'artist', artistId })} />;
+    return portalFor(artist, publishedRevenue);
   }
 
   return (
@@ -722,7 +730,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'submissions' && <SubmissionsSection releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection overheads={overheads} ledger={ledger} approver={canApproveBudgets(session, staff)} invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
         {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={approvedLedger} invoices={invoices} />}
-        {active === 'publish' && <PublishToArtists roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
+        {active === 'publish' && <PublishToArtists renderPreview={(artistSlug, rows, onClose) => { const a = roster.find(x => slug(x.name) === artistSlug); return a ? portalFor(a, rows, true, onClose) : null; }} roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection invoices={invoices} payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection overheads={overheads} approver={canApproveBudgets(session, staff)} invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection overheads={overheads} update={updateOverheads} roster={roster} catalog={catalogView} staff={staff} ledger={ledger} invoices={invoices} session={session} canEdit={canEdit} />}
