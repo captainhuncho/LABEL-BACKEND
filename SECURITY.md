@@ -95,9 +95,8 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   `publishedRevenue` (a snapshot taken on Publish), never the live `revenue`
   books, and its Inbound Banking Charge comes from the `swiftShare` fixed on
   each snapshot row. Statement files show once every month they cover is
-  published. Who may publish (Finance asks, Admin approves, unless an Admin
-  turns on `labelSettings.financePublishDirect`) is enforced in the app, like
-  other role rules.
+  published. Only an Admin publishes; Finance sends a publish to an Admin to approve.
+  The database refuses any other write to `publishedRevenue`.
 - **Activity audit** (`audit_log` table): append-only. Rows are written only by
   `log_activity()`, which takes the actor from the signed-in session (team
   member from the staff list, or the artist from the roster; an artist's

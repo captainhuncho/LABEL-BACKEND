@@ -1,6 +1,6 @@
 // Publish revenue to artists. The team's books stay internal; artists only see
 // the snapshot published here. Finance picks what to publish and sends it to an
-// Admin, unless an Admin has let Finance publish directly.
+// Admin to approve; only an Admin publishes directly.
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
 import { applyPublish, pctAt, publishChecks, publishDiff, revenueRowSplit, slug } from '../finance.js';
@@ -15,7 +15,8 @@ const STATE_LABEL = { New: 'Not published yet', Changed: 'Changed since publish'
 
 export default function PublishToArtists({ roster, approvedRevenue, masterGross, published, updatePublished, log, updateLog, labelSettings = {}, updateLabelSettings, session = {}, canEdit = true }) {
   const isAdmin = session.role === 'Admin';
-  const direct = isAdmin || !!labelSettings.financePublishDirect;
+  // Only an Admin publishes directly; Finance always sends it to an Admin to approve.
+  const direct = isAdmin;
   const [selected, setSelected] = useState(() => new Set());
   const [artistFilter, setArtistFilter] = useState('');
   const [note, setNote] = useState('');
@@ -114,13 +115,6 @@ export default function PublishToArtists({ roster, approvedRevenue, masterGross,
   return (
     <div>
       <SectionHeader title="Publish to artists" artistNote="exactly what was last published here: revenue, breakdowns, their Inbound Banking Charge share and statement files. Nothing else changes their earnings view." description="Revenue you import or edit stays inside the label until it’s published here. Artists see exactly what was published, and get an email when it is." />
-
-      {isAdmin && (
-        <label className="flex items-start gap-2 text-sm rounded border p-3 mb-6" style={{ borderColor: C.border, background: C.panel, cursor: 'pointer' }}>
-          <input type="checkbox" checked={!!labelSettings.financePublishDirect} onChange={e => updateLabelSettings({ ...labelSettings, financePublishDirect: e.target.checked })} style={{ accentColor: C.amber, marginTop: 3 }} />
-          <span><b>Let Finance publish without Admin approval</b><span className="block text-xs mt-0.5" style={{ color: C.textDim }}>Off: Finance sends publishes to an Admin to approve. On: anyone with royalties access publishes straight to artists.</span></span>
-        </label>
-      )}
 
       {pending.length > 0 && (
         <section aria-labelledby="pub-pending-h" className="rounded border mb-6" style={{ borderColor: C.amber, background: C.panel }}>
