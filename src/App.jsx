@@ -723,6 +723,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <Sidebar active={active} setActive={setActive} nav={NAV} sessionName={session.name + (session.role ? ' · ' + session.role : '')} onLogout={logout} />
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
+          <img className="imss-print-logo" src={LOGO_DATA_URI} alt="" aria-hidden="true" />
         <TopBar onLogout={logout} roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
         {error && (
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>

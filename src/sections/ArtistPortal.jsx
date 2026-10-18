@@ -491,6 +491,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
       <main className="imss-content">
         <div className="imss-content-inner" style={{ maxWidth: 1120 }}>
+          <img className="imss-print-logo" src={LOGO_DATA_URI} alt="" aria-hidden="true" />
         <div className="imss-mobile-only mb-5">
           <div className="flex items-center gap-3">
             <Avatar name={artist.name} photoUrl={artist.photoUrl} size={36} />

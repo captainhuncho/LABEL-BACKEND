@@ -3,7 +3,7 @@
 // their artists' releases a PM confirmed, and invoices pushed to them. They
 // download both, and mark a pushed invoice as sent to the partner (DP Queue).
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, FileDown, FileSpreadsheet, FileText, LogOut, Eye, Mail } from 'lucide-react';
+import { Calendar, FileDown, FileSpreadsheet, FileText, LogOut, Eye, Mail, X } from 'lucide-react';
 import { documentUrl, supabase } from './storage.js';
 import { logSignIn } from './audit.js';
 import { formatCurrency, formatDate, todayStr } from './constants.js';
@@ -16,6 +16,7 @@ import { RELEASE_SHEET_HEADERS, exportRecordsToWord, releaseSheetRow } from './r
 import LoadingScreen from './LoadingScreen.jsx';
 import { PasskeySettings } from './Passkeys.jsx';
 import { TwoFactorSettings } from './Mfa.jsx';
+import { createPortal } from 'react-dom';
 
 const PAGES = [
   { id: 'releases', label: 'Release schedule', icon: Calendar },
@@ -61,7 +62,7 @@ export default function RepApp({ signOut, demo = null }) {
 
   return (
     <div style={{ background: CANVAS_GRADIENT, fontFamily: HEADING_FONT, color: C.text }} className="w-full overflow-hidden imss-shell">
-      <style>{GLOBAL_STYLES}</style>
+      <style>{GLOBAL_STYLES + SHEET_CSS}</style>
       <div className="imss-sidebar shrink-0" style={{ borderColor: C.border, background: C.panel }}>
         <div className="imss-desktop-only px-5 pt-6 pb-4">
           <img src={LOGO_DATA_URI} alt="IMSS Records" style={{ height: 26, width: 'auto' }} />
@@ -79,6 +80,7 @@ export default function RepApp({ signOut, demo = null }) {
       </div>
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner" style={{ maxWidth: 1120 }}>
+          <img className="imss-print-logo" src={LOGO_DATA_URI} alt="" aria-hidden="true" />
           <div className="flex items-center justify-end gap-2 mb-4">
             <NotificationBell routes={{ release: 'releases', submission: 'releases', invoice: 'invoices' }} onOpen={setPage} />
             {/* Your initials open the account menu (Appearance, Account & security, Sign out), as on ops. */}
@@ -111,27 +113,25 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
     const a = artistById[r.artistId] || {};
     const updated = r.repConfirmedAt && r.repFirstConfirmedAt && r.repConfirmedAt !== r.repFirstConfirmedAt;
     return (
-      <li key={r.id} className="rounded p-4 flex gap-3 items-start" style={{ background: C.panel }}>
-        <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={'Select ' + r.title} style={{ marginTop: 4 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="flex items-baseline justify-between gap-3 flex-wrap">
-            <button onClick={() => setViewing(r)} className="text-left" style={{ fontWeight: 600, fontSize: 16 }}>{r.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></button>
-            <div style={{ fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>{formatDate(r.releaseDate)}</div>
-          </div>
-          <div className="text-sm mt-1 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
+      <li key={r.id} className="flex gap-3 items-center">
+        <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={'Select ' + r.title} style={{ width: 20, height: 20, flex: '0 0 20px' }} />
+        <button className="imss-repcard" onClick={() => open(r)} aria-label={'Open ' + r.title}>
+          <span className="flex items-baseline justify-between gap-3">
+            <span style={{ fontWeight: 600, fontSize: 16, minWidth: 0 }}>{r.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></span>
+            <span style={{ fontSize: 15, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{formatDate(r.releaseDate)}</span>
+          </span>
+          <span className="text-sm mt-1.5 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
             <span>{r.type || 'Release'}</span>
             {r.isrc && <span>ISRC {r.isrc}</span>}
-            {r.upc && <span>UPC {r.upc}</span>}
             {updated && <Badge tone="amber">Updated {formatDate(day(r.repConfirmedAt))}</Badge>}
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 items-end">
-          <Btn variant="ghost" onClick={() => setViewing(r)} aria-label={'View ' + r.title}><Eye size={14} /> View</Btn>
-          <Ack kind="release" item={r} acknowledge={acknowledge} compact />
-        </div>
+            <AckChips item={r} />
+          </span>
+        </button>
       </li>
     );
   };
+  // Opening a release counts as seeing it.
+  const open = r => { setViewing(r); setMailMsg(''); if (!r.repSeenAt) acknowledge('release', r, 'seen'); };
 
   return (
     <div>
@@ -157,21 +157,26 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
         const vals = releaseSheetRow(viewing, a);
         const one = (viewing.title || 'release').replace(/\s+/g, '-').toLowerCase();
         return (
-          <ViewSheet title={viewing.title} subtitle={a.name + ' · ' + formatDate(viewing.releaseDate)} onClose={() => { setViewing(null); setMailMsg(''); }}>
-            <Fields headers={RELEASE_SHEET_HEADERS} values={vals} />
-            <div className="flex gap-2 flex-wrap mt-4">
+          <ViewSheet title={viewing.title} subtitle={a.name + ' · ' + formatDate(viewing.releaseDate)} onClose={() => { setViewing(null); setMailMsg(''); }}
+            footer={<>
+              <Btn variant="primary" onClick={() => mail([viewing])}><Mail size={14} /> Email to me</Btn>
               <Btn variant="ghost" onClick={() => exportRecordsToWord(one, viewing.title + ' · ' + (a.name || ''), RELEASE_SHEET_HEADERS, [vals])}><FileDown size={14} /> Word</Btn>
               <Btn variant="ghost" onClick={() => exportRowsToExcel(one, RELEASE_SHEET_HEADERS, [vals])}><FileSpreadsheet size={14} /> Excel</Btn>
               <Btn variant="ghost" onClick={() => exportRowsToCsv(one, RELEASE_SHEET_HEADERS, [vals])}><FileText size={14} /> CSV</Btn>
-              <Btn variant="primary" onClick={() => mail([viewing])}><Mail size={14} /> Email to me</Btn>
-            </div>
-            <div className="mt-4 pt-3" style={{ borderTop: '1px solid ' + C.border }}><Ack kind="release" item={releases.find(x => x.id === viewing.id) || viewing} acknowledge={acknowledge} /></div>
-            {mailMsg && <div role="status" className="text-sm mt-3" style={{ color: /Couldn|Too many/.test(mailMsg) ? C.red : C.teal }}>{mailMsg}</div>}
+            </>}>
+            <div className="mb-4"><Ack kind="release" item={releases.find(x => x.id === viewing.id) || viewing} acknowledge={acknowledge} /></div>
+            {mailMsg && <div role="status" className="text-sm mb-3" style={{ color: /Couldn|Too many/.test(mailMsg) ? C.red : C.teal }}>{mailMsg}</div>}
+            <Fields headers={RELEASE_SHEET_HEADERS} values={vals} />
           </ViewSheet>
         );
       })()}
     </div>
   );
+}
+
+// Seen / Sent out tags for list rows.
+function AckChips({ item }) {
+  return <>{item.repSentOutAt ? <Badge tone="teal">Sent out {formatDate(day(item.repSentOutAt))}</Badge> : item.repSeenAt ? <Badge tone="teal">Seen</Badge> : <Badge tone="amber">New</Badge>}</>;
 }
 
 // The rep confirms they've seen it, then that they've sent it out on their side.
@@ -199,23 +204,51 @@ function Ack({ kind, item, acknowledge, compact = false }) {
 }
 
 // A view-only panel over the page (release or invoice details).
-function ViewSheet({ title, subtitle, onClose, children }) {
-  useEffect(() => { const k = e => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
-  return (
-    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="rounded" style={{ background: C.panel, width: '100%', maxWidth: 680, maxHeight: '90dvh', overflowY: 'auto', padding: '20px 20px 18px', boxShadow: 'var(--shadow)' }}>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div style={{ minWidth: 0 }}><h2 style={{ fontWeight: 700, fontSize: 20 }}>{title}</h2>{subtitle && <div className="text-sm" style={{ color: C.textDim }}>{subtitle}</div>}</div>
-          <Btn variant="ghost" onClick={onClose}>Close</Btn>
+function ViewSheet({ title, subtitle, onClose, children, footer = null }) {
+  useEffect(() => {
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', k);
+    const page = document.querySelector('.imss-content'); const before = page && page.style.overflow;
+    if (page) page.style.overflow = 'hidden'; // the page behind doesn't scroll
+    return () => { window.removeEventListener('keydown', k); if (page) page.style.overflow = before || ''; };
+  }, [onClose]);
+  // At page level, so it covers the tab bar and isn't caught by the page's animation.
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} className="imss-viewsheet">
+      <div onClick={e => e.stopPropagation()} className="imss-viewsheet-panel">
+        <div className="imss-viewsheet-head">
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h2 style={{ fontWeight: 700, fontSize: 19, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{title}</h2>
+            {subtitle && <div className="text-sm" style={{ color: C.textDim }}>{subtitle}</div>}
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, flex: '0 0 44px', borderRadius: 999, background: 'var(--fill)', color: C.text, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={20} /></button>
         </div>
-        {children}
+        <div className="imss-viewsheet-body">{children}</div>
+        {footer && <div className="imss-viewsheet-foot">{footer}</div>}
       </div>
-    </div>
+    </div>, document.body
   );
 }
+const SHEET_CSS = `
+.imss-viewsheet { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.imss-viewsheet-panel { background: var(--panel); width: 100%; max-width: 720px; max-height: calc(100dvh - 48px); display: flex; flex-direction: column; border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; animation: imss-vs-in .2s ease-out; }
+.imss-viewsheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--hairline); }
+.imss-viewsheet-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px; }
+.imss-viewsheet-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--hairline); background: var(--panel); }
+.imss-viewsheet-foot > * { flex: 1 1 auto; justify-content: center; }
+@keyframes imss-vs-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (max-width: 767px) {
+  .imss-viewsheet { padding: 0; align-items: stretch; }
+  .imss-viewsheet-panel { max-width: none; max-height: none; height: 100dvh; border-radius: 0; padding-top: env(safe-area-inset-top); }
+}
+@media (prefers-reduced-motion: reduce) { .imss-viewsheet-panel { animation: none; } }
+.imss-repcard { width: 100%; text-align: left; display: block; border-radius: 14px; background: var(--panel); padding: 14px 16px; transition: box-shadow .15s; }
+.imss-repcard:hover { box-shadow: var(--shadow); }
+.imss-repcard:focus-visible { outline: 3px solid var(--amber-line); outline-offset: 2px; }
+`;
 function Fields({ headers, values }) {
   return (
-    <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 38%) minmax(0, 1fr)', borderTop: '1px solid ' + C.border }}>
+    <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 40%) minmax(0, 1fr)', columnGap: 12, borderTop: '1px solid ' + C.border }}>
       {headers.map((h, i) => values[i] === '' || values[i] == null ? null : [
         <dt key={h + 'k'} className="text-sm" style={{ color: C.textDim, padding: '8px 10px 8px 0', borderBottom: '1px solid ' + C.border }}>{h}</dt>,
         <dd key={h + 'v'} className="text-sm" style={{ margin: 0, padding: '8px 0', borderBottom: '1px solid ' + C.border, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{String(values[i])}</dd>,
@@ -227,6 +260,9 @@ function Fields({ headers, values }) {
 const INVOICE_HEADERS = ['Invoice', 'Artist', 'Type', 'Amount', 'Invoice number', 'Payee', 'Details', 'Submitted', 'Sent to the partner', 'Status'];
 const invoiceRow = (i, a) => [i.title, a.name || '', i.kind === 'expense' ? 'Expense claim' : 'Service invoice', Number(i.amount || 0).toFixed(2), i.invoiceNumber || '', i.payee || '', i.details || '', day(i.submittedAt), day(i.sentToRepAt), i.status];
 
+const INVOICE_VIEW_HEADERS = ['Artist', 'Type', 'Amount', 'Invoice number', 'Payee', 'Details', 'Submitted', 'Sent to the partner'];
+const invoiceView = (i, a) => [a.name || '', i.kind === 'expense' ? 'Expense claim' : 'Service invoice', formatCurrency(Number(i.amount || 0)), i.invoiceNumber || '', i.payee || '', i.details || '', formatDate(day(i.submittedAt)), formatDate(day(i.sentToRepAt))];
+
 function Invoices({ invoices, artistById, acknowledge }) {
   const [viewing, setViewing] = useState(null);
   const [fileUrl, setFileUrl] = useState('');
@@ -234,6 +270,7 @@ function Invoices({ invoices, artistById, acknowledge }) {
   const sorted = [...invoices].sort((a, b) => String(b.sentToRepAt).localeCompare(String(a.sentToRepAt)));
   async function view(inv) {
     setViewing(inv); setFileUrl(''); setFileErr('');
+    if (!inv.repSeenAt) acknowledge('invoice', inv, 'seen'); // opening it counts as seeing it
     if (!inv.attachment) return;
     try { setFileUrl(await documentUrl(inv.attachment)); } catch (e) { setFileErr('Couldn’t open the invoice file. Try again in a moment.'); }
   }
@@ -245,26 +282,23 @@ function Invoices({ invoices, artistById, acknowledge }) {
       document.body.appendChild(l); l.click(); l.remove();
     } catch (e) { setFileErr('Couldn’t download the invoice file. Try again in a moment.'); }
   }
-  const isImage = inv => /^data:image|\.(png|jpe?g|gif|webp|heic)$/i.test(String(inv.attachmentName || inv.attachment || ''));
+  const isImage = inv => /^data:image/i.test(String(inv.attachment || '')) || /\.(png|jpe?g|gif|webp|heic|svg)$/i.test(String(inv.attachmentName || ''));
   const row = inv => {
     const a = artistById[inv.artistId] || {};
     return (
-      <li key={inv.id} className="rounded p-4" style={{ background: C.panel }}>
-        <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <button onClick={() => view(inv)} className="text-left" style={{ fontWeight: 600, fontSize: 16 }}>{inv.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></button>
-          <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(Number(inv.amount || 0))}</div>
-        </div>
-        <div className="text-sm mt-1 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
-          <Badge tone={TONE[inv.status] || 'default'}>{inv.status}</Badge>
-          <span>Sent to the partner {formatDate(day(inv.sentToRepAt))}</span>
-        </div>
-        <div className="flex gap-2 flex-wrap mt-3">
-          <Btn variant="ghost" onClick={() => view(inv)}><Eye size={14} /> View</Btn>
-          {inv.attachment && <Btn variant="ghost" onClick={() => downloadFile(inv)}><FileDown size={14} /> Download invoice file</Btn>}
-          <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (inv.invoiceNumber || inv.id), 'Invoice: ' + inv.title, INVOICE_HEADERS, [invoiceRow(inv, a)])}><FileDown size={14} /> {inv.attachment ? 'Download details' : 'Download'}</Btn>
-        </div>
-        {!viewing && fileErr && <div className="text-xs mt-2" role="alert" style={{ color: C.red }}>{fileErr}</div>}
-        <div className="mt-3"><Ack kind="invoice" item={inv} acknowledge={acknowledge} /></div>
+      <li key={inv.id}>
+        <button className="imss-repcard" onClick={() => view(inv)} aria-label={'Open ' + inv.title}>
+          <span className="flex items-baseline justify-between gap-3">
+            <span style={{ fontWeight: 600, fontSize: 16, minWidth: 0 }}>{inv.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></span>
+            <span style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{formatCurrency(Number(inv.amount || 0))}</span>
+          </span>
+          <span className="text-sm mt-1.5 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
+            <Badge tone={TONE[inv.status] || 'default'}>{inv.status}</Badge>
+            <span>Sent to the partner {formatDate(day(inv.sentToRepAt))}</span>
+            {inv.attachment && <span>File attached</span>}
+            <AckChips item={inv} />
+          </span>
+        </button>
       </li>
     );
   };
@@ -282,21 +316,25 @@ function Invoices({ invoices, artistById, acknowledge }) {
       {viewing && (() => {
         const a = artistById[viewing.artistId] || {};
         return (
-          <ViewSheet title={viewing.title} subtitle={(a.name || '') + ' · ' + formatCurrency(Number(viewing.amount || 0))} onClose={() => setViewing(null)}>
+          <ViewSheet title={viewing.title} subtitle={(a.name || '') + ' · ' + formatCurrency(Number(viewing.amount || 0))} onClose={() => setViewing(null)}
+            footer={<>
+              {viewing.attachment && <Btn variant="primary" disabled={!fileUrl} onClick={() => downloadFile(viewing)}><FileDown size={14} /> Download invoice file</Btn>}
+              <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (viewing.invoiceNumber || viewing.id), 'Invoice: ' + viewing.title, INVOICE_HEADERS, [invoiceRow(viewing, a)])}><FileDown size={14} /> Download details</Btn>
+            </>}>
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <Badge tone={TONE[viewing.status] || 'default'}>{viewing.status}</Badge>
+              <span className="text-sm" style={{ color: C.textDim }}>Sent to the partner {formatDate(day(viewing.sentToRepAt))}</span>
+            </div>
+            <div className="mb-4"><Ack kind="invoice" item={invoices.find(x => x.id === viewing.id) || viewing} acknowledge={acknowledge} /></div>
             {viewing.attachment && (
-              <div className="mb-4">
-                {fileErr ? <div className="text-sm" role="alert" style={{ color: C.red }}>{fileErr}</div>
-                  : !fileUrl ? <div className="text-sm" style={{ color: C.textDim }}>Opening the invoice file…</div>
-                  : isImage(viewing) ? <img src={fileUrl} alt={'Invoice file for ' + viewing.title} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid ' + C.border }} />
-                  : <iframe src={fileUrl} title={'Invoice file for ' + viewing.title} style={{ width: '100%', height: '60dvh', border: '1px solid ' + C.border, borderRadius: 10, background: '#fff' }} />}
+              <div className="mb-4" style={{ borderRadius: 12, border: '1px solid ' + C.border, overflow: 'hidden', background: '#fff' }}>
+                {fileErr ? <div className="text-sm p-3" role="alert" style={{ color: C.red }}>{fileErr}</div>
+                  : !fileUrl ? <div className="text-sm p-3" style={{ color: '#68686d' }}>Opening the invoice file…</div>
+                  : isImage(viewing) ? <img src={fileUrl} alt={'Invoice file for ' + viewing.title} style={{ display: 'block', width: '100%', maxHeight: '55dvh', objectFit: 'contain' }} />
+                  : <iframe src={fileUrl} title={'Invoice file for ' + viewing.title} style={{ display: 'block', width: '100%', height: '55dvh', border: 0 }} />}
               </div>
             )}
-            <Fields headers={INVOICE_HEADERS} values={invoiceRow(viewing, a)} />
-            <div className="flex gap-2 flex-wrap mt-4">
-              {fileUrl && <Btn variant="primary" onClick={() => { const l = document.createElement('a'); l.href = fileUrl; l.download = viewing.attachmentName || 'invoice'; l.target = '_blank'; l.rel = 'noopener'; document.body.appendChild(l); l.click(); l.remove(); }}><FileDown size={14} /> Download invoice file</Btn>}
-              <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (viewing.invoiceNumber || viewing.id), 'Invoice: ' + viewing.title, INVOICE_HEADERS, [invoiceRow(viewing, a)])}><FileDown size={14} /> Download details</Btn>
-            </div>
-            <div className="mt-4 pt-3" style={{ borderTop: '1px solid ' + C.border }}><Ack kind="invoice" item={invoices.find(x => x.id === viewing.id) || viewing} acknowledge={acknowledge} /></div>
+            <Fields headers={INVOICE_VIEW_HEADERS} values={invoiceView(viewing, a)} />
           </ViewSheet>
         );
       })()}

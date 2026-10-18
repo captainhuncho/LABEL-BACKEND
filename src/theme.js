@@ -111,8 +111,10 @@ img[alt="IMSS Records"] { filter: var(--logo-filter); }
 @media (min-width: 640px) { .imss-form-grid { grid-template-columns: 1fr 1fr !important; } }
 @media (min-width: 1024px) { .imss-grid-2 { grid-template-columns: 1fr 1fr !important; } }
 @media (min-width: 1280px) { .imss-form-grid { grid-template-columns: repeat(3, 1fr) !important; } .imss-form-grid.imss-two { grid-template-columns: 1fr 1fr !important; } }
+.imss-print-logo { display: none; }
 @media print {
   .imss-sidebar, .imss-print-hide { display: none !important; }
+  .imss-print-logo { display: block !important; height: 40px; width: auto; margin: 0 0 18px; filter: none !important; }
   .imss-content { max-height: none !important; overflow: visible !important; padding: 0 !important; }
   .imss-content-inner { max-width: none !important; animation: none; }
   .imss-shell, .imss-gate, .imss-portal { border: none !important; height: auto !important; max-height: none !important; overflow: visible !important; }

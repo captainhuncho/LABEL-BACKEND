@@ -202,9 +202,10 @@ export async function exportRowsToExcel(filename, headers, rows) {
   logActivity('exported Excel', filename + ' (' + rows.length + ' rows)');
   try {
     const XLSX = await import('xlsx');
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // Branded title rows on top (this library can't embed the logo image).
+    const ws = XLSX.utils.aoa_to_sheet([['IMSS Records'], [String(filename).replace(/[-_]+/g, ' ') + ' · exported ' + new Date().toISOString().slice(0, 10)], [], headers, ...rows]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.utils.book_append_sheet(wb, ws, 'IMSS Records');
     XLSX.writeFile(wb, filename + '.xlsx');
   } catch (e) {
     exportRowsToCsv(filename, headers, rows);
