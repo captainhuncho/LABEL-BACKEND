@@ -1,6 +1,6 @@
-// Phones: tables wider than the screen get class .imss-stack (cards, see
+// Phones and tablets: tables wider than the screen get class .imss-stack (cards, see
 // GLOBAL_STYLES) and each cell a data-label from its column header.
-const PHONE = '(max-width: 767px)';
+const PHONE = '(max-width: 1199px)'; // phones and tablets (both orientations)
 
 function label(table) {
   // A header that is only screen-reader text ("Actions") labels nothing on a card.

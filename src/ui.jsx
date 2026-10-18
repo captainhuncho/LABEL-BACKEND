@@ -101,7 +101,34 @@ export const inputStyle = { background: 'var(--field)', border: '1px solid var(-
 
 export function Input(props) {
   const { style, className, ...rest } = props;
+  if (props.type === 'month' && !MONTH_SUPPORTED) return <MonthPicker {...rest} style={style} />;
   return <input {...rest} style={{ ...inputStyle, ...(style || {}) }} className={'w-full ' + (className || '')} />;
+}
+
+// Firefox and desktop Safari have no month picker (type="month" becomes a plain
+// text box), so there a month is picked from Month + Year drop-downs. Same
+// value ("YYYY-MM") and onChange({ target: { value } }) as the native one.
+export const MONTH_SUPPORTED = (() => { try { const i = document.createElement('input'); i.setAttribute('type', 'month'); return i.type === 'month'; } catch (e) { return true; } })();
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export function MonthPicker({ value = '', onChange, min, max, required, disabled, style, id, 'aria-label': ariaLabel }) {
+  const [y, m] = String(value || '').split('-');
+  const now = new Date().getFullYear();
+  const lo = min ? +String(min).slice(0, 4) : now - 10, hi = max ? +String(max).slice(0, 4) : now + 2;
+  const years = []; for (let k = hi; k >= lo; k--) years.push(String(k));
+  const emit = (yy, mm) => onChange && onChange({ target: { value: yy && mm ? yy + '-' + mm : '' } });
+  const box = { ...inputStyle, flex: 1, minWidth: 0 };
+  return (
+    <span role="group" aria-label={ariaLabel || 'Month'} style={{ display: 'flex', gap: 6, width: '100%', ...(style || {}) }}>
+      <select id={id} aria-label="Month" value={m || ''} required={required} disabled={disabled} onChange={e => emit(y || String(now), e.target.value)} style={box}>
+        <option value="">Month</option>
+        {MONTH_NAMES.map((n, i) => { const v = String(i + 1).padStart(2, '0'); return <option key={v} value={v}>{n}</option>; })}
+      </select>
+      <select aria-label="Year" value={y || ''} required={required} disabled={disabled} onChange={e => emit(e.target.value, m || '01')} style={{ ...box, flex: '0 0 96px' }}>
+        <option value="">Year</option>
+        {years.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+    </span>
+  );
 }
 export function Select({ children, style, className, ...rest }) {
   return <select {...rest} style={{ ...inputStyle, ...(style || {}) }} className={'w-full ' + (className || '')}>{children}</select>;

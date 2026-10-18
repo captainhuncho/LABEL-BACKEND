@@ -1,4 +1,4 @@
-import { ReportingLagNote } from '../../ui.jsx';
+import { ReportingLagNote, MonthPicker, MONTH_SUPPORTED } from '../../ui.jsx';
 import { Megaphone, ChevronRight, Eye, LogOut, Wallet } from 'lucide-react';
 import { dealLabel, formatCents, formatDate, formatNumber, monthLabel } from '../../constants.js';
 import { artistSpend } from '../../finance.js';
@@ -88,9 +88,9 @@ export function OverviewTab({ DASH_PRESETS, activePreset, applyDashRange, artist
             )}
 
             <form className="imss-dash-range" aria-label="Date selection" onSubmit={e => { e.preventDefault(); applyDashRange(dashDraft); }}>
-              <label className="imss-dash-field">From<input type="month" value={dashDraft.from} max={dashDraft.to || undefined} onChange={e => setDashDraft(d => ({ ...d, from: e.target.value }))} /></label>
+              <label className="imss-dash-field">From{MONTH_SUPPORTED ? <input type="month" value={dashDraft.from} max={dashDraft.to || undefined} onChange={e => setDashDraft(d => ({ ...d, from: e.target.value }))} /> : <MonthPicker aria-label="From" value={dashDraft.from} max={dashDraft.to || undefined} onChange={e => setDashDraft(d => ({ ...d, from: e.target.value }))} />}</label>
               <span className="imss-dash-to" aria-hidden="true">to</span>
-              <label className="imss-dash-field">To<input type="month" value={dashDraft.to} min={dashDraft.from || undefined} onChange={e => setDashDraft(d => ({ ...d, to: e.target.value }))} /></label>
+              <label className="imss-dash-field">To{MONTH_SUPPORTED ? <input type="month" value={dashDraft.to} min={dashDraft.from || undefined} onChange={e => setDashDraft(d => ({ ...d, to: e.target.value }))} /> : <MonthPicker aria-label="To" value={dashDraft.to} min={dashDraft.from || undefined} onChange={e => setDashDraft(d => ({ ...d, to: e.target.value }))} />}</label>
               <Btn variant="primary" type="submit">Update</Btn>
               <div className="imss-dash-presets" role="group" aria-label="Quick ranges">
                 {DASH_PRESETS.map(p => (
