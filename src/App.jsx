@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Bell, Mail, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
 import { logActivity, logSignIn } from './audit.js';
 import { MobileNav } from './MobileNav.jsx';
 import { usePageUrl } from './pageUrl.js';
@@ -40,6 +40,7 @@ import { SubmissionsSection } from './sections/Submissions.jsx';
 import { TasksSection } from './sections/Tasks.jsx';
 import { TeamSection } from './sections/Team.jsx';
 import LoadingScreen from './LoadingScreen.jsx';
+import { EmailSwitches } from './sections/EmailSwitches.jsx';
 
 function Sidebar({ active, setActive, nav, sessionName, onLogout }) {
   return (
@@ -628,6 +629,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: 'Team' },
     isPrivileged && { id: 'activity', label: 'Activity', icon: History, group: 'Team' },
 
+    isAdmin && { id: 'emails', label: 'Email notifications', icon: Mail, group: 'System' },
     isAdmin && { id: 'backup', label: 'Backup & restore', icon: FileDown, group: 'System' },
   ].filter(Boolean);
 
@@ -703,8 +705,9 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'import' && <ImportSection publishedRevenue={publishedRevenue} updatePublishedRevenue={updatePublishedRevenue} roster={roster} catalog={catalogView} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
         {active === 'roster' && <RosterSection focus={focus} updateStatementFiles={updateStatementFiles} updateCatalog={updateCatalog} updateTasks={updateTasks} invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streamsView} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
-        {active === 'team' && <TeamSection labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} roster={roster} updateRoster={updateRoster} staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
+        {active === 'team' && <TeamSection roster={roster} updateRoster={updateRoster} staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
         {active === 'access-requests' && <AccessRequestsSection accessRequests={accessRequests} update={updateAccessRequests} staff={staff} updateStaff={updateStaff} isAdmin={isAdmin} sessionName={session.name} />}
+        {active === 'emails' && isAdmin && <><SectionHeader title="Email notifications" description="Every email the platform sends, and who gets it. Switch any of them off; the bell notification in the app still appears." /><EmailSwitches labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} startOpen /></>}
         {active === 'backup' && isAdmin && <BackupSection
           allData={{ roster, catalog, revenue, streams, payouts, masterGross, labelSettings, staff, tasks, ledger, accessRequests, invoices }}
           updaters={{ roster: updateRoster, catalog: updateCatalog, revenue: updateRevenue, streams: updateStreams, payouts: updatePayouts, masterGross: updateMasterGross, labelSettings: updateLabelSettings, staff: updateStaff, tasks: updateTasks, ledger: updateLedger, accessRequests: updateAccessRequests, invoices: updateInvoices }}

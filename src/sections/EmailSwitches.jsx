@@ -6,8 +6,8 @@ import { EMAIL_SWITCHES } from '../constants.js';
 import { C } from '../theme.js';
 import { logActivity } from '../audit.js';
 
-export function EmailSwitches({ labelSettings = {}, updateLabelSettings }) {
-  const [open, setOpen] = useState(false);
+export function EmailSwitches({ labelSettings = {}, updateLabelSettings, startOpen = false }) {
+  const [open, setOpen] = useState(startOpen);
   const sw = labelSettings.emailSwitches || {};
   const isOn = key => sw[key] !== false;
   const offCount = EMAIL_SWITCHES.filter(e => !isOn(e.key)).length;
@@ -20,13 +20,13 @@ export function EmailSwitches({ labelSettings = {}, updateLabelSettings }) {
   const groups = [...new Set(EMAIL_SWITCHES.map(e => e.group))];
   return (
     <section aria-labelledby="email-sw-h" className="rounded border mb-6" style={{ background: C.panel, borderColor: C.border }}>
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center justify-between gap-3 w-full text-left" style={{ padding: '14px 16px' }}>
+      {!startOpen && <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center justify-between gap-3 w-full text-left" style={{ padding: '14px 16px' }}>
         <span className="flex items-center gap-2"><Mail size={16} aria-hidden="true" style={{ color: C.textDim }} /><span id="email-sw-h" style={{ fontWeight: 600 }}>Email notifications</span></span>
         <span className="text-sm" style={{ color: offCount ? C.amber : C.textDim }}>{offCount ? offCount + ' switched off' : 'All on'} · {open ? 'Hide' : 'Show'}</span>
-      </button>
+      </button>}
       {open && (
-        <div style={{ padding: '0 16px 14px' }}>
-          <p className="text-sm mb-3" style={{ color: C.textDim }}>Every email the platform sends. Switching one off stops that email for everyone; the bell notification in the app still appears. Sign-in codes are always sent.</p>
+        <div style={{ padding: startOpen ? '14px 16px' : '0 16px 14px' }}>
+          {startOpen ? <p className="text-sm mb-3" style={{ color: offCount ? C.amber : C.textDim }}>{offCount ? offCount + ' switched off.' : 'All emails are on.'} Sign-in codes are always sent.</p> : <p className="text-sm mb-3" style={{ color: C.textDim }}>Every email the platform sends. Switching one off stops that email for everyone; the bell notification in the app still appears. Sign-in codes are always sent.</p>}
           {groups.map(g => (
             <div key={g} className="mb-3">
               <div className="text-xs mb-1" style={{ color: C.textFaint, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{g}</div>
