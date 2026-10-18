@@ -13,7 +13,9 @@ import { stackWideTables } from './stackTables.js';
 import { installErrorReport } from './errorReport.js';
 import { installPullToRefresh } from './pullToRefresh.js';
 import LoadingScreen from './LoadingScreen.jsx';
+import { applyAppearance } from './appearance.js';
 
+applyAppearance();
 installStorage();
 installErrorReport();
 installPullToRefresh();

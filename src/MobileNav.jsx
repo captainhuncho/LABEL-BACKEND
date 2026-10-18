@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, LogOut, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react';
 import { C } from './theme.js';
+import { AppearancePicker } from './appearance.js';
 
 // The four tabs per role, in order; pages the person can't open are skipped
 // and the fallback list fills the gaps.
@@ -48,6 +49,10 @@ function AccountCard({ profile, close }) {
           <div style={{ fontWeight: 600, fontSize: 17, color: C.text }}>{profile.name}</div>
           <div style={{ fontSize: 13, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[profile.role, profile.email].filter(Boolean).join(' · ')}</div>
         </div>
+      </div>
+      <div className="flex items-center justify-between gap-3" style={{ padding: '10px 14px', borderTop: '1px solid var(--hairline)' }}>
+        <span style={{ fontSize: 15, color: C.text }}>Appearance</span>
+        <AppearancePicker />
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderTop: '1px solid var(--hairline)' }}>
         <li><button onClick={() => { close(); profile.onSecurity(); }} className="imss-sheet-row" style={{ color: C.text }}><ShieldCheck size={19} aria-hidden="true" style={{ color: C.textDim }} /><span style={{ flex: 1, textAlign: 'left' }}>Account &amp; security</span><ChevronRight size={16} aria-hidden="true" style={{ color: C.textDim }} /></button></li>

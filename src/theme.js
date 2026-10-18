@@ -43,8 +43,9 @@ export const GLOBAL_STYLES = `
   --shadow: 0 2px 6px rgba(0,0,0,0.04), 0 10px 30px rgba(0,0,0,0.06);
   --logo-filter: invert(1);
 }
+/* Dark: the device setting (Auto), unless Appearance says Light; or always when it says Dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #000000; --panel: #1c1c1e; --panel-2: #232325; --chrome: rgba(22,22,23,0.8);
     --text: #f5f5f7; --text-2: #a1a1a6; --text-3: #98989d;
@@ -56,6 +57,18 @@ export const GLOBAL_STYLES = `
     --shadow: 0 2px 6px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.35);
     --logo-filter: none;
   }
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #000000; --panel: #1c1c1e; --panel-2: #232325; --chrome: rgba(22,22,23,0.8);
+    --text: #f5f5f7; --text-2: #a1a1a6; --text-3: #98989d;
+    --hairline: rgba(255,255,255,0.11); --hairline-strong: rgba(255,255,255,0.2);
+    --fill: rgba(255,255,255,0.08); --hover: rgba(255,255,255,0.06); --field: #1c1c1e; --field-line: rgba(255,255,255,0.18);
+    --amber: #F0B04F; --amber-fill: #E7A23D; --on-amber: #1d1d1f; --amber-soft: rgba(231,162,61,0.18); --amber-line: rgba(231,162,61,0.5);
+    --teal: #6CC4AC; --teal-soft: rgba(95,165,147,0.18); --teal-line: rgba(95,165,147,0.5);
+    --red: #FF6B5E; --red-soft: rgba(255,107,94,0.14); --red-line: rgba(255,107,94,0.45);
+    --shadow: 0 2px 6px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.35);
+    --logo-filter: none;
 }
 html, body { background: var(--bg); color: var(--text); font-family: ${HEADING_FONT}; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-feature-settings: "tnum"; letter-spacing: -0.01em; }
 ::selection { background: var(--amber-soft); color: var(--text); }

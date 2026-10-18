@@ -6,6 +6,7 @@ import { C } from '../../theme.js';
 import { Avatar, Badge, Btn, Field, Input, Td, TextArea, PhotoCropper } from '../../ui.jsx';
 import { PasskeySettings } from '../../Passkeys.jsx';
 import { TwoFactorSettings } from '../../Mfa.jsx';
+import { AppearancePicker } from '../../appearance.js';
 
 // The artist portal's profile tab (state lives in ArtistPortalShell).
 export function ProfileTab({ artist, cropFile, handleProfilePhoto, monthLong, myPendingRequest, myProfileRequests, paid, pctLabel, profileForm, profileInputRef, profileSaved, saveProfile, setCropFile, setProfileForm, submitProfileRequest }) {
@@ -13,6 +14,10 @@ export function ProfileTab({ artist, cropFile, handleProfilePhoto, monthLong, my
           <div>
             <PasskeySettings />
             <TwoFactorSettings />
+            <div className="flex items-center justify-between gap-3 flex-wrap rounded border p-4 mt-4" style={{ borderColor: C.border, background: C.panel }}>
+              <div><div style={{ fontWeight: 600 }}>Appearance</div><div className="text-sm" style={{ color: C.textDim }}>Auto follows your device's light or dark setting.</div></div>
+              <AppearancePicker />
+            </div>
             <section aria-label="Your deal" className="rounded p-5 mb-6" style={{ background: C.panel }}>
               <h2 style={{ fontWeight: 600, fontSize: 19, letterSpacing: '-0.02em' }}>Your deal</h2>
               <p className="mt-1 mb-3" style={{ color: C.textDim, fontSize: 14 }}>Your share of net earnings and your deal over time. Each month is paid at the terms in force that month.</p>
