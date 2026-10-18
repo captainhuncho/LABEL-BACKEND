@@ -100,6 +100,7 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
   const [picked, setPicked] = useState([]);
   const [viewing, setViewing] = useState(null);
   const [mailMsg, setMailMsg] = useState('');
+  const [tab, setTab] = useState('upcoming');
   async function mail(list) { setMailMsg('Sending…'); setMailMsg(await emailReleases(list)); }
   const today = todayStr();
   const sorted = useMemo(() => [...releases].sort((a, b) => String(a.releaseDate || '9999').localeCompare(String(b.releaseDate || '9999'))), [releases]);
@@ -122,7 +123,7 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
             <span style={{ fontSize: 15, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{formatDate(r.releaseDate)}</span>
           </span>
           <span className="text-sm mt-1.5 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
-            <span>{r.type || 'Release'}</span>
+            <Badge tone={r.type === 'Album' ? 'teal' : r.type === 'EP' ? 'amber' : 'default'}>{r.type || 'Type not set'}</Badge>
             {r.isrc && <span>ISRC {r.isrc}</span>}
             {updated && <Badge tone="amber">Updated {formatDate(day(r.repConfirmedAt))}</Badge>}
             <AckChips item={r} />
@@ -149,16 +150,24 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
           {picked.length > 0 && <button onClick={() => setPicked([])} style={{ color: C.amber, fontSize: 14 }}>Clear selection</button>}
         </div>
         {mailMsg && <div role="status" className="text-sm mb-3" style={{ color: /Couldn|Too many/.test(mailMsg) ? C.red : C.teal }}>{mailMsg}</div>}
-        <h2 style={{ fontWeight: 600, fontSize: 17, margin: '8px 0 10px' }}>Upcoming</h2>
-        {upcoming.length ? <ul className="flex flex-col gap-2 mb-6">{upcoming.map(card)}</ul> : <p className="mb-6" style={{ color: C.textDim }}>Nothing scheduled yet.</p>}
-        {past.length > 0 && <><h2 style={{ fontWeight: 600, fontSize: 17, margin: '8px 0 10px' }}>Released</h2><ul className="flex flex-col gap-2">{past.map(card)}</ul></>}
+        <div role="tablist" aria-label="Releases" className="flex gap-1 mb-3" style={{ display: 'inline-flex', padding: 3, borderRadius: 980, background: 'var(--fill)' }}>
+          {[['upcoming', 'Upcoming', upcoming.length], ['released', 'Released', past.length]].map(([id, label, n]) => (
+            <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+              style={{ minHeight: 40, padding: '6px 16px', borderRadius: 980, fontSize: 15, fontWeight: 600, background: tab === id ? 'var(--panel)' : 'transparent', color: tab === id ? C.text : C.textDim, boxShadow: tab === id ? '0 1px 3px rgba(0,0,0,.15)' : 'none' }}>
+              {label} <span style={{ color: C.textDim, fontWeight: 500 }}>{n}</span>
+            </button>
+          ))}
+        </div>
+        {tab === 'upcoming'
+          ? (upcoming.length ? <ul className="flex flex-col gap-2">{upcoming.map(card)}</ul> : <p style={{ color: C.textDim }}>Nothing scheduled yet.</p>)
+          : (past.length ? <ul className="flex flex-col gap-2">{past.map(card)}</ul> : <p style={{ color: C.textDim }}>Nothing released yet.</p>)}
       </>}
       {viewing && (() => {
         const a = artistById[viewing.artistId] || {};
         const vals = releaseSheetRow(viewing, a);
         const one = (viewing.title || 'release').replace(/\s+/g, '-').toLowerCase();
         return (
-          <ViewSheet title={viewing.title} subtitle={a.name + ' · ' + formatDate(viewing.releaseDate)} onClose={() => { setViewing(null); setMailMsg(''); }}
+          <ViewSheet title={viewing.title} subtitle={(viewing.type || 'Release') + ' · ' + a.name + ' · ' + formatDate(viewing.releaseDate)} onClose={() => { setViewing(null); setMailMsg(''); }}
             footer={<>
               <Btn variant="primary" onClick={() => mail([viewing])}><Mail size={14} /> Email to me</Btn>
               <Btn variant="ghost" onClick={() => exportRecordsToWord(one, viewing.title + ' · ' + (a.name || ''), RELEASE_SHEET_HEADERS, [vals])}><FileDown size={14} /> Word</Btn>
