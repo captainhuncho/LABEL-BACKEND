@@ -44,6 +44,8 @@ export default function AuthGate({ children }) {
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthEmail(session ? session.user.email : null);
+      // Sign-in clears its token from the address but leaves a bare "#".
+      if (window.location.href.endsWith('#')) window.history.replaceState(null, '', window.location.pathname + window.location.search);
     });
     return () => data.subscription.unsubscribe();
   }, []);
