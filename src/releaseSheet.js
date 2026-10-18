@@ -26,11 +26,13 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 
 // A Word document (opens in Word and Google Docs): one section per record,
 // each a two-column table of field and value.
+// The logo is linked from the live site (not this page's address), so it shows
+// wherever the file is opened, Word or Google Docs, as long as it's online.
 export function exportRecordsToWord(filename, title, headers, rows, heading = r => r[0]) {
   logActivity('exported Word', filename + ' (' + rows.length + ')');
   const body = rows.map(r => `<h2 style="font-family:Arial;font-size:15pt;margin:18pt 0 6pt">${esc(heading(r))}</h2>
 <table style="border-collapse:collapse;width:100%;font-family:Arial;font-size:10.5pt">${headers.map((h, i) => r[i] === '' || r[i] == null ? '' : `<tr><td style="border:1px solid #ccc;padding:4pt 6pt;width:34%;color:#555">${esc(h)}</td><td style="border:1px solid #ccc;padding:4pt 6pt">${esc(r[i]).replace(/\n/g, '<br>')}</td></tr>`).join('')}</table>`).join('');
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${esc(title)}</title></head><body><img src="${location.origin}/email-logo-dark.png" width="88" height="40" alt="IMSS Records" style="display:block;margin:0 0 12pt"><h1 style="font-family:Arial;font-size:20pt">${esc(title)}</h1>${body}<p style="font-family:Arial;font-size:9pt;color:#888;margin-top:24pt">IMSS Records · exported ${new Date().toISOString().slice(0, 10)}</p></body></html>`;
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${esc(title)}</title></head><body><img src="https://ops.imssrecords.com/email-logo-dark.png" width="88" height="40" alt="IMSS Records" style="display:block;margin:0 0 12pt"><h1 style="font-family:Arial;font-size:20pt">${esc(title)}</h1>${body}<p style="font-family:Arial;font-size:9pt;color:#888;margin-top:24pt">IMSS Records · exported ${new Date().toISOString().slice(0, 10)}</p></body></html>`;
   const url = URL.createObjectURL(new Blob(['﻿', html], { type: 'application/msword' }));
   const a = document.createElement('a'); a.href = url; a.download = filename + '.doc';
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
