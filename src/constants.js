@@ -464,3 +464,21 @@ export function salesDateRange(row) {
   const months = Object.keys((row && row.salesMonths) || {}).filter(Boolean).sort();
   return months.length ? (months.length === 1 ? months[0] : months[0] + ' to ' + months[months.length - 1]) : '';
 }
+
+// Every email the platform sends, for Admin's On/Off switches
+// (labelSettings.emailSwitches[key] === false means off). The notify function
+// uses the same keys. Switching one off stops the email; bell notifications stay.
+export const EMAIL_SWITCHES = [
+  { key: 'earnings', group: 'Artists', label: 'New earnings published', who: 'Artist' },
+  { key: 'statement', group: 'Artists', label: 'Royalty statement ready', who: 'Artist' },
+  { key: 'invoiceArtist', group: 'Artists', label: 'Invoice updates: needs changes, not approved, paid, label replies', who: 'Artist' },
+  { key: 'releaseWeek', group: 'Artists', label: 'Release week: Monday reminder to check everything is ready', who: 'Artist and their PM' },
+  { key: 'notice', group: 'Everyone', label: 'Noticeboard posts', who: 'The post’s audience' },
+  { key: 'welcome', group: 'Everyone', label: 'Welcome emails (sent with the Send welcome button)', who: 'Artist or team member' },
+  { key: 'signin', group: 'Everyone', label: 'New sign-in security notice', who: 'Whoever signed in' },
+  { key: 'invoiceTeam', group: 'Team', label: 'Invoices waiting for review and artist replies', who: 'PM, invoice queue reviewers, Admins' },
+  { key: 'submissions', group: 'Team', label: 'New release submissions, artist requests and their replies', who: 'PM, A&R, Admins' },
+  { key: 'dealLegal', group: 'Team', label: 'Deal and license changes (the record for Legal)', who: 'Legal' },
+  { key: 'signinAlert', group: 'Team', label: 'Watched account signed in', who: 'Admins' },
+  { key: 'rep', group: 'Label reps', label: 'Release confirmed or updated, invoice to settle', who: 'The artist’s label rep' },
+];

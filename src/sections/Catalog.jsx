@@ -261,7 +261,10 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
             </Select>
           </Field>
           <Field label="Genre"><Input value={form.genre} onChange={e => setForm({ ...form, genre: e.target.value })} placeholder={(roster.find(a => a.id === form.artistId) || {}).genre || 'e.g. Alt-Pop'} /></Field>
-          <Field label="Release date"><Input type="date" value={form.releaseDate} onChange={e => setForm({ ...form, releaseDate: e.target.value })} /></Field>
+          <Field label="Release date">
+            <Input type="date" value={form.releaseDate} onChange={e => setForm({ ...form, releaseDate: e.target.value })} />
+            <DateClash catalog={catalog} date={form.releaseDate} exceptId={editing} artistMap={artistMap} />
+          </Field>
           <Field label="ISRC (recording code)"><Input value={form.isrc} onChange={e => setForm({ ...form, isrc: e.target.value })} placeholder="US-XXX-YY-NNNNN" /></Field>
           <Field label="UPC (release code)"><Input value={form.upc} onChange={e => setForm({ ...form, upc: e.target.value })} placeholder="e.g. 198004512367" /></Field>
           <Field label="Entered by"><Input value={form.enteredBy} onChange={e => setForm({ ...form, enteredBy: e.target.value })} placeholder="Your name" /></Field>
@@ -585,6 +588,24 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
           </table>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Other releases already on a date (the label's whole catalog).
+export function releasesOn(catalog, date, exceptId = null) {
+  if (!date) return [];
+  return catalog.filter(r => r.releaseDate === date && r.id !== exceptId && r.status !== 'Archived');
+}
+
+// A heads-up, never a block: the same date can still be chosen.
+export function DateClash({ catalog, date, exceptId = null, artistMap = {} }) {
+  const others = releasesOn(catalog, date, exceptId);
+  if (!others.length) return null;
+  const names = others.slice(0, 3).map(r => '“' + r.title + '”' + (artistMap[r.artistId] ? ' by ' + artistMap[r.artistId].name : '')).join(', ');
+  return (
+    <div role="status" className="text-xs mt-1.5" style={{ color: C.amber, fontWeight: 600 }}>
+      Date clash: {others.length === 1 ? 'another release is' : others.length + ' other releases are'} out on this day ({names}{others.length > 3 ? ', …' : ''}). You can still use it.
     </div>
   );
 }

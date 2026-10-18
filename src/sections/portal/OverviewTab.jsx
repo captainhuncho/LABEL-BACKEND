@@ -1,4 +1,4 @@
-import { ReportingLagNote, MonthPicker, MONTH_SUPPORTED } from '../../ui.jsx';
+import { ReportingLagNote, MonthPicker, MONTH_SUPPORTED, ReleaseCountdown } from '../../ui.jsx';
 import { Megaphone, ChevronRight, Eye, LogOut, Wallet } from 'lucide-react';
 import { dealLabel, formatCents, formatDate, formatNumber, monthLabel } from '../../constants.js';
 import { artistSpend } from '../../finance.js';
@@ -8,7 +8,7 @@ import { Badge, Btn, Td, Th } from '../../ui.jsx';
 import { breakdownLabel } from '../StatementFiles.jsx';
 
 // The artist portal's overview tab (state lives in ArtistPortalShell).
-export function OverviewTab({ DASH_PRESETS, activePreset, applyDashRange, artist, balance, budgetRemaining, creditLine, dashBestMonth, dashCountries, dashDraft, dashError, dashGross, dashLabel, dashReleased, dashRetailers, dashTopSongs, dashUnits, dismissDeal, invoices, invoicesDue, isFunded, latestDeal, ledger, lifetime, monthLong, myNotices, needsToKnow, onLogout, openReleaseRevenue, paid, payouts, pctLabel, platformTotals, rateLabel, recoupment, releasedByType, revenue, setDashDraft, setTab, showDealBanner, streams, totalStreams }) {
+export function OverviewTab({ artistCatalog = [], DASH_PRESETS, activePreset, applyDashRange, artist, balance, budgetRemaining, creditLine, dashBestMonth, dashCountries, dashDraft, dashError, dashGross, dashLabel, dashReleased, dashRetailers, dashTopSongs, dashUnits, dismissDeal, invoices, invoicesDue, isFunded, latestDeal, ledger, lifetime, monthLong, myNotices, needsToKnow, onLogout, openReleaseRevenue, paid, payouts, pctLabel, platformTotals, rateLabel, recoupment, releasedByType, revenue, setDashDraft, setTab, showDealBanner, streams, totalStreams }) {
   return (
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -19,6 +19,7 @@ export function OverviewTab({ DASH_PRESETS, activePreset, applyDashRange, artist
               </div>
             </div>
             <ReportingLagNote />
+            <ReleaseCountdown releases={artistCatalog} title="Your release countdown" />
 
             {showDealBanner && (
               <section aria-label="Your deal has been updated" className="rounded mb-6" style={{ background: C.amberSoft, padding: '18px 20px' }}>

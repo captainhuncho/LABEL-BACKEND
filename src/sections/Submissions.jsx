@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { SPLIT_REQUIRED_ROLES, formatDate, missingRequiredDocs } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Badge, Btn, EmptyState, Field, SectionHeader, Td, TextArea, Th, DocLink } from '../ui.jsx';
+import { releasesOn } from './Catalog.jsx';
 
 // What a release submission needs before it can go to Catalog.
 export function submissionChecks(sub) {
@@ -29,7 +30,7 @@ export function submissionChecks(sub) {
 export const SUBMISSION_LABELS = { Pending: 'Waiting review', 'Needs info': 'Needs info', Approved: 'Accepted', Rejected: 'Rejected' };
 export const SUBMISSION_TONES = { Pending: 'amber', 'Needs info': 'amber', Approved: 'teal', Rejected: 'red' };
 
-export function SubmissionsSection({ releaseSubmissions, update, roster, pmScope = null, canEdit = true, sessionName = '', onAccept }) {
+export function SubmissionsSection({ releaseSubmissions, update, roster, catalog = [], pmScope = null, canEdit = true, sessionName = '', onAccept }) {
   const [status, setStatus] = useState('all');
   const [openId, setOpenId] = useState(null);
   const [message, setMessage] = useState('');
@@ -81,7 +82,7 @@ export function SubmissionsSection({ releaseSubmissions, update, roster, pmScope
                       <Td mono>{formatDate((sub.submittedAt || '').slice(0, 10))}</Td>
                       <Td>{a.name || 'Unknown artist'}</Td>
                       <Td><span style={{ fontWeight: 600 }}>{sub.title}</span><div className="text-xs" style={{ color: C.textDim }}>{sub.type}{sub.genre ? ' · ' + sub.genre : ''}</div></Td>
-                      <Td mono>{sub.proposedDate ? formatDate(sub.proposedDate) : '—'}</Td>
+                      <Td mono>{sub.proposedDate ? formatDate(sub.proposedDate) : '—'}{sub.proposedDate && releasesOn(catalog, sub.proposedDate).length > 0 && <div className="text-xs" style={{ color: C.amber, fontWeight: 600, fontFamily: 'inherit' }}>Date clash: {releasesOn(catalog, sub.proposedDate).length} already out</div>}</Td>
                       <Td><span style={{ fontFamily: MONO_FONT, color: passed === checks.length ? C.teal : C.amber, fontWeight: 600 }}>{passed}/{checks.length}</span></Td>
                       <Td><Badge tone={SUBMISSION_TONES[sub.status]}>{SUBMISSION_LABELS[sub.status] || sub.status}</Badge></Td>
                       <Td align="right"><button onClick={() => { setOpenId(isOpen ? null : sub.id); setMessage(''); setError(''); }} style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>{isOpen ? 'Close' : 'Review'}</button></Td>

@@ -2,7 +2,7 @@
 import { Download, FileSpreadsheet, Printer, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { documentUrl } from './storage.js';
-import { artworkColor, artworkInitials, REPORTING_LAG_NOTE, reportingLagExample } from './constants.js';
+import { artworkColor, artworkInitials, REPORTING_LAG_NOTE, reportingLagExample, formatDate } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
 import { logActivity } from './audit.js';
 
@@ -354,5 +354,31 @@ export function ReportingLagNote({ className = 'mt-1 mb-4' }) {
         <span className="block mt-1">{reportingLagExample()}</span>
       </details>
     </div>
+  );
+}
+
+// Days until each upcoming release (today and the next 60 days), soonest first.
+export function ReleaseCountdown({ releases = [], artistMap = null, max = 4, title = 'Release countdown' }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = d => Math.round((new Date(d + 'T00:00:00') - today) / 86400000);
+  const up = releases.filter(r => r.releaseDate && r.status !== 'Archived' && days(r.releaseDate) >= 0 && days(r.releaseDate) <= 60)
+    .sort((a, b) => a.releaseDate.localeCompare(b.releaseDate)).slice(0, max);
+  if (!up.length) return null;
+  const when = n => n === 0 ? 'Out today' : n === 1 ? 'Tomorrow' : n + ' days';
+  return (
+    <section aria-label={title} className="rounded border mb-6" style={{ background: C.panel, borderColor: C.border, padding: '14px 16px' }}>
+      <h2 className="mb-2" style={{ fontWeight: 600, fontSize: 15 }}>{title}</h2>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        {up.map(r => { const n = days(r.releaseDate); return (
+          <li key={r.id} className="flex items-center gap-3" style={{ minWidth: 0 }}>
+            <span style={{ flex: '0 0 auto', minWidth: 74, textAlign: 'center', borderRadius: 12, padding: '8px 6px', background: n <= 7 ? C.amberSoft : 'var(--fill)', color: n <= 7 ? C.amber : C.text, fontWeight: 700, fontSize: 14 }}>{when(n)}</span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+              <span className="text-xs" style={{ color: C.textDim }}>{artistMap && artistMap[r.artistId] ? artistMap[r.artistId].name + ' · ' : ''}{formatDate(r.releaseDate)}</span>
+            </span>
+          </li>
+        ); })}
+      </ul>
+    </section>
   );
 }

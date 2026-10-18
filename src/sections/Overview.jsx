@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { PLATFORM_COLORS, formatCurrency, formatDate, formatNumber, monthLabel } from '../constants.js';
 import { companyFinanceTotals, slug } from '../finance.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, Field, Input, KPICard, SectionHeader, Td, Th } from '../ui.jsx';
+import { Badge, Btn, Field, Input, KPICard, SectionHeader, Td, Th, ReleaseCountdown } from '../ui.jsx';
 
 // Folded or open, remembered on this device only.
 const ATTN_KEY = 'imss:attn-folded';
@@ -99,6 +99,7 @@ export function Overview({ roster, catalog, revenue, masterGross = [], streams, 
   return (
     <div>
       <SectionHeader title="Overview" description="Label performance at a glance — roster health, release activity, revenue, and stream volume." />
+      <ReleaseCountdown releases={catalog} artistMap={artistMap} />
 
       <section aria-labelledby="attn-h" className="rounded border mb-6" style={{ background: C.panel, borderColor: attention.length ? C.amber : C.border }}>
         <button type="button" onClick={toggleAttn} aria-expanded={!attnFolded} aria-controls="attn-list" className="flex items-center justify-between gap-2 w-full text-left px-4 pt-4" style={{ paddingBottom: attnFolded ? 16 : 8 }}>

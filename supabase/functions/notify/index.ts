@@ -112,7 +112,7 @@ async function audit(action: string, detail: string, artistId: string | null = n
 }
 
 // Safety lock: artists are emailed only about royalties, statements (payouts),
-// invoices, noticeboard posts, new sign-in notices, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
+// invoices, noticeboard posts, new sign-in notices, release week, and the portal welcome an Admin sends. Any other email to an address on the roster is dropped and logged,
 // whatever the calling code asked for.
 // Email addresses never appear in full in an email body: ma•••@g•••.com.
 const maskEmail = (e: string) => e.replace(/^([^@]{1,2})[^@]*@([^.@])[^@]*?(\.[a-z]{2,})$/i, '$1•••@$2•••$3');
@@ -127,7 +127,20 @@ function toText(html: string) {
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
     .replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
-const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice', 'security'];
+const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice', 'security', 'release'];
+// Admin's On/Off switches (labelSettings.emailSwitches; same keys as
+// EMAIL_SWITCHES in src/constants.js). A switched-off email isn't sent; the
+// bell notification still is. SWITCH names the email being handled right now.
+let SWITCH = '';
+let switchCache: Record<string, boolean> | null = null;
+async function switchedOff(key: string) {
+  if (!key) return false;
+  if (!switchCache) {
+    const { data } = await db.from('app_data').select('value').eq('key', 'labelSettings').maybeSingle();
+    switchCache = (data?.value && data.value.emailSwitches) || {};
+  }
+  return switchCache![key] === false;
+}
 async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
   if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
@@ -139,6 +152,10 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
     }
   }
   if (!recipients.length) return { skipped: 'no recipients' };
+  if (await switchedOff(SWITCH)) {
+    const inAppOff = bell ? await notifyInApp(recipients, subject) : null;
+    return { skipped: 'email switched off: ' + SWITCH, inApp: inAppOff };
+  }
   if (artistTopic) html = html.split(APP_URL).join(ARTIST_URL);
   html = maskEmails(html);
   const inApp = bell ? await notifyInApp(recipients, subject) : null;
@@ -194,6 +211,10 @@ async function handleEvent(ev: Event) {
   const item = items.find(x => x.id === ev.id);
   if (!item) return { skipped: 'not found' };
   const roster = await section('roster');
+  SWITCH = ev.type === 'earnings' ? 'earnings' : ev.type === 'notice' ? 'notice' : ev.type === 'deal' ? 'dealLegal'
+    : ev.type === 'repRelease' || ev.type === 'repInvoice' ? 'rep' : ev.type === 'statement' ? 'statement'
+    : ev.key === 'invoices' ? (ev.type === 'stage' && ['Rejected', 'Needs changes', 'Paid'].includes(item.status) ? 'invoiceArtist' : 'invoiceTeam')
+    : 'submissions';
 
   // Earnings published: one email per artist, naming their months.
   if (ev.type === 'earnings') {
@@ -342,6 +363,7 @@ async function handleEvent(ev: Event) {
     const labelText = last && last.from === 'label' ? last.text : (ev.key === 'artistRequests' && item.response && (!last || last.from !== 'artist') ? item.response : null);
     if (labelText && ev.key !== 'invoices') return inAppOnly([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`);
     if (labelText) {
+      SWITCH = 'invoiceArtist';
       return send([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`,
         page('The label replied', [`Hi ${esc(artistName)}, here’s a message about ${esc(what)}:`],
           { label: 'Open your portal', url: `${APP_URL}/` }, labelText), replyKey, 'invoice');
@@ -443,6 +465,45 @@ async function handleInbound(data: Item) {
   return { added: msg.from };
 }
 
+// Monday of release week (cron "release-week"): every release out this week
+// (Monday to Sunday, UTC) gets an email to the artist to check everything is
+// ready, and one to their PM to keep tabs on it.
+async function sendReleaseWeek() {
+  const [catalog, roster, staff] = await Promise.all([section('catalog'), section('roster'), section('staff')]);
+  const now = new Date();
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+  const sunday = new Date(monday.getTime() + 6 * 86400000);
+  const from = monday.toISOString().slice(0, 10), to = sunday.toISOString().slice(0, 10);
+  const due = catalog.filter(r => r.releaseDate && r.releaseDate >= from && r.releaseDate <= to && r.status !== 'Archived');
+  const day = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const results = [];
+  for (const r of due) {
+    const a = roster.find(x => x.id === r.artistId && x.status !== 'Archived');
+    if (!a) { results.push({ skipped: 'no artist for ' + r.id }); continue; }
+    const pm = staff.find(m => a.productManager && lower(m.name) === lower(a.productManager) && m.status !== 'Archived');
+    const list = Array.isArray(r.checklist) ? r.checklist : [];
+    const open = list.filter((t: Item) => !t.done).map((t: Item) => esc(t.label || t.task || ''));
+    const checklist = list.length ? (open.length ? `Still open on the release checklist: ${open.slice(0, 6).join(', ')}${open.length > 6 ? '…' : ''}.` : 'Everything on the release checklist is ticked.') : '';
+    const when = day(r.releaseDate);
+    if (lower(a.email).includes('@')) {
+      results.push(await send([lower(a.email)], `Release week: “${r.title}” is out ${when}`,
+        page(`“${r.title}” is out this week`, [
+          `Hi ${esc(a.name)},`,
+          `Your release <b>${esc(r.title)}</b> is out on <b>${esc(when)}</b>. Please check everything is ready: artwork, credits, links and anything you're posting.`,
+          ...(checklist ? [checklist] : []),
+          pm ? `Keep in touch with your Product Manager, <b>${esc(pm.name)}</b>, this week about anything that's not ready.` : 'Reply to the label this week about anything that\'s not ready.',
+        ], { label: 'Open your portal', url: `${APP_URL}/releases` }), undefined, 'release'));
+    }
+    if (pm && lower(pm.email).includes('@')) {
+      results.push(await send([lower(pm.email)], `Release week: “${r.title}” by ${a.name}, ${when}`,
+        page(`Release week: ${r.title}`, [`<b>${esc(r.title)}</b> by ${esc(a.name)} is out on <b>${esc(when)}</b>. ${esc(a.name)} has been asked to check everything is ready and keep in touch with you.`, ...(checklist ? [checklist] : [])],
+          { label: 'Open the release', url: `${APP_URL}/catalog` })));
+    }
+  }
+  if (due.length) await audit('sent release-week emails', due.map(r => r.title + ' (' + r.releaseDate + ')').join(', '));
+  return { week: from + ' to ' + to, releases: due.length, results };
+}
+
 // Admin pressed "Send welcome email" on the artist's page (send_portal_welcome).
 async function sendWelcome(artistId: string) {
   const a = (await section('roster')).find(x => x.id === artistId);
@@ -510,6 +571,8 @@ Deno.serve(async req => {
     const { data: ok } = await db.rpc('notify_secret_ok', { candidate: req.headers.get('x-notify-secret') || '' });
     if (!ok) return new Response('forbidden', { status: 403 });
     const body = JSON.parse(raw || '{}');
+    switchCache = null;
+    SWITCH = ({ releaseWeek: 'releaseWeek', welcome: 'welcome', teamWelcome: 'welcome', signinNotice: 'signin', signinAlert: 'signinAlert' } as Record<string, string>)[body.action] || '';
     if (body.action === 'due') return Response.json(await sendDueStatements());
     if (body.action === 'signinNotice') return Response.json(await sendSigninNotice(lower(body.email), String(body.device || '')));
     if (body.action === 'signinAlert') {
@@ -519,6 +582,7 @@ Deno.serve(async req => {
       const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
       return Response.json(await send(admins, `${label} signed in`, page(`${label} signed in`, [`They signed in to IMSS Records at <b>${esc(when)}</b>.`, 'You asked to be told when this account signs in.'], { label: 'Open the dashboard', url: `${APP_URL}/` })));
     }
+    if (body.action === 'releaseWeek') return Response.json(await sendReleaseWeek());
     if (body.action === 'teamWelcome') return Response.json(await sendTeamWelcome(String(body.staffId || '')));
     if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));
     if (body.action === 'events') {

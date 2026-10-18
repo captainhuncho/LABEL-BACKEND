@@ -42,6 +42,14 @@ ARTISTS.forEach(([name], ai) => {
   }
 });
 
+// Two upcoming releases (dated from today) so the countdown and the
+// date-clash note have something to show in the demo.
+const inDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+DEMO_CATALOG.push(
+  { id: 'nova-reign_ocean-drive', artistId: slug('Nova Reign'), title: 'Ocean Drive', type: 'Single', releaseDate: inDays(4), isrc: '', upc: '', status: 'Upcoming', enteredBy: 'Demo', hasVideo: false, licenseExpiration: '', primaryMarket: 'Ghana', secondaryMarket: '' },
+  { id: 'ama-vesper_late-bloom', artistId: slug('Ama Vesper'), title: 'Late Bloom', type: 'EP', releaseDate: inDays(18), isrc: '', upc: '', status: 'Upcoming', enteredBy: 'Demo', hasVideo: false, licenseExpiration: '', primaryMarket: 'Nigeria', secondaryMarket: '' },
+);
+
 // Money received each month: what the songs earned plus a little not yet matched to a song.
 export const DEMO_MASTER_GROSS = MONTHS.map(m => {
   const tracked = DEMO_REVENUE.filter(r => r.month === m).reduce((a, r) => a + r.earning, 0);
