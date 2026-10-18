@@ -702,7 +702,10 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     const acknowledge = (kind, id, step, note) => {
       const at = new Date().toISOString();
       const mark = i => i.id !== id ? i : { ...i, repSeenAt: i.repSeenAt || at, repSeenBy: i.repSeenBy || rep.name, ...(step === 'sent' ? { repSentOutAt: at, repSentOutBy: rep.name, repSentOutNote: note } : {}) };
-      if (kind === 'invoice') updateInvoices(invoices.map(mark)); else updateCatalog(catalog.map(mark));
+      // Saved quietly, logged the way rep_acknowledge() logs it live.
+      if (kind === 'invoice') { const n = invoices.map(mark); setInvoices(n); persist('invoices', n); } else { const n = catalog.map(mark); setCatalog(n); persist('catalog', n); }
+      const it = (kind === 'invoice' ? invoices : catalog).find(i => i.id === id);
+      logActivity((step === 'seen' ? 'confirmed seeing the ' : 'confirmed sending out the ') + kind, (it ? it.title : '') + (note ? ' · ' + note : ''));
     };
     if (repData) return <RepApp demo={{ data: repData, acknowledge }} signOut={logout} />;
   }

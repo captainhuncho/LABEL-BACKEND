@@ -3,9 +3,9 @@
 // their artists' releases a PM confirmed, and invoices pushed to them. They
 // download both, and mark a pushed invoice as sent to the partner (DP Queue).
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, FileDown, FileSpreadsheet, FileText, LogOut, Eye, Mail, X } from 'lucide-react';
+import { Calendar, FileDown, FileSpreadsheet, FileText, LogOut, Eye, Mail, X, History } from 'lucide-react';
 import { documentUrl, supabase } from './storage.js';
-import { logSignIn } from './audit.js';
+import {logSignIn, readAudit, logActivity } from './audit.js';
 import { formatCurrency, formatDate, todayStr } from './constants.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 import { Badge, Btn, EmptyState, exportRowsToCsv, exportRowsToExcel, SectionHeader, ReleaseCountdown } from './ui.jsx';
@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom';
 const PAGES = [
   { id: 'releases', label: 'Release schedule', icon: Calendar },
   { id: 'invoices', label: 'Invoices', icon: FileText },
+  { id: 'activity', label: 'My activity', icon: History },
 ];
 const day = s => String(s || '').slice(0, 10);
 const initials = n => String(n || '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -34,7 +35,7 @@ export default function RepApp({ signOut, demo = null }) {
   usePageUrl(PAGES, page, setPage);
 
   async function load() {
-    if (demo) { setData(demo.data); return; }
+    if (demo) { setData(demo.data); logSignIn('rep', demo.data.rep.name); return; }
     const { data: d, error: err } = await supabase.rpc('rep_portal');
     if (err || !d) { setError('Could not load your releases and invoices. Try again in a moment.'); return; }
     setData(d); logSignIn('rep', d.rep.name);
@@ -86,7 +87,7 @@ export default function RepApp({ signOut, demo = null }) {
             {/* Your initials open the account menu (Appearance, Account & security, Sign out), as on ops. */}
             <button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + data.rep.name} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{initials(data.rep.name)}</button>
           </div>
-          {page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} emailReleases={emailReleases} acknowledge={acknowledge} /> : <Invoices invoices={data.invoices || []} artistById={artistById} acknowledge={acknowledge} />}
+          {page === 'activity' ? <MyActivity demo={!!demo} repName={data.rep.name} /> : page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} emailReleases={emailReleases} acknowledge={acknowledge} /> : <Invoices invoices={data.invoices || []} artistById={artistById} acknowledge={acknowledge} />}
         </div>
       </div>
       <MobileNav nav={PAGES} active={page} setActive={setPage} role="rep" account={[{ label: 'Sign out', icon: LogOut, onClick: signOut, danger: true }]}
@@ -131,7 +132,7 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
     );
   };
   // Opening a release counts as seeing it.
-  const open = r => { setViewing(r); setMailMsg(''); if (!r.repSeenAt) acknowledge('release', r, 'seen'); };
+  const open = r => { setViewing(r); setMailMsg(''); logActivity('viewed a release', r.title, r.artistId); if (!r.repSeenAt) acknowledge('release', r, 'seen'); };
 
   return (
     <div>
@@ -170,6 +171,37 @@ function Releases({ releases, artistById, emailReleases, acknowledge }) {
           </ViewSheet>
         );
       })()}
+    </div>
+  );
+}
+
+// Everything the rep did here, newest first (their own entries only).
+function MyActivity({ demo, repName }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    if (demo) { readAudit({ limit: 300 }).then(list => setRows(list.filter(e => e.actor_name === repName)), () => setRows([])); return; }
+    supabase.rpc('rep_my_activity').then(({ data }) => setRows(data || []), () => setRows([]));
+  }, [demo, repName]);
+  const label = a => String(a || '').replace(/^exported /, 'downloaded ').replace(/^./, c => c.toUpperCase());
+  return (
+    <div>
+      <h1 className="imss-title">My activity</h1>
+      <p className="mb-5" style={{ color: C.textDim, fontSize: 17 }}>What you’ve done here: sign-ins, what you opened, downloaded, emailed and confirmed. Only you and the label’s Admins can see this.</p>
+      {rows === null ? <div className="text-sm" style={{ color: C.textDim }}>Loading…</div>
+        : rows.length === 0 ? <EmptyState icon={History} title="Nothing yet" description="As you open, download and confirm releases and invoices, it shows here." />
+        : (
+          <ul className="rounded" style={{ background: C.panel, listStyle: 'none', margin: 0, padding: 0 }}>
+            {rows.map((e, i) => (
+              <li key={i} className="flex gap-3 items-start" style={{ padding: '12px 16px', borderTop: i ? '1px solid ' + C.border : 'none' }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 600, fontSize: 15 }}>{label(e.action)}</span>
+                  {e.detail && <span className="text-sm" style={{ color: C.textDim, overflowWrap: 'anywhere' }}>{e.detail}</span>}
+                </span>
+                <span className="text-sm" style={{ color: C.textDim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+              </li>
+            ))}
+          </ul>
+        )}
     </div>
   );
 }
@@ -270,6 +302,7 @@ function Invoices({ invoices, artistById, acknowledge }) {
   const sorted = [...invoices].sort((a, b) => String(b.sentToRepAt).localeCompare(String(a.sentToRepAt)));
   async function view(inv) {
     setViewing(inv); setFileUrl(''); setFileErr('');
+    logActivity('viewed an invoice', inv.title, inv.artistId);
     if (!inv.repSeenAt) acknowledge('invoice', inv, 'seen'); // opening it counts as seeing it
     if (!inv.attachment) return;
     try { setFileUrl(await documentUrl(inv.attachment)); } catch (e) { setFileErr('Couldn’t open the invoice file. Try again in a moment.'); }
@@ -278,6 +311,7 @@ function Invoices({ invoices, artistById, acknowledge }) {
   async function downloadFile(inv) {
     try {
       const url = await documentUrl(inv.attachment, inv.attachmentName);
+      logActivity('downloaded an invoice file', inv.title + (inv.attachmentName ? ' (' + inv.attachmentName + ')' : ''), inv.artistId);
       const l = document.createElement('a'); l.href = url; l.download = inv.attachmentName || 'invoice'; l.target = '_blank'; l.rel = 'noopener';
       document.body.appendChild(l); l.click(); l.remove();
     } catch (e) { setFileErr('Couldn’t download the invoice file. Try again in a moment.'); }
