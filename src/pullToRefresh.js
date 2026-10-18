@@ -122,7 +122,12 @@ export function installPullToRefresh() {
   let wheel = 0, atTopAtStart = false, endTimer = null;
   document.addEventListener('wheel', e => {
     const b = e.target.closest && e.target.closest('.imss-content');
-    if (!b || (e.target.closest && e.target.closest('[role="dialog"], .imss-sheet-list'))) return;
+    // Never while a drop-down, field or list is in use: scrolling up an open
+    // select's list must scroll the list, not pull the page.
+    const ae = document.activeElement;
+    const inControl = (e.target.closest && e.target.closest('select, input, textarea, [role="listbox"], [role="dialog"], .imss-sheet-list'))
+      || (ae && /^(SELECT|INPUT|TEXTAREA)$/.test(ae.tagName));
+    if (!b || inControl) return;
     if (endTimer === null) { atTopAtStart = settledAtTop(b); wheel = 0; wBox = b; }
     clearTimeout(endTimer);
     // A browser can't see fingers lift off a trackpad (a still finger looks the
