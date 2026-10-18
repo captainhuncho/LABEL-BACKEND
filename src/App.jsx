@@ -699,7 +699,12 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       releases: catalogView.filter(r => ids.has(r.artistId) && r.repConfirmedAt),
       invoices: invoices.filter(i => ids.has(i.artistId) && i.sentToRepAt).map(i => ({ ...i, payee: i.payTo || '' })),
     };
-    if (repData) return <RepApp demo={{ data: repData }} signOut={logout} />;
+    const acknowledge = (kind, id, step, note) => {
+      const at = new Date().toISOString();
+      const mark = i => i.id !== id ? i : { ...i, repSeenAt: i.repSeenAt || at, repSeenBy: i.repSeenBy || rep.name, ...(step === 'sent' ? { repSentOutAt: at, repSentOutBy: rep.name, repSentOutNote: note } : {}) };
+      if (kind === 'invoice') updateInvoices(invoices.map(mark)); else updateCatalog(catalog.map(mark));
+    };
+    if (repData) return <RepApp demo={{ data: repData, acknowledge }} signOut={logout} />;
   }
 
   if (session.mode === 'artist') {

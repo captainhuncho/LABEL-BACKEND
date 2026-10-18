@@ -125,7 +125,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
   function confirmForRep() {
     if (!form.title.trim()) return;
     const at = new Date().toISOString();
-    update(catalog.map(r => r.id === editing ? { ...form, id: editing, repConfirmedAt: at, repFirstConfirmedAt: form.repFirstConfirmedAt || at, repConfirmedBy: sessionName } : r));
+    update(catalog.map(r => r.id === editing ? { ...form, id: editing, repConfirmedAt: at, repFirstConfirmedAt: form.repFirstConfirmedAt || at, repConfirmedBy: sessionName, repSeenAt: null, repSeenBy: null, repSentOutAt: null, repSentOutBy: null, repSentOutNote: null } : r));
     closeForm();
   }
   function save(e) {
@@ -404,6 +404,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
               <span className="inline-flex items-center gap-2 flex-wrap">
                 <Btn variant="ghost" onClick={confirmForRep}><Send size={14} /> {form.repConfirmedAt ? 'Save and re-send to label rep' : 'Save and confirm for label rep'}</Btn>
                 {form.repConfirmedAt && <span className="text-xs" style={{ color: C.textDim }}>Confirmed {String(form.repConfirmedAt).slice(0, 10)}{form.repConfirmedBy ? ' by ' + form.repConfirmedBy : ''}</span>}
+                {form.repConfirmedAt && <span className="text-xs" style={{ color: form.repSentOutAt ? C.teal : C.textDim }}>{form.repSentOutAt ? 'Label rep sent it out ' + String(form.repSentOutAt).slice(0, 10) + (form.repSentOutNote ? ' (' + form.repSentOutNote + ')' : '') : form.repSeenAt ? 'Label rep has seen it (' + String(form.repSeenAt).slice(0, 10) + '), not sent out yet' : 'Label rep hasn’t seen it yet'}</span>}
               </span>
             )}
           </div>

@@ -39,6 +39,13 @@ export default function RepApp({ signOut, demo = null }) {
     setData(d); logSignIn('rep', d.rep.name);
   }
   useEffect(() => { load(); }, [demo && demo.data]);
+  // Confirm seen / sent out on an invoice or a release (a record for the team).
+  async function acknowledge(kind, item, step, note = '') {
+    if (demo) { demo.acknowledge && demo.acknowledge(kind, item.id, step, note); return ''; }
+    const { error: err } = await supabase.rpc('rep_acknowledge', { kind, item_id: item.id, step, note });
+    if (err) return 'Couldn’t save that. Try again in a moment.';
+    await load(); return '';
+  }
   // Email release sheets to the rep's own address (never anyone else's).
   async function emailReleases(list) {
     if (!list.length) return 'Pick at least one release.';
@@ -77,7 +84,7 @@ export default function RepApp({ signOut, demo = null }) {
             {/* Your initials open the account menu (Appearance, Account & security, Sign out), as on ops. */}
             <button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + data.rep.name} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{initials(data.rep.name)}</button>
           </div>
-          {page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} emailReleases={emailReleases} /> : <Invoices invoices={data.invoices || []} artistById={artistById} />}
+          {page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} emailReleases={emailReleases} acknowledge={acknowledge} /> : <Invoices invoices={data.invoices || []} artistById={artistById} acknowledge={acknowledge} />}
         </div>
       </div>
       <MobileNav nav={PAGES} active={page} setActive={setPage} role="rep" account={[{ label: 'Sign out', icon: LogOut, onClick: signOut, danger: true }]}
@@ -86,7 +93,7 @@ export default function RepApp({ signOut, demo = null }) {
   );
 }
 
-function Releases({ releases, artistById, emailReleases }) {
+function Releases({ releases, artistById, emailReleases, acknowledge }) {
   const [picked, setPicked] = useState([]);
   const [viewing, setViewing] = useState(null);
   const [mailMsg, setMailMsg] = useState('');
@@ -118,7 +125,10 @@ function Releases({ releases, artistById, emailReleases }) {
             {updated && <Badge tone="amber">Updated {formatDate(day(r.repConfirmedAt))}</Badge>}
           </div>
         </div>
-        <Btn variant="ghost" onClick={() => setViewing(r)} aria-label={'View ' + r.title}><Eye size={14} /> View</Btn>
+        <div className="flex flex-col gap-2 items-end">
+          <Btn variant="ghost" onClick={() => setViewing(r)} aria-label={'View ' + r.title}><Eye size={14} /> View</Btn>
+          <Ack kind="release" item={r} acknowledge={acknowledge} compact />
+        </div>
       </li>
     );
   };
@@ -155,10 +165,35 @@ function Releases({ releases, artistById, emailReleases }) {
               <Btn variant="ghost" onClick={() => exportRowsToCsv(one, RELEASE_SHEET_HEADERS, [vals])}><FileText size={14} /> CSV</Btn>
               <Btn variant="primary" onClick={() => mail([viewing])}><Mail size={14} /> Email to me</Btn>
             </div>
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid ' + C.border }}><Ack kind="release" item={releases.find(x => x.id === viewing.id) || viewing} acknowledge={acknowledge} /></div>
             {mailMsg && <div role="status" className="text-sm mt-3" style={{ color: /Couldn|Too many/.test(mailMsg) ? C.red : C.teal }}>{mailMsg}</div>}
           </ViewSheet>
         );
       })()}
+    </div>
+  );
+}
+
+// The rep confirms they've seen it, then that they've sent it out on their side.
+function Ack({ kind, item, acknowledge, compact = false }) {
+  const [busy, setBusy] = useState(false);
+  const [noting, setNoting] = useState(false);
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState('');
+  const go = async (step, n = '') => { setBusy(true); setErr(await acknowledge(kind, item, step, n)); setBusy(false); setNoting(false); setNote(''); };
+  const chip = (label, at) => <Badge tone="teal">{label} {formatDate(day(at))}</Badge>;
+  return (
+    <div className={'flex gap-2 flex-wrap items-center' + (compact ? ' justify-end' : '')}>
+      {item.repSeenAt ? chip('Seen', item.repSeenAt) : <Btn variant="ghost" disabled={busy} onClick={() => go('seen')}>Mark as seen</Btn>}
+      {item.repSentOutAt ? <>{chip('Sent out', item.repSentOutAt)}{!compact && item.repSentOutNote && <span className="text-xs" style={{ color: C.textDim }}>{item.repSentOutNote}</span>}</>
+        : noting ? (
+          <span className="flex gap-2 flex-wrap items-center">
+            <input value={note} onChange={e => setNote(e.target.value)} maxLength={300} placeholder="Who you sent it to (optional)" aria-label="Note" style={{ flex: '1 1 200px', background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '9px 12px', minHeight: 40 }} />
+            <Btn variant="primary" disabled={busy} onClick={() => go('sent', note.trim())}>{busy ? 'Saving…' : 'Confirm sent out'}</Btn>
+            <Btn variant="ghost" onClick={() => setNoting(false)}>Cancel</Btn>
+          </span>
+        ) : <Btn variant={item.repSeenAt ? 'primary' : 'ghost'} disabled={busy} onClick={() => setNoting(true)}>Confirm sent out</Btn>}
+      {err && <span role="alert" className="text-xs" style={{ color: C.red }}>{err}</span>}
     </div>
   );
 }
@@ -192,7 +227,7 @@ function Fields({ headers, values }) {
 const INVOICE_HEADERS = ['Invoice', 'Artist', 'Type', 'Amount', 'Invoice number', 'Payee', 'Details', 'Submitted', 'Sent to the partner', 'Status'];
 const invoiceRow = (i, a) => [i.title, a.name || '', i.kind === 'expense' ? 'Expense claim' : 'Service invoice', Number(i.amount || 0).toFixed(2), i.invoiceNumber || '', i.payee || '', i.details || '', day(i.submittedAt), day(i.sentToRepAt), i.status];
 
-function Invoices({ invoices, artistById }) {
+function Invoices({ invoices, artistById, acknowledge }) {
   const [viewing, setViewing] = useState(null);
   const [fileUrl, setFileUrl] = useState('');
   const [fileErr, setFileErr] = useState('');
@@ -201,6 +236,14 @@ function Invoices({ invoices, artistById }) {
     setViewing(inv); setFileUrl(''); setFileErr('');
     if (!inv.attachment) return;
     try { setFileUrl(await documentUrl(inv.attachment)); } catch (e) { setFileErr('Couldn’t open the invoice file. Try again in a moment.'); }
+  }
+  // The invoice file the artist attached (PDF or image), straight from the list.
+  async function downloadFile(inv) {
+    try {
+      const url = await documentUrl(inv.attachment, inv.attachmentName);
+      const l = document.createElement('a'); l.href = url; l.download = inv.attachmentName || 'invoice'; l.target = '_blank'; l.rel = 'noopener';
+      document.body.appendChild(l); l.click(); l.remove();
+    } catch (e) { setFileErr('Couldn’t download the invoice file. Try again in a moment.'); }
   }
   const isImage = inv => /^data:image|\.(png|jpe?g|gif|webp|heic)$/i.test(String(inv.attachmentName || inv.attachment || ''));
   const row = inv => {
@@ -217,8 +260,11 @@ function Invoices({ invoices, artistById }) {
         </div>
         <div className="flex gap-2 flex-wrap mt-3">
           <Btn variant="ghost" onClick={() => view(inv)}><Eye size={14} /> View</Btn>
-          <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (inv.invoiceNumber || inv.id), 'Invoice: ' + inv.title, INVOICE_HEADERS, [invoiceRow(inv, a)])}><FileDown size={14} /> Download</Btn>
+          {inv.attachment && <Btn variant="ghost" onClick={() => downloadFile(inv)}><FileDown size={14} /> Download invoice file</Btn>}
+          <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (inv.invoiceNumber || inv.id), 'Invoice: ' + inv.title, INVOICE_HEADERS, [invoiceRow(inv, a)])}><FileDown size={14} /> {inv.attachment ? 'Download details' : 'Download'}</Btn>
         </div>
+        {!viewing && fileErr && <div className="text-xs mt-2" role="alert" style={{ color: C.red }}>{fileErr}</div>}
+        <div className="mt-3"><Ack kind="invoice" item={inv} acknowledge={acknowledge} /></div>
       </li>
     );
   };
@@ -250,6 +296,7 @@ function Invoices({ invoices, artistById }) {
               {fileUrl && <Btn variant="primary" onClick={() => { const l = document.createElement('a'); l.href = fileUrl; l.download = viewing.attachmentName || 'invoice'; l.target = '_blank'; l.rel = 'noopener'; document.body.appendChild(l); l.click(); l.remove(); }}><FileDown size={14} /> Download invoice file</Btn>}
               <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (viewing.invoiceNumber || viewing.id), 'Invoice: ' + viewing.title, INVOICE_HEADERS, [invoiceRow(viewing, a)])}><FileDown size={14} /> Download details</Btn>
             </div>
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid ' + C.border }}><Ack kind="invoice" item={invoices.find(x => x.id === viewing.id) || viewing} acknowledge={acknowledge} /></div>
           </ViewSheet>
         );
       })()}
