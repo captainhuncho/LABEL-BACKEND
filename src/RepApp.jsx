@@ -3,8 +3,8 @@
 // their artists' releases a PM confirmed, and invoices pushed to them. They
 // download both, and mark a pushed invoice as sent to the partner (DP Queue).
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, FileDown, FileSpreadsheet, FileText, LogOut, Send } from 'lucide-react';
-import { supabase } from './storage.js';
+import { Calendar, FileDown, FileSpreadsheet, FileText, LogOut, Eye, Mail } from 'lucide-react';
+import { documentUrl, supabase } from './storage.js';
 import { logSignIn } from './audit.js';
 import { formatCurrency, formatDate, todayStr } from './constants.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
@@ -25,7 +25,7 @@ const day = s => String(s || '').slice(0, 10);
 const initials = n => String(n || '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 const TONE = { 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red' };
 
-// demo: { data, markSent(invoice, ref) } for the local preview (no database).
+// demo: { data } for the local preview (no database).
 export default function RepApp({ signOut, demo = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -39,6 +39,14 @@ export default function RepApp({ signOut, demo = null }) {
     setData(d); logSignIn('rep', d.rep.name);
   }
   useEffect(() => { load(); }, [demo && demo.data]);
+  // Email release sheets to the rep's own address (never anyone else's).
+  async function emailReleases(list) {
+    if (!list.length) return 'Pick at least one release.';
+    if (demo) return 'Demo: in the live portal this emails ' + list.length + ' release' + (list.length === 1 ? '' : 's') + ' to you, with the release sheet attached.';
+    const { error: err } = await supabase.rpc('rep_email_releases', { release_ids: list.map(r => r.id) });
+    if (err) return /Too many/.test(err.message || '') ? 'Too many emails in the last hour. Try again later.' : 'Couldn’t send the email. Try again in a moment.';
+    return 'Sent to your email: ' + list.length + ' release' + (list.length === 1 ? '' : 's') + ', with the release sheet attached.';
+  }
 
   if (error) return <div className="p-8 text-sm" role="alert" style={{ color: C.text, fontFamily: HEADING_FONT }}>{error}</div>;
   if (!data) return <LoadingScreen variant="rep" />;
@@ -69,7 +77,7 @@ export default function RepApp({ signOut, demo = null }) {
             {/* Your initials open the account menu (Appearance, Account & security, Sign out), as on ops. */}
             <button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + data.rep.name} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{initials(data.rep.name)}</button>
           </div>
-          {page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} /> : <Invoices demoMarkSent={demo && demo.markSent} invoices={data.invoices || []} artistById={artistById} reload={load} />}
+          {page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} emailReleases={emailReleases} /> : <Invoices invoices={data.invoices || []} artistById={artistById} />}
         </div>
       </div>
       <MobileNav nav={PAGES} active={page} setActive={setPage} role="rep" account={[{ label: 'Sign out', icon: LogOut, onClick: signOut, danger: true }]}
@@ -78,8 +86,11 @@ export default function RepApp({ signOut, demo = null }) {
   );
 }
 
-function Releases({ releases, artistById }) {
+function Releases({ releases, artistById, emailReleases }) {
   const [picked, setPicked] = useState([]);
+  const [viewing, setViewing] = useState(null);
+  const [mailMsg, setMailMsg] = useState('');
+  async function mail(list) { setMailMsg('Sending…'); setMailMsg(await emailReleases(list)); }
   const today = todayStr();
   const sorted = useMemo(() => [...releases].sort((a, b) => String(a.releaseDate || '9999').localeCompare(String(b.releaseDate || '9999'))), [releases]);
   const upcoming = sorted.filter(r => !r.releaseDate || r.releaseDate >= today);
@@ -97,7 +108,7 @@ function Releases({ releases, artistById }) {
         <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={'Select ' + r.title} style={{ marginTop: 4 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
-            <div style={{ fontWeight: 600, fontSize: 16 }}>{r.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></div>
+            <button onClick={() => setViewing(r)} className="text-left" style={{ fontWeight: 600, fontSize: 16 }}>{r.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></button>
             <div style={{ fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>{formatDate(r.releaseDate)}</div>
           </div>
           <div className="text-sm mt-1 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
@@ -107,7 +118,7 @@ function Releases({ releases, artistById }) {
             {updated && <Badge tone="amber">Updated {formatDate(day(r.repConfirmedAt))}</Badge>}
           </div>
         </div>
-        <button onClick={() => exportRecordsToWord(r.title.replace(/\s+/g, '-').toLowerCase(), r.title + ' · ' + (a.name || ''), RELEASE_SHEET_HEADERS, [releaseSheetRow(r, a)])} aria-label={'Download ' + r.title + ' as Word'} title="Download as Word" style={{ color: C.textDim }}><FileDown size={16} /></button>
+        <Btn variant="ghost" onClick={() => setViewing(r)} aria-label={'View ' + r.title}><Eye size={14} /> View</Btn>
       </li>
     );
   };
@@ -123,77 +134,125 @@ function Releases({ releases, artistById }) {
           <Btn variant="ghost" onClick={() => exportRowsToCsv(name, RELEASE_SHEET_HEADERS, rows)}><FileText size={14} /> CSV</Btn>
           <Btn variant="ghost" onClick={() => exportRowsToExcel(name, RELEASE_SHEET_HEADERS, rows)}><FileSpreadsheet size={14} /> Excel</Btn>
           <Btn variant="ghost" onClick={() => exportRecordsToWord(name, 'IMSS Records releases', RELEASE_SHEET_HEADERS, rows)}><FileDown size={14} /> Word / Google Docs</Btn>
+          <Btn variant="ghost" onClick={() => mail(chosen)}><Mail size={14} /> Email {picked.length ? 'selected' : 'all'} to me</Btn>
           {picked.length > 0 && <button onClick={() => setPicked([])} style={{ color: C.amber, fontSize: 14 }}>Clear selection</button>}
         </div>
+        {mailMsg && <div role="status" className="text-sm mb-3" style={{ color: /Couldn|Too many/.test(mailMsg) ? C.red : C.teal }}>{mailMsg}</div>}
         <h2 style={{ fontWeight: 600, fontSize: 17, margin: '8px 0 10px' }}>Upcoming</h2>
         {upcoming.length ? <ul className="flex flex-col gap-2 mb-6">{upcoming.map(card)}</ul> : <p className="mb-6" style={{ color: C.textDim }}>Nothing scheduled yet.</p>}
         {past.length > 0 && <><h2 style={{ fontWeight: 600, fontSize: 17, margin: '8px 0 10px' }}>Released</h2><ul className="flex flex-col gap-2">{past.map(card)}</ul></>}
       </>}
+      {viewing && (() => {
+        const a = artistById[viewing.artistId] || {};
+        const vals = releaseSheetRow(viewing, a);
+        const one = (viewing.title || 'release').replace(/\s+/g, '-').toLowerCase();
+        return (
+          <ViewSheet title={viewing.title} subtitle={a.name + ' · ' + formatDate(viewing.releaseDate)} onClose={() => { setViewing(null); setMailMsg(''); }}>
+            <Fields headers={RELEASE_SHEET_HEADERS} values={vals} />
+            <div className="flex gap-2 flex-wrap mt-4">
+              <Btn variant="ghost" onClick={() => exportRecordsToWord(one, viewing.title + ' · ' + (a.name || ''), RELEASE_SHEET_HEADERS, [vals])}><FileDown size={14} /> Word</Btn>
+              <Btn variant="ghost" onClick={() => exportRowsToExcel(one, RELEASE_SHEET_HEADERS, [vals])}><FileSpreadsheet size={14} /> Excel</Btn>
+              <Btn variant="ghost" onClick={() => exportRowsToCsv(one, RELEASE_SHEET_HEADERS, [vals])}><FileText size={14} /> CSV</Btn>
+              <Btn variant="primary" onClick={() => mail([viewing])}><Mail size={14} /> Email to me</Btn>
+            </div>
+            {mailMsg && <div role="status" className="text-sm mt-3" style={{ color: /Couldn|Too many/.test(mailMsg) ? C.red : C.teal }}>{mailMsg}</div>}
+          </ViewSheet>
+        );
+      })()}
     </div>
   );
 }
 
-const INVOICE_HEADERS = ['Invoice', 'Artist', 'Type', 'Amount', 'Invoice number', 'Payee', 'Details', 'Submitted', 'Sent to you', 'Status'];
+// A view-only panel over the page (release or invoice details).
+function ViewSheet({ title, subtitle, onClose, children }) {
+  useEffect(() => { const k = e => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} className="rounded" style={{ background: C.panel, width: '100%', maxWidth: 680, maxHeight: '90dvh', overflowY: 'auto', padding: '20px 20px 18px', boxShadow: 'var(--shadow)' }}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div style={{ minWidth: 0 }}><h2 style={{ fontWeight: 700, fontSize: 20 }}>{title}</h2>{subtitle && <div className="text-sm" style={{ color: C.textDim }}>{subtitle}</div>}</div>
+          <Btn variant="ghost" onClick={onClose}>Close</Btn>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function Fields({ headers, values }) {
+  return (
+    <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 38%) minmax(0, 1fr)', borderTop: '1px solid ' + C.border }}>
+      {headers.map((h, i) => values[i] === '' || values[i] == null ? null : [
+        <dt key={h + 'k'} className="text-sm" style={{ color: C.textDim, padding: '8px 10px 8px 0', borderBottom: '1px solid ' + C.border }}>{h}</dt>,
+        <dd key={h + 'v'} className="text-sm" style={{ margin: 0, padding: '8px 0', borderBottom: '1px solid ' + C.border, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{String(values[i])}</dd>,
+      ])}
+    </dl>
+  );
+}
+
+const INVOICE_HEADERS = ['Invoice', 'Artist', 'Type', 'Amount', 'Invoice number', 'Payee', 'Details', 'Submitted', 'Sent to the partner', 'Status'];
 const invoiceRow = (i, a) => [i.title, a.name || '', i.kind === 'expense' ? 'Expense claim' : 'Service invoice', Number(i.amount || 0).toFixed(2), i.invoiceNumber || '', i.payee || '', i.details || '', day(i.submittedAt), day(i.sentToRepAt), i.status];
 
-function Invoices({ invoices, artistById, reload, demoMarkSent = null }) {
-  const [openId, setOpenId] = useState(null);
-  const [ref, setRef] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
+function Invoices({ invoices, artistById }) {
+  const [viewing, setViewing] = useState(null);
+  const [fileUrl, setFileUrl] = useState('');
+  const [fileErr, setFileErr] = useState('');
   const sorted = [...invoices].sort((a, b) => String(b.sentToRepAt).localeCompare(String(a.sentToRepAt)));
-  const waiting = sorted.filter(i => !['DP Queue', 'Pay Approved', 'Paid', 'Rejected'].includes(i.status));
-  const done = sorted.filter(i => !waiting.includes(i));
-  async function markSent(inv) {
-    setBusy(true); setMsg('');
-    const { error } = demoMarkSent ? (demoMarkSent(inv, ref.trim()), {}) : await supabase.rpc('rep_mark_sent', { invoice_id: inv.id, ref: ref.trim() });
-    setBusy(false);
-    if (error) { setMsg('Couldn’t update it. Refresh and try again.'); return; }
-    setRef(''); setOpenId(null); setMsg('Marked as sent to the partner. It’s now in DP Queue.'); reload();
+  async function view(inv) {
+    setViewing(inv); setFileUrl(''); setFileErr('');
+    if (!inv.attachment) return;
+    try { setFileUrl(await documentUrl(inv.attachment)); } catch (e) { setFileErr('Couldn’t open the invoice file. Try again in a moment.'); }
   }
-  const row = (inv, canSend) => {
+  const isImage = inv => /^data:image|\.(png|jpe?g|gif|webp|heic)$/i.test(String(inv.attachmentName || inv.attachment || ''));
+  const row = inv => {
     const a = artistById[inv.artistId] || {};
-    const open = openId === inv.id;
     return (
       <li key={inv.id} className="rounded p-4" style={{ background: C.panel }}>
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <div style={{ fontWeight: 600, fontSize: 16 }}>{inv.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></div>
+          <button onClick={() => view(inv)} className="text-left" style={{ fontWeight: 600, fontSize: 16 }}>{inv.title} <span style={{ color: C.textDim, fontWeight: 400 }}>· {a.name}</span></button>
           <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(Number(inv.amount || 0))}</div>
         </div>
         <div className="text-sm mt-1 flex gap-2 flex-wrap items-center" style={{ color: C.textDim }}>
-          <Badge tone={TONE[inv.status] || 'default'}>{canSend ? 'Waiting for you' : inv.status}</Badge>
-          <span>Sent to you {formatDate(day(inv.sentToRepAt))}</span>
-          {inv.repSentAt && <span>· To partner {formatDate(day(inv.repSentAt))}{inv.repRef ? ' (ref ' + inv.repRef + ')' : ''}</span>}
+          <Badge tone={TONE[inv.status] || 'default'}>{inv.status}</Badge>
+          <span>Sent to the partner {formatDate(day(inv.sentToRepAt))}</span>
         </div>
-        {inv.details && <p className="text-sm mt-2" style={{ color: C.text, whiteSpace: 'pre-wrap' }}>{inv.details}</p>}
         <div className="flex gap-2 flex-wrap mt-3">
+          <Btn variant="ghost" onClick={() => view(inv)}><Eye size={14} /> View</Btn>
           <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (inv.invoiceNumber || inv.id), 'Invoice: ' + inv.title, INVOICE_HEADERS, [invoiceRow(inv, a)])}><FileDown size={14} /> Download</Btn>
-          {canSend && !open && <Btn variant="primary" onClick={() => { setOpenId(inv.id); setRef(''); }}><Send size={14} /> Sent to partner</Btn>}
         </div>
-        {open && (
-          <div className="mt-3 flex gap-2 flex-wrap items-center">
-            <input value={ref} onChange={e => setRef(e.target.value)} maxLength={300} placeholder="Partner reference (optional)" aria-label="Partner reference" style={{ flex: '1 1 220px', background: 'var(--field)', color: C.text, border: '1px solid var(--field-line)', borderRadius: 12, padding: '10px 12px' }} />
-            <Btn variant="primary" onClick={() => markSent(inv)} disabled={busy}>{busy ? 'Saving…' : 'Confirm: move to DP Queue'}</Btn>
-            <Btn variant="ghost" onClick={() => setOpenId(null)}>Cancel</Btn>
-          </div>
-        )}
       </li>
     );
   };
   return (
     <div>
       <h1 className="imss-title">Invoices</h1>
-      <p className="mb-5" style={{ color: C.textDim, fontSize: 17 }}>Invoices IMSS Records sent you to settle. Download each one, send it to the partner, then mark it sent here.</p>
-      {msg && <div role="status" className="mb-4 text-sm" style={{ color: /Couldn/.test(msg) ? C.red : C.teal }}>{msg}</div>}
-      {invoices.length === 0 ? <EmptyState icon={FileText} title="No invoices sent to you yet" description="When a Product Manager sends you an invoice, it appears here and you get an email." /> : <>
+      <p className="mb-5" style={{ color: C.textDim, fontSize: 17 }}>Invoices IMSS Records sent to the partner for your artists. View each one, then download what you need.</p>
+      {invoices.length === 0 ? <EmptyState icon={FileText} title="No invoices yet" description="When IMSS Records sends an invoice to the partner for one of your artists, it appears here and you get an email." /> : <>
         <div className="flex gap-2 flex-wrap mb-4">
           <Btn variant="ghost" onClick={() => exportRowsToCsv('imss-invoices-' + todayStr(), INVOICE_HEADERS, sorted.map(i => invoiceRow(i, artistById[i.artistId] || {})))}><FileText size={14} /> CSV</Btn>
           <Btn variant="ghost" onClick={() => exportRowsToExcel('imss-invoices-' + todayStr(), INVOICE_HEADERS, sorted.map(i => invoiceRow(i, artistById[i.artistId] || {})))}><FileSpreadsheet size={14} /> Excel</Btn>
         </div>
-        <h2 style={{ fontWeight: 600, fontSize: 17, margin: '8px 0 10px' }}>Waiting for you</h2>
-        {waiting.length ? <ul className="flex flex-col gap-2 mb-6">{waiting.map(i => row(i, true))}</ul> : <p className="mb-6" style={{ color: C.textDim }}>Nothing waiting. You’re up to date.</p>}
-        {done.length > 0 && <><h2 style={{ fontWeight: 600, fontSize: 17, margin: '8px 0 10px' }}>Sent to partner</h2><ul className="flex flex-col gap-2">{done.map(i => row(i, false))}</ul></>}
+        <ul className="flex flex-col gap-2">{sorted.map(row)}</ul>
       </>}
+      {viewing && (() => {
+        const a = artistById[viewing.artistId] || {};
+        return (
+          <ViewSheet title={viewing.title} subtitle={(a.name || '') + ' · ' + formatCurrency(Number(viewing.amount || 0))} onClose={() => setViewing(null)}>
+            {viewing.attachment && (
+              <div className="mb-4">
+                {fileErr ? <div className="text-sm" role="alert" style={{ color: C.red }}>{fileErr}</div>
+                  : !fileUrl ? <div className="text-sm" style={{ color: C.textDim }}>Opening the invoice file…</div>
+                  : isImage(viewing) ? <img src={fileUrl} alt={'Invoice file for ' + viewing.title} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid ' + C.border }} />
+                  : <iframe src={fileUrl} title={'Invoice file for ' + viewing.title} style={{ width: '100%', height: '60dvh', border: '1px solid ' + C.border, borderRadius: 10, background: '#fff' }} />}
+              </div>
+            )}
+            <Fields headers={INVOICE_HEADERS} values={invoiceRow(viewing, a)} />
+            <div className="flex gap-2 flex-wrap mt-4">
+              {fileUrl && <Btn variant="primary" onClick={() => { const l = document.createElement('a'); l.href = fileUrl; l.download = viewing.attachmentName || 'invoice'; l.target = '_blank'; l.rel = 'noopener'; document.body.appendChild(l); l.click(); l.remove(); }}><FileDown size={14} /> Download invoice file</Btn>}
+              <Btn variant="ghost" onClick={() => exportRecordsToWord('invoice-' + (viewing.invoiceNumber || viewing.id), 'Invoice: ' + viewing.title, INVOICE_HEADERS, [invoiceRow(viewing, a)])}><FileDown size={14} /> Download details</Btn>
+            </div>
+          </ViewSheet>
+        );
+      })()}
     </div>
   );
 }

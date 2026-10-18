@@ -141,7 +141,7 @@ async function switchedOff(key: string) {
   }
   return switchCache![key] === false;
 }
-async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true) {
+async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true, attachments?: { filename: string; content: string }[]) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
   if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
     const artists = new Set((await section('roster')).map(a => lower(a.email)).filter(e => e.includes('@')));
@@ -165,6 +165,7 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   const note = replyable ? '<p class="t2" style="margin:20px 0 0;font-size:14px;color:#6e6e73">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
   const finalHtml = html.replace('<!--REPLY_NOTE-->', note);
   const body: Record<string, unknown> = { from: MAIL_FROM, to: recipients, subject, html: finalHtml, text: toText(finalHtml) };
+  if (attachments && attachments.length) body.attachments = attachments;
   if (replyable) body.reply_to = `reply-${replyKey}@${RECEIVE_DOMAIN}`;
   else if (REPLY_TO) body.reply_to = REPLY_TO;
   const res = await fetch('https://api.resend.com/emails', {
@@ -276,8 +277,8 @@ async function handleEvent(ev: Event) {
     return ev.type === 'repRelease'
       ? send([lower(rep.email)], `${updated ? 'Release updated' : 'Release confirmed'}: “${item.title}” by ${a.name}`,
           page(`${updated ? 'Updated' : 'Confirmed'}: ${item.title}`, [`Hi ${esc(rep.name)},`, `IMSS Records ${updated ? 'updated the details of' : 'confirmed'} <b>${esc(item.title)}</b> by ${esc(a.name)}${item.releaseDate ? ', releasing <b>' + esc(item.releaseDate) + '</b>' : ''}.`, 'The full release sheet is in your Release schedule, ready to download.'], { label: 'Open Release schedule', url: `${APP_URL}/release-schedule` }))
-      : send([lower(rep.email)], `Invoice to settle: “${item.title}” (${a.name}, $${Number(item.amount || 0).toFixed(2)})`,
-          page('An invoice to settle', [`Hi ${esc(rep.name)},`, `IMSS Records sent you <b>${esc(item.title)}</b> for ${esc(a.name)}, <b>$${Number(item.amount || 0).toFixed(2)}</b>.`, 'Download it, send it to the partner, then mark it sent in Invoices.'], { label: 'Open Invoices', url: `${APP_URL}/invoices` }));
+      : send([lower(rep.email)], `Invoice sent to the partner: “${item.title}” (${a.name}, $${Number(item.amount || 0).toFixed(2)})`,
+          page('An invoice for your records', [`Hi ${esc(rep.name)},`, `IMSS Records sent <b>${esc(item.title)}</b> for ${esc(a.name)}, <b>$${Number(item.amount || 0).toFixed(2)}</b>, to the partner.`, 'You can view it and download it in Invoices.'], { label: 'Open Invoices', url: `${APP_URL}/invoices` }));
   }
 
   // A deal or license change approved: Legal gets the record. Nothing goes to the artist.
@@ -504,6 +505,46 @@ async function sendReleaseWeek() {
   return { week: from + ' to ' + to, releases: due.length, results };
 }
 
+// A label rep asked for release sheets by email (rep_email_releases, which
+// checks the releases are theirs). Only ever sent to that rep's own address.
+const SHEET_HEADERS = ['Song Title', 'Primary Artist(s)', 'Featured Artist(s)', 'Release Type', 'Release Date', 'ISRC', 'UPC', 'Label', '℗ Line', 'Genre', 'Explicit/Clean', 'Duration', 'Written By (Songwriters)', 'Produced By', 'Collaborators & Splits', 'Recording Engineer', 'Mixing Engineer', 'Mastering Engineer', 'Dolby Atmos', 'Dolby Atmos Engineer', 'Lyrics', 'Music Video', 'Status', 'Primary Market', 'Secondary Market'];
+function sheetRow(r: Item, artist: Item = {}) {
+  const cr = r.credits || {}, collabs: Item[] = r.collaborators || [], label = r.label || 'IMSS Records';
+  return [
+    r.title, [artist.name, ...(r.primaryArtists || [])].filter(Boolean).join(' & '),
+    collabs.filter(c => c.role === 'Feature').map(c => c.name).join(', '),
+    r.type || '', r.releaseDate || '', r.isrc || '', r.upc || '', label,
+    r.releaseDate ? '℗ ' + String(r.releaseDate).slice(0, 4) + ' ' + label : '',
+    r.genre || artist.genre || '', r.explicit && r.explicit !== 'Not Set' ? r.explicit : '', r.duration || '',
+    cr.writtenBy || '', cr.producedBy || collabs.filter(c => c.role === 'Producer').map(c => c.name).join(', '),
+    collabs.map(c => c.name + ' (' + c.role + ', ' + c.splitPercent + '%)').join('; '),
+    cr.recordingEngineer || '', cr.mixingEngineer || '', cr.masteringEngineer || '',
+    r.dolbyAtmos ? 'Yes' : 'No', cr.dolbyEngineer || '', r.lyrics || '', r.hasVideo ? 'Yes' : 'No',
+    r.status || '', r.primaryMarket || '', r.secondaryMarket || '',
+  ].map(v => String(v ?? ''));
+}
+const b64 = (text: string) => { const bytes = new TextEncoder().encode(text); let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(bin); };
+async function sendReleaseSheet(repId: string, ids: string[]) {
+  const [staff, roster, catalog] = await Promise.all([section('staff'), section('roster'), section('catalog')]);
+  const rep = staff.find(m => m.id === repId && m.role === 'Label Rep' && m.status !== 'Archived');
+  if (!rep || !lower(rep.email).includes('@')) return { skipped: 'no rep email' };
+  const mine = new Set(roster.filter(a => a.labelRep === repId).map(a => a.id));
+  const rels = catalog.filter(r => ids.includes(r.id) && mine.has(r.artistId) && r.repConfirmedAt);
+  if (!rels.length) return { skipped: 'no releases' };
+  const rows = rels.map(r => sheetRow(r, roster.find(a => a.id === r.artistId) || {}));
+  const tables = rows.map(v => `<p style="margin:18px 0 6px;font-weight:700;font-size:17px;color:#1d1d1f">${esc(v[0])} · ${esc(v[1])}</p><table role="presentation" style="border-collapse:collapse;width:100%;font-size:14px">${SHEET_HEADERS.map((h, i) => v[i] ? `<tr><td style="padding:5px 8px 5px 0;color:#6e6e73;vertical-align:top;width:40%">${esc(h)}</td><td style="padding:5px 0;color:#1d1d1f;vertical-align:top">${esc(v[i]).replace(/\n/g, '<br>')}</td></tr>` : '').join('')}</table>`).join('');
+  const doc = `<html><head><meta charset="utf-8"><title>IMSS Records releases</title></head><body style="font-family:Arial">${rows.map(v => `<h2>${esc(v[0])}</h2><table style="border-collapse:collapse;width:100%">${SHEET_HEADERS.map((h, i) => v[i] ? `<tr><td style="border:1px solid #ccc;padding:4pt 6pt;width:34%;color:#555">${esc(h)}</td><td style="border:1px solid #ccc;padding:4pt 6pt">${esc(v[i])}</td></tr>` : '').join('')}</table>`).join('')}</body></html>`;
+  const csvCell = (x: string) => /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x;
+  const csv = [SHEET_HEADERS, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  const date = new Date().toISOString().slice(0, 10);
+  const subject = rels.length === 1 ? `Release sheet: “${rels[0].title}”` : `Release sheets: ${rels.length} releases`;
+  const html = page(subject, [`Hi ${esc(rep.name)},`, `Here ${rels.length === 1 ? 'is the release you asked for' : 'are the ' + rels.length + ' releases you asked for'}. The release sheet is attached as a Word file and a CSV (opens in Excel).`, tables], { label: 'Open Release schedule', url: `${APP_URL}/release-schedule` });
+  return await send([lower(rep.email)], subject, html, undefined, undefined, false, [
+    { filename: `imss-releases-${date}.doc`, content: b64('\ufeff' + doc) },
+    { filename: `imss-releases-${date}.csv`, content: b64('\ufeff' + csv) },
+  ]);
+}
+
 // Admin pressed "Send welcome email" on the artist's page (send_portal_welcome).
 async function sendWelcome(artistId: string) {
   const a = (await section('roster')).find(x => x.id === artistId);
@@ -583,6 +624,7 @@ Deno.serve(async req => {
       return Response.json(await send(admins, `${label} signed in`, page(`${label} signed in`, [`They signed in to IMSS Records at <b>${esc(when)}</b>.`, 'You asked to be told when this account signs in.'], { label: 'Open the dashboard', url: `${APP_URL}/` })));
     }
     if (body.action === 'releaseWeek') return Response.json(await sendReleaseWeek());
+    if (body.action === 'repReleaseSheet') return Response.json(await sendReleaseSheet(String(body.repId || ''), Array.isArray(body.ids) ? body.ids.map(String) : []));
     if (body.action === 'teamWelcome') return Response.json(await sendTeamWelcome(String(body.staffId || '')));
     if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));
     if (body.action === 'events') {

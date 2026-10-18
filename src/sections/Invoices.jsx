@@ -346,16 +346,25 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                               </section>
                             );
                           })()}
-                          {canEdit && (() => {
-                            // The artist's label rep settles it with the partner, then moves it to DP Queue.
-                            const rep = staff.find(m => m.id === ((roster.find(a => a.id === inv.artistId) || {}).labelRep) && m.status !== 'Archived');
-                            if (!rep || ['DP Queue', 'Pay Approved', 'Paid', 'Rejected'].includes(st)) return inv.sentToRepAt ? <section className="imss-sub-wide text-sm" style={{ color: C.textDim }}>Sent to label rep {String(inv.sentToRepAt).slice(0, 10)}{inv.repSentAt ? '; they sent it to the partner ' + String(inv.repSentAt).slice(0, 10) + (inv.repRef ? ' (ref ' + inv.repRef + ')' : '') : ''}.</section> : null;
+                          {(() => {
+                            // Send to partner: PM (theirs), Finance, Legal or Admin. It's shared with the
+                            // artist's label rep (view and download only) and moves to DP Queue.
+                            const artistRec = roster.find(a => a.id === inv.artistId) || {};
+                            const rep = staff.find(m => m.id === artistRec.labelRep && m.status !== 'Archived');
+                            const maysend = canEdit && (['Admin', 'Finance', 'Legal'].includes(session.role) || (session.role === 'Product Manager' && artistRec.productManager === session.name));
+                            const past = ['DP Queue', 'Pay Approved', 'Paid', 'Rejected'].includes(st);
+                            if (inv.sentToRepAt || inv.sentToPartnerAt) return <section className="imss-sub-wide text-sm" style={{ color: C.textDim }}>Sent to the partner {String(inv.sentToPartnerAt || inv.sentToRepAt).slice(0, 10)}{inv.sentToRepBy ? ' by ' + inv.sentToRepBy : ''}{rep ? '; shared with ' + rep.name + ' (label rep)' : ''}.</section>;
+                            if (!maysend || past) return null;
                             return (
                               <section className="imss-sub-wide">
-                                <h3 className="imss-sub-h">Label rep</h3>
-                                {inv.sentToRepAt
-                                  ? <div className="text-sm" style={{ color: C.textDim }}>Sent to {rep.name}{rep.company ? ' (' + rep.company + ')' : ''} on {String(inv.sentToRepAt).slice(0, 10)}. Waiting for them to send it to the partner.</div>
-                                  : <Btn variant="ghost" onClick={() => { logActivity('sent an invoice to the label rep', inv.title + ' → ' + rep.name, inv.artistId); update(invoices.map(i => i.id !== inv.id ? i : { ...i, sentToRepAt: new Date().toISOString(), sentToRepBy: session.name, history: [...(i.history || []), { at: new Date().toISOString(), by: session.name, action: 'sent to label rep', from: st, to: st, note: rep.name }] })); }}><Send size={14} /> Send to label rep ({rep.name})</Btn>}
+                                <h3 className="imss-sub-h">Partner</h3>
+                                <Btn variant="ghost" onClick={() => {
+                                  const at = new Date().toISOString();
+                                  logActivity('sent an invoice to the partner', inv.title + (rep ? ' (shared with ' + rep.name + ')' : ''), inv.artistId);
+                                  update(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'DP Queue', sentToPartnerAt: at, sentToRepAt: rep ? at : i.sentToRepAt, sentToRepBy: session.name,
+                                    history: [...(i.history || []), { at, by: session.name, action: 'sent to partner', from: st, to: 'DP Queue', note: rep ? 'Shared with ' + rep.name : '' }] }));
+                                }}><Send size={14} /> Send to partner{rep ? ' (shares it with ' + rep.name + ')' : ''}</Btn>
+                                <div className="text-xs mt-1" style={{ color: C.textDim }}>Moves it to DP Queue.{rep ? ' The label rep can view and download it.' : ''}</div>
                               </section>
                             );
                           })()}

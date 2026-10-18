@@ -688,7 +688,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }
 
   // Local preview only (demo / no database): the label rep view from local data,
-  // shaped like rep_portal(). Marking sent updates the invoice here.
+  // shaped like rep_portal().
   if (session.mode === 'rep') {
     const rep = staff.find(s => s.id === session.repId);
     const mine = roster.filter(a => a.labelRep === session.repId && a.status !== 'Archived');
@@ -699,9 +699,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       releases: catalogView.filter(r => ids.has(r.artistId) && r.repConfirmedAt),
       invoices: invoices.filter(i => ids.has(i.artistId) && i.sentToRepAt).map(i => ({ ...i, payee: i.payTo || '' })),
     };
-    const markSent = (inv, ref) => updateInvoices(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'DP Queue', repSentAt: new Date().toISOString(), repRef: ref,
-      history: [...(i.history || []), { at: new Date().toISOString(), by: rep.name, action: 'sent to partner', from: i.status, to: 'DP Queue', note: ref }] }));
-    if (repData) return <RepApp demo={{ data: repData, markSent }} signOut={logout} />;
+    if (repData) return <RepApp demo={{ data: repData }} signOut={logout} />;
   }
 
   if (session.mode === 'artist') {
