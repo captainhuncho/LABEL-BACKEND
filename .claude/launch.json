@@ -27,6 +27,15 @@
         "VITE_SUPABASE_URL=https://preview.invalid VITE_SUPABASE_PUBLISHABLE_KEY=preview npx vite --port 5175 --open false"
       ],
       "port": 5175
+    },
+    {
+      "name": "demo",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_DEMO=1 VITE_SUPABASE_URL= VITE_SUPABASE_PUBLISHABLE_KEY= npx vite --port 5177 --open false"
+      ],
+      "port": 5177
     }
   ]
 }
