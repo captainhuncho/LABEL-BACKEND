@@ -61,7 +61,7 @@ export function RevenueTab({ EMPTY_REV_FILTERS, artist, artistCatalog, filteredM
             <div className="imss-print-hide flex items-center gap-2 mb-4">
               <label htmlFor="rev-group" className="text-sm" style={{ color: C.textDim, whiteSpace: "nowrap" }}>View by</label>
               <Select id="rev-group" value={revGroupBy} onChange={e => setRevGroupBy(e.target.value)} style={{ minWidth: 200 }}>
-                {[['none', 'All'], ['product', 'Song'], ['source', 'Release type'], ['stores', 'Platform'], ['countries', 'Country'], ['types', 'Format'], ['models', 'Model'], ['salesMonths', 'Approx. sales date']].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                {[['none', 'All'], ['product', 'Song'], ['stores', 'Platform'], ['countries', 'Country'], ['types', 'Format'], ['models', 'Model'], ['salesMonths', 'Approx. sales date']].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
               </Select>
             </div>
 
