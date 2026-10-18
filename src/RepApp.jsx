@@ -8,19 +8,21 @@ import { supabase } from './storage.js';
 import { logSignIn } from './audit.js';
 import { formatCurrency, formatDate, todayStr } from './constants.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
-import { Badge, Btn, EmptyState, exportRowsToCsv, exportRowsToExcel } from './ui.jsx';
+import { Badge, Btn, EmptyState, exportRowsToCsv, exportRowsToExcel, SectionHeader, ReleaseCountdown } from './ui.jsx';
 import { MobileNav } from './MobileNav.jsx';
 import { usePageUrl } from './pageUrl.js';
 import { NotificationBell } from './sections/Notifications.jsx';
 import { RELEASE_SHEET_HEADERS, exportRecordsToWord, releaseSheetRow } from './releaseSheet.js';
 import LoadingScreen from './LoadingScreen.jsx';
-import { AppearancePicker } from './appearance.js';
+import { PasskeySettings } from './Passkeys.jsx';
+import { TwoFactorSettings } from './Mfa.jsx';
 
 const PAGES = [
   { id: 'releases', label: 'Release schedule', icon: Calendar },
   { id: 'invoices', label: 'Invoices', icon: FileText },
 ];
 const day = s => String(s || '').slice(0, 10);
+const initials = n => String(n || '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 const TONE = { 'DP Queue': 'amber', 'Pay Approved': 'teal', Paid: 'teal', Rejected: 'red' };
 
 // demo: { data, markSent(invoice, ref) } for the local preview (no database).
@@ -62,15 +64,16 @@ export default function RepApp({ signOut, demo = null }) {
       </div>
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner" style={{ maxWidth: 1120 }}>
-          <div className="flex items-center justify-end gap-2 mb-4 flex-wrap">
-            <AppearancePicker style={{ marginRight: 'auto' }} />
+          <div className="flex items-center justify-end gap-2 mb-4">
             <NotificationBell routes={{ release: 'releases', submission: 'releases', invoice: 'invoices' }} onOpen={setPage} />
-            <button onClick={signOut} className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button>
+            {/* Your initials open the account menu (Appearance, Account & security, Sign out), as on ops. */}
+            <button onClick={e => window.dispatchEvent(new CustomEvent('imss:open-account', { detail: e.currentTarget.getBoundingClientRect() }))} aria-label={'Your account: ' + data.rep.name} className="inline-flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 9999, background: C.amberSoft, color: C.amber, fontWeight: 700, fontSize: 14, flex: '0 0 auto' }}>{initials(data.rep.name)}</button>
           </div>
-          {page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} /> : <Invoices demoMarkSent={demo && demo.markSent} invoices={data.invoices || []} artistById={artistById} reload={load} />}
+          {page === 'account' ? <div><SectionHeader title="Account & security" description="How you sign in: passkeys for Face ID, your fingerprint or this device’s screen lock, and two-factor codes." /><PasskeySettings /><TwoFactorSettings /></div> : page === 'releases' ? <Releases releases={data.releases || []} artistById={artistById} /> : <Invoices demoMarkSent={demo && demo.markSent} invoices={data.invoices || []} artistById={artistById} reload={load} />}
         </div>
       </div>
-      <MobileNav nav={PAGES} active={page} setActive={setPage} role="rep" account={[{ label: 'Sign out', icon: LogOut, onClick: signOut, danger: true }]} />
+      <MobileNav nav={PAGES} active={page} setActive={setPage} role="rep" account={[{ label: 'Sign out', icon: LogOut, onClick: signOut, danger: true }]}
+        profile={{ name: data.rep.name, role: 'Label rep', email: data.rep.email || '', onSecurity: () => setPage('account'), onSignOut: signOut }} />
     </div>
   );
 }
@@ -113,6 +116,7 @@ function Releases({ releases, artistById }) {
     <div>
       <h1 className="imss-title">Release schedule</h1>
       <p className="mb-5" style={{ color: C.textDim, fontSize: 17 }}>Releases your IMSS Records Product Manager has confirmed, with everything distributors and publishers ask for.</p>
+      <ReleaseCountdown releases={releases} artistMap={artistById} />
       {releases.length === 0 ? <EmptyState icon={Calendar} title="No releases confirmed yet" description="When a Product Manager confirms a release for you, it appears here and you get an email." /> : <>
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <span className="text-sm" style={{ color: C.textDim, marginRight: 4 }}>{picked.length ? 'Download ' + picked.length + ' selected:' : 'Download all ' + sorted.length + ':'}</span>
