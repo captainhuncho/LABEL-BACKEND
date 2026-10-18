@@ -22,7 +22,8 @@ export default function LoadingScreen() {
     <div className="imss-ld" role="status" aria-live="polite">
       <style>{GLOBAL_STYLES + CSS}</style>
       <img className="imss-ld-logo" src={LOGO_DATA_URI} alt="IMSS Records" />
-      <div className="imss-ld-text">Loading…</div>
+      <div className="imss-ld-text">A Different Approach</div>
+      <span className="sr-only">Loading</span>
       {slow && (
         <div className="text-sm" style={{ color: C.textDim }}>
           Still loading. Check your connection, or <button onClick={() => window.location.reload()} style={{ color: C.amber, fontWeight: 600 }}>retry</button>.
