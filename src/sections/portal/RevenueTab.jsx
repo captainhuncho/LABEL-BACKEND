@@ -58,13 +58,11 @@ export function RevenueTab({ EMPTY_REV_FILTERS, artist, artistCatalog, filteredM
               <div className="text-xs" style={{ color: C.textFaint }}>Showing {filteredMyRevenue.length} of {myRevenue.length} entries</div>
             </div>
 
-            <div className="imss-print-hide flex items-center gap-1 mb-4 flex-wrap">
-              {[['none', 'Flat'], ['product', 'By song'], ['source', 'By release type'], ['stores', 'By platform'], ['countries', 'By country'], ['types', 'By format'], ['models', 'By model'], ['salesMonths', 'By approx. sales date']].map(([id, label]) => (
-                <button key={id} onClick={() => setRevGroupBy(id)} className="text-sm px-3 py-1.5 rounded"
-                  style={{ background: revGroupBy === id ? C.amberSoft : 'transparent', color: revGroupBy === id ? C.amber : C.textDim, border: '1px solid ' + (revGroupBy === id ? 'transparent' : C.border), fontWeight: revGroupBy === id ? 600 : 500 }}>
-                  {label}
-                </button>
-              ))}
+            <div className="imss-print-hide flex items-center gap-2 mb-4">
+              <label htmlFor="rev-group" className="text-sm" style={{ color: C.textDim, whiteSpace: "nowrap" }}>Group by</label>
+              <Select id="rev-group" value={revGroupBy} onChange={e => setRevGroupBy(e.target.value)} style={{ minWidth: 200 }}>
+                {[['none', 'No grouping (every entry)'], ['product', 'Song'], ['source', 'Release type'], ['stores', 'Platform'], ['countries', 'Country'], ['types', 'Format'], ['models', 'Model'], ['salesMonths', 'Approx. sales date']].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              </Select>
             </div>
 
             <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Approx. sales date', 'Type', 'Product', 'Gross', 'Inbound Banking Charge', 'Your earnings']} rows={filteredMyRevenue.map(r => { const x = splitOf(r); return [r.month, salesDateRange(r), r.type, r.title, x.gross, x.charge, x.artistShare]; })} />
