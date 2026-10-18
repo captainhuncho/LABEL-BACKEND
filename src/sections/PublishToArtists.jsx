@@ -1,3 +1,4 @@
+import { ReportingLagNote } from '../ui.jsx';
 // Publish revenue to artists. The team's books stay internal; artists only see
 // the snapshot published here. Finance picks what to publish and sends it to an
 // Admin to approve; only an Admin publishes directly.
@@ -118,6 +119,7 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
   return (
     <div>
       <SectionHeader title="Publish to artists" artistNote="exactly what was last published here: revenue, breakdowns, their Inbound Banking Charge share and statement files. Nothing else changes their earnings view." description="Revenue you import or edit stays inside the label until it’s published here. Artists see exactly what was published, and get an email when it is." />
+      <ReportingLagNote className="mb-4" />
 
       {pending.length > 0 && (
         <section aria-labelledby="pub-pending-h" className="rounded border mb-6" style={{ borderColor: C.amber, background: C.panel }}>

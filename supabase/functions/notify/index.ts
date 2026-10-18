@@ -17,6 +17,8 @@ const RECEIVE_DOMAIN = Deno.env.get('RECEIVE_DOMAIN') ?? '';
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://ops.imssrecords.com';
 // Artists use their own address; emails to them link there.
 const ARTIST_URL = Deno.env.get('ARTIST_URL') ?? 'https://artist.imssrecords.com';
+// Same wording as REPORTING_LAG_NOTE in src/constants.js.
+const LAG_NOTE = 'Royalty reports have a lag of about 60 days or more from our distribution partners, so the latest months take time to appear.';
 const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecords.com>';
 // A real mailbox the team reads; emails without a thread reply address reply here.
 const REPLY_TO = Deno.env.get('REPLY_TO') ?? '';
@@ -205,7 +207,7 @@ async function handleEvent(ev: Event) {
       const names = [...new Set(months)].sort().map(m => new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
       const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
       results.push(await send([email], `Your IMSS Records earnings for ${list} are ready`,
-        page('New earnings in your portal', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records portal, with the breakdown by song, platform and country.`],
+        page('New earnings in your portal', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records portal, with the breakdown by song, platform and country.`, LAG_NOTE],
           { label: 'See your earnings', url: `${APP_URL}/` }), undefined, 'earnings'));
     }
     return results;
@@ -284,7 +286,7 @@ async function handleEvent(ev: Event) {
   if (ev.type === 'statement') {
     const period = item.periodStart === item.periodEnd ? item.periodStart : `${item.periodStart} to ${item.periodEnd}`;
     return send([artistEmail], `Your IMSS Records statement is ready (${period})`,
-      page('Your royalty statement is ready', [`Hi ${esc(artistName)},`, `Your statement for <b>${esc(period)}</b> is ready in your IMSS Records portal.`, `Your earnings for this period: <b>$${Number(item.artistShare || 0).toFixed(2)}</b>.`],
+      page('Your royalty statement is ready', [`Hi ${esc(artistName)},`, `Your statement for <b>${esc(period)}</b> is ready in your IMSS Records portal.`, `Your earnings for this period: <b>$${Number(item.artistShare || 0).toFixed(2)}</b>.`, LAG_NOTE],
         { label: 'View your statement', url: `${APP_URL}/` }), undefined, 'statement');
   }
 

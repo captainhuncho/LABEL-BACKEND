@@ -2,7 +2,7 @@
 import { Download, FileSpreadsheet, Printer, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { documentUrl } from './storage.js';
-import { artworkColor, artworkInitials } from './constants.js';
+import { artworkColor, artworkInitials, REPORTING_LAG_NOTE, reportingLagExample } from './constants.js';
 import { C, HEADING_FONT, MONO_FONT } from './theme.js';
 import { logActivity } from './audit.js';
 
@@ -315,4 +315,17 @@ export function DocLink({ value, name, children, style }) {
     } catch (x) { setErr('Could not open the file.'); }
   }
   return <><a href="#" onClick={open} style={{ color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3, ...style }}>{children || name || 'Open file'}</a>{err && <span role="alert" style={{ color: C.red, fontSize: 12, marginLeft: 6 }}>{err}</span>}</>;
+}
+
+// The distribution partners' reporting lag, on every royalty, statement and payment screen.
+export function ReportingLagNote({ className = 'mt-1 mb-4' }) {
+  return (
+    <div className={'text-sm ' + className} style={{ color: C.textDim }}>
+      {REPORTING_LAG_NOTE}{' '}
+      <details style={{ display: 'inline' }}>
+        <summary style={{ display: 'inline', cursor: 'pointer', color: C.amber, textDecoration: 'underline', textUnderlineOffset: 3 }}>Example</summary>
+        <span className="block mt-1">{reportingLagExample()}</span>
+      </details>
+    </div>
+  );
 }

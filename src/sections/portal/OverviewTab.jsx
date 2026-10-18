@@ -1,3 +1,4 @@
+import { ReportingLagNote } from '../../ui.jsx';
 import { Megaphone, ChevronRight, Eye, LogOut, Wallet } from 'lucide-react';
 import { dealLabel, formatCents, formatDate, formatNumber, monthLabel } from '../../constants.js';
 import { artistSpend } from '../../finance.js';
@@ -17,6 +18,7 @@ export function OverviewTab({ DASH_PRESETS, activePreset, applyDashRange, artist
                 <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
               </div>
             </div>
+            <ReportingLagNote />
 
             {showDealBanner && (
               <section aria-label="Your deal has been updated" className="rounded mb-6" style={{ background: C.amberSoft, padding: '18px 20px' }}>

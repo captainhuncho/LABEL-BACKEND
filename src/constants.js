@@ -443,3 +443,24 @@ export function guessColumnIndex(headers, aliases, preferLast) {
   if (!matches.length) return -1;
   return preferLast ? matches[matches.length - 1] : matches[0];
 }
+
+// Shown wherever artists see royalties (portal and emails). From the
+// distribution partner: "roughly a 60 day or more lag in reporting".
+export const REPORTING_LAG_NOTE = 'Royalty reports have a lag of about 60 days or more from our distribution partners, so the latest months take time to appear.';
+// The lag in one example, worked out from today's month.
+export function reportingLagExample(today = new Date()) {
+  const label = d => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const now = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const reported = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1));
+  return `For example, the ${label(now)} period covers earnings reported for ${label(reported)} and earlier. You can check this in a detailed royalty report, in the Approx. sales date column.`;
+}
+// EMPIRE's "Approx. Sales Date" for a royalty row: the month(s) the sales happened.
+export function salesDateLabel(row) {
+  const months = Object.keys((row && row.salesMonths) || {}).filter(Boolean).sort();
+  if (!months.length) return '—';
+  return months.length === 1 ? monthLabel(months[0]) : monthLabel(months[0]) + ' – ' + monthLabel(months[months.length - 1]);
+}
+export function salesDateRange(row) {
+  const months = Object.keys((row && row.salesMonths) || {}).filter(Boolean).sort();
+  return months.length ? (months.length === 1 ? months[0] : months[0] + ' to ' + months[months.length - 1]) : '';
+}

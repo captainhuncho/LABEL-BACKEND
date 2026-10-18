@@ -10,7 +10,7 @@ import { C } from '../theme.js';
 import { DocLink, Td, Th, exportRowsToCsv } from '../ui.jsx';
 
 // Royalty breakdowns (EMPIRE detail on each revenue row).
-export const BREAKDOWN_FIELDS = { stores: 'Platform', countries: 'Country', types: 'Format', models: 'Model', salesMonths: 'Month earned' };
+export const BREAKDOWN_FIELDS = { stores: 'Platform', countries: 'Country', types: 'Format', models: 'Model', salesMonths: 'Approx. sales date' };
 export const regionNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { return null; } })();
 export function breakdownLabel(format, key) {
   if (key === 'Not broken down') return 'Not broken down (older statements)';

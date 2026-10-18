@@ -1,6 +1,6 @@
 import { CheckCircle2, ClipboardList, DollarSign, Download, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { RELEASE_TYPES, formatCurrency, todayStr } from '../constants.js';
+import { RELEASE_TYPES, formatCurrency, salesDateLabel, todayStr } from '../constants.js';
 import { slug } from '../finance.js';
 import { C } from '../theme.js';
 import { Badge, Btn, ConfirmInline, EmptyState, Field, Input, KPICard, SectionHeader, Select, Td, Th, exportRowsToCsv } from '../ui.jsx';
@@ -134,11 +134,12 @@ export function RevenueSection({ revenue, update, roster, catalog = [], canEdit 
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 760 }}>
-            <thead><tr><Th>Month</Th><Th>Artist</Th><Th>Track</Th><Th>Type</Th><Th align="right">Earning</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
+            <thead><tr><Th>Month</Th><Th>Approx. sales date</Th><Th>Artist</Th><Th>Track</Th><Th>Type</Th><Th align="right">Earning</Th><Th>Status</Th><Th align="right">Actions</Th></tr></thead>
             <tbody>
               {sorted.map(r => (
                 <tr key={r.id} data-focus={r.id}>
                   <Td mono>{r.month}</Td>
+                  <Td mono>{salesDateLabel(r)}</Td>
                   <Td>{r.artist}</Td>
                   <Td>{r.title}{r.epAlbum ? <span style={{ color: C.textFaint }}> · {r.epAlbum}</span> : ''}</Td>
                   <Td><Badge>{r.type || '—'}</Badge></Td>

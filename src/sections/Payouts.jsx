@@ -1,3 +1,4 @@
+import { ReportingLagNote } from '../ui.jsx';
 import { CheckCircle2, ClipboardList, DollarSign, Mail, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
 import { useMemo, useState } from 'react';
@@ -67,6 +68,7 @@ export function PayoutsSection({ invoices = [], payouts, update, roster, revenue
   return (
     <div>
       <SectionHeader title="Payouts" artistNote="a statement only after you press Send to artist (or its scheduled time passes). They get an email." description="Generate a payout statement for an artist over any period — computed live from revenue and money received, per the inbound banking charge split formula." />
+      <ReportingLagNote className="mb-4" />
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={DollarSign} label="Label earnings (lifetime)" value={formatCurrency(pnl.labelEarn)} tone="teal" />

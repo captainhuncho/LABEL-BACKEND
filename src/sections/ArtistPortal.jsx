@@ -21,6 +21,7 @@ import { MobileNav } from '../MobileNav.jsx';
 import { ArtistBudgets, BUDGET_TYPES } from './Budget.jsx';
 import { usePageUrl } from '../pageUrl.js';
 import { TwoFactorSettings } from '../Mfa.jsx';
+import { ReportingLagNote } from '../ui.jsx';
 import { InvoicesTab } from './portal/InvoicesTab.jsx';
 import { ExpensesTab } from './portal/ExpensesTab.jsx';
 import { EarningsTab } from './portal/EarningsTab.jsx';
@@ -508,6 +509,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
             <span className="imss-desktop-only"><span className="flex items-center gap-2"><NotificationBell routes={{ budget: 'budget', notice: 'overview', deal: 'profile', earnings: 'revenue', statement: 'statements', invoice: 'invoices', submission: 'releases', request: 'requests' }} onOpen={setTab} /><button onClick={onLogout} aria-label="Sign out" title="Sign out" className="inline-flex items-center gap-1.5" style={{ background: C.fill, color: C.text, borderRadius: 980, padding: '8px 12px', fontSize: 14 }}><LogOut size={15} /> <span className="imss-alerts-label">Sign out</span></button></span></span>
           </div>
         )}
+        {['revenue', 'earnings', 'payouts'].includes(tab) && <ReportingLagNote />}
 
         {tab === 'overview' && <OverviewTab DASH_PRESETS={DASH_PRESETS} activePreset={activePreset} applyDashRange={applyDashRange} artist={artist} balance={balance} budgetRemaining={budgetRemaining} creditLine={creditLine} dashBestMonth={dashBestMonth} dashCountries={dashCountries} dashDraft={dashDraft} dashError={dashError} dashGross={dashGross} dashLabel={dashLabel} dashReleased={dashReleased} dashRetailers={dashRetailers} dashTopSongs={dashTopSongs} dashUnits={dashUnits} dismissDeal={dismissDeal} invoices={invoices} invoicesDue={invoicesDue} isFunded={isFunded} latestDeal={latestDeal} ledger={ledger} lifetime={lifetime} monthLong={monthLong} myNotices={myNotices} needsToKnow={needsToKnow} onLogout={onLogout} openReleaseRevenue={openReleaseRevenue} paid={paid} payouts={payouts} pctLabel={pctLabel} platformTotals={platformTotals} rateLabel={rateLabel} recoupment={recoupment} releasedByType={releasedByType} revenue={revenue} setDashDraft={setDashDraft} setTab={setTab} showDealBanner={showDealBanner} streams={streams} totalStreams={totalStreams} />}
 
@@ -636,3 +638,4 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     </div>
   );
 }
+

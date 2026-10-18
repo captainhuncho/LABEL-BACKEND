@@ -34,7 +34,10 @@ ARTISTS.forEach(([name], ai) => {
     MONTHS.forEach((m, mi) => {
       if (m < release) return;
       const earning = Math.round((40 + rand() * 260) * (1 + mi / 10) * (ai % 3 === 0 ? 1.6 : 1) * 100) / 100;
-      DEMO_REVENUE.push({ id: id + '_' + m, artist: name, artistSlug: slug(name), title, month: m, earning, type: 'Single', epAlbum: null, releaseDate: release + '-12', approvalStatus: 'Approved', approvedBy: 'Demo Admin', approvedAt: '2026-01-01' });
+      // Sales land about two months before the statement (the partner's reporting lag).
+      const back = n => { const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 - n, 1)); return d.toISOString().slice(0, 7); };
+      const salesMonths = { [back(2)]: Math.round(earning * 70) / 100, [back(3)]: Math.round(earning * 30) / 100 };
+      DEMO_REVENUE.push({ salesMonths, id: id + '_' + m, artist: name, artistSlug: slug(name), title, month: m, earning, type: 'Single', epAlbum: null, releaseDate: release + '-12', approvalStatus: 'Approved', approvedBy: 'Demo Admin', approvedAt: '2026-01-01' });
     });
   }
 });

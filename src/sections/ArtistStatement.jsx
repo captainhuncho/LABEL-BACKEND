@@ -1,3 +1,4 @@
+import { ReportingLagNote } from '../ui.jsx';
 import { ClipboardList, DollarSign, Download, FileText, Printer, TrendingUp, Wallet } from 'lucide-react';
 import { logActivity } from '../audit.js';
 import { useMemo, useState } from 'react';
@@ -219,6 +220,7 @@ export function ArtistStatementView({ invoices = [], artist, revenue, masterGros
               {shown.mode !== 'all' && <> · lifetime to date {formatCents(lifetime.artistShare)}</>}
             </div>
           </div>
+          <ReportingLagNote className="mb-4" />
 
           <DealSpanNote artist={artist} rows={monthRows.flatMap(m => m.tracks)} active={shown.mode === 'range' ? { from: shown.dealFrom, to: shown.dealTo } : null}
             onPick={p => { const start = p.from || earliestMonth, end = p.to || latestMonth; setPeriodMode('range'); setRangeStart(start); setRangeEnd(end); setRangeError(''); setGenerated({ mode: 'range', start, end, dealFrom: p.from, dealTo: p.to }); }} />

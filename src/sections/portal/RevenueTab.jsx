@@ -1,5 +1,5 @@
 import { ClipboardList, DollarSign, FileText, Wallet } from 'lucide-react';
-import { formatCents, monthLabel } from '../../constants.js';
+import { formatCents, monthLabel, salesDateLabel, salesDateRange } from '../../constants.js';
 import { revenueBreakdown } from '../../finance.js';
 import { C } from '../../theme.js';
 import { Badge, Btn, EmptyState, ExportBar, Field, Input, KPICard, Select, Td, Th } from '../../ui.jsx';
@@ -59,7 +59,7 @@ export function RevenueTab({ EMPTY_REV_FILTERS, artist, artistCatalog, filteredM
             </div>
 
             <div className="imss-print-hide flex items-center gap-1 mb-4 flex-wrap">
-              {[['none', 'Flat'], ['product', 'By song'], ['source', 'By release type'], ['stores', 'By platform'], ['countries', 'By country'], ['types', 'By format'], ['models', 'By model'], ['salesMonths', 'By month earned']].map(([id, label]) => (
+              {[['none', 'Flat'], ['product', 'By song'], ['source', 'By release type'], ['stores', 'By platform'], ['countries', 'By country'], ['types', 'By format'], ['models', 'By model'], ['salesMonths', 'By approx. sales date']].map(([id, label]) => (
                 <button key={id} onClick={() => setRevGroupBy(id)} className="text-sm px-3 py-1.5 rounded"
                   style={{ background: revGroupBy === id ? C.amberSoft : 'transparent', color: revGroupBy === id ? C.amber : C.textDim, border: '1px solid ' + (revGroupBy === id ? 'transparent' : C.border), fontWeight: revGroupBy === id ? 600 : 500 }}>
                   {label}
@@ -67,18 +67,19 @@ export function RevenueTab({ EMPTY_REV_FILTERS, artist, artistCatalog, filteredM
               ))}
             </div>
 
-            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Type', 'Product', 'Gross', 'Inbound Banking Charge', 'Your earnings']} rows={filteredMyRevenue.map(r => { const x = splitOf(r); return [r.month, r.type, r.title, x.gross, x.charge, x.artistShare]; })} />
+            <ExportBar filename={(artist.name || 'artist').replace(/\s+/g, '-').toLowerCase() + '-revenue'} headers={['Month', 'Approx. sales date', 'Type', 'Product', 'Gross', 'Inbound Banking Charge', 'Your earnings']} rows={filteredMyRevenue.map(r => { const x = splitOf(r); return [r.month, salesDateRange(r), r.type, r.title, x.gross, x.charge, x.artistShare]; })} />
 
             {filteredMyRevenue.length === 0 ? (
               <EmptyState icon={DollarSign} title="Nothing in that period" description="No revenue was logged for what you picked. Try a wider date range, or clear the type and product filters." />
             ) : revGroupBy === 'none' ? (
               <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
                 <table className="w-full" style={{ minWidth: 820 }}>
-                  <thead><tr><Th>Month</Th><Th>Type</Th><Th>Product</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Your earnings</Th></tr></thead>
+                  <thead><tr><Th>Month</Th><Th>Approx. sales date</Th><Th>Type</Th><Th>Product</Th><Th align="right">Gross</Th><Th align="right">Inbound Banking Charge</Th><Th align="right">Your earnings</Th></tr></thead>
                   <tbody>
                     {filteredMyRevenue.map((r, i) => { const x = splitOf(r); return (
                       <tr key={i}>
                         <Td mono>{monthLabel(r.month)}</Td>
+                        <Td mono>{salesDateLabel(r)}</Td>
                         <Td><Badge>{r.type}</Badge></Td>
                         <Td>{r.title}</Td>
                         <Td align="right" mono>{formatCents(x.gross)}</Td>
