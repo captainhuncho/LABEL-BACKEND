@@ -20,7 +20,21 @@ export function installPullToRefresh() {
   pill.style.cssText = 'position:fixed;top:0;left:50%;z-index:9999;transform:translate(-50%,-48px);padding:8px 14px;border-radius:980px;background:var(--panel,#fff);color:var(--text,#1d1d1f);box-shadow:0 2px 12px rgba(0,0,0,.18);font:600 13px -apple-system,system-ui,sans-serif;pointer-events:none;transition:transform .2s';
   document.body.appendChild(pill);
   const show = y => { pill.style.transition = 'none'; pill.style.transform = `translate(-50%,${Math.min(y, TRIGGER + 20) - 50}px)`; };
-  const hide = () => { pill.style.transition = 'transform .2s'; pill.style.transform = 'translate(-50%,-48px)'; };
+  let offerTimer = null;
+  const hide = () => {
+    clearTimeout(offerTimer);
+    pill.style.pointerEvents = 'none'; pill.style.cursor = ''; pill.onclick = null;
+    pill.style.transition = 'transform .2s'; pill.style.transform = 'translate(-50%,-48px)';
+  };
+  // Trackpad: stays for a few seconds as a button; only a click refreshes.
+  const offerButton = () => {
+    pill.textContent = 'Refresh';
+    pill.style.pointerEvents = 'auto'; pill.style.cursor = 'pointer';
+    pill.setAttribute('role', 'button');
+    pill.onclick = () => { pill.textContent = 'Refreshing…'; window.location.reload(); };
+    pill.style.transition = 'transform .2s'; pill.style.transform = 'translate(-50%,16px)';
+    clearTimeout(offerTimer); offerTimer = setTimeout(hide, 4000);
+  };
 
   document.addEventListener('touchstart', e => {
     box = e.target.closest && e.target.closest('.imss-content');
@@ -84,16 +98,18 @@ export function installPullToRefresh() {
     if (!b || (e.target.closest && e.target.closest('[role="dialog"], .imss-sheet-list'))) return;
     if (endTimer === null) { atTopAtStart = settledAtTop(b); wheel = 0; }
     clearTimeout(endTimer);
+    // A browser can't see fingers lift off a trackpad (a still finger looks the
+    // same), so the pull only arms it: the pill becomes a Refresh button to click.
     endTimer = setTimeout(() => {
       endTimer = null;
-      if (wheel >= TRIGGER) { pill.textContent = 'Refreshing…'; window.location.reload(); } else hide();
+      if (wheel >= TRIGGER) offerButton(); else hide();
       wheel = 0;
     }, 250);
     if (!atTopAtStart || b.scrollTop > 0 || e.deltaY >= 0) { if (e.deltaY > 0) { wheel = 0; hide(); } return; }
     wheel += -e.deltaY * 0.12;
     if (wheel < DEAD_ZONE) return;
     // Trackpad: lifting the fingers (the gesture ending) is the release.
-    pill.textContent = wheel >= TRIGGER ? 'Release to refresh' : 'Pull to refresh';
+    pill.textContent = wheel >= TRIGGER ? 'Let go, then click Refresh' : 'Pull to refresh';
     show(wheel);
   }, { passive: true });
 }
