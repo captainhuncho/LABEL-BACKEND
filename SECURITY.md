@@ -62,6 +62,10 @@ Please don't open a public issue or share details elsewhere until it's fixed.
     access, `canApproveBudgets`, sign-in email or Archived/Inactive status.
     Others can edit profile fields. Legal's access changes go through
     `accessRequests` for an Admin to approve.
+    Sign-in addresses by role (`private.staff_email_ok`): label reps use
+    @empi.re, everyone else @imullar.com or @imssrecords.com. Checked for a new
+    entry or a changed email or role, for everyone including Admins; existing
+    entries that don't change keep working.
   - Deal privacy: the real `roster` and `dealChanges` are readable only by
     Admin, Finance, Legal and anyone with Artist earnings
     (`private.can_see_deals()`). Everyone else reads `rosterPublic`, the roster

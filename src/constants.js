@@ -12,11 +12,15 @@ export const EXPLICIT_OPTIONS = ['Not Set', 'Explicit', 'Clean'];
 export function emptyCredits() {
   return { performedBy: '', writtenBy: '', producedBy: '', recordingEngineer: '', mixingEngineer: '', masteringEngineer: '', dolbyEngineer: '' };
 }
-// Staff sign in with a label address. imullar.com today; imssrecords.com when the team moves.
+// Staff sign in with a label address (imullar.com today; imssrecords.com when the
+// team moves); label reps with their EMPIRE address. The database enforces the
+// same for new or changed entries (private.staff_email_ok).
 export const STAFF_EMAIL_DOMAINS = ['imullar.com', 'imssrecords.com'];
-export function isStaffEmailAllowed(email) {
+export const REP_EMAIL_DOMAINS = ['empi.re'];
+export const emailDomainsFor = role => role === 'Label Rep' ? REP_EMAIL_DOMAINS : STAFF_EMAIL_DOMAINS;
+export function isStaffEmailAllowed(email, role) {
   const domain = String(email || '').trim().toLowerCase().split('@')[1] || '';
-  return STAFF_EMAIL_DOMAINS.includes(domain);
+  return emailDomainsFor(role).includes(domain);
 }
 export const COLLABORATOR_ROLES = ['Feature', 'Producer', 'Songwriter', 'Co-Writer', 'Remixer', 'Other'];
 // Roles that take a share of the song: a split % is required when one is listed.

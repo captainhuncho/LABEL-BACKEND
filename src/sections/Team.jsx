@@ -1,7 +1,7 @@
 import { Archive, Mail, Pencil, Plus, Trash2, UserCog, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { BlockedSignins } from './BlockedSignins.jsx';
-import { STAFF_EMAIL_DOMAINS, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
+import { emailDomainsFor, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { supabase } from '../storage.js';
@@ -50,12 +50,14 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
   function save(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    // A new or changed staff email must be on a label domain; unchanged existing ones keep working.
-    const previousEmail = editing ? ((staff.find(x => x.id === editing) || {}).email || '') : null;
+    // A new entry, or a changed email or role, must use the domain for that role
+    // (label rep: @empi.re; everyone else: a label address). Unchanged ones keep working.
+    const prev = editing ? (staff.find(x => x.id === editing) || {}) : null;
     const email = (form.email || '').trim();
     if (!email) { setEmailError('Add their work email. It’s how they sign in.'); return; }
-    if (email.toLowerCase() !== String(previousEmail || '').toLowerCase() && form.role !== 'Label Rep' && !isStaffEmailAllowed(email)) {
-      setEmailError('Use a label email ending in ' + STAFF_EMAIL_DOMAINS.map(d => '@' + d).join(' or ') + '.'); return;
+    const changed = !prev || email.toLowerCase() !== String(prev.email || '').toLowerCase() || form.role !== prev.role;
+    if (changed && !isStaffEmailAllowed(email, form.role)) {
+      setEmailError((form.role === 'Label Rep' ? 'A label rep signs in with their EMPIRE email, ending in ' : 'Use a label email ending in ') + emailDomainsFor(form.role).map(d => '@' + d).join(' or ') + '.'); return;
     }
     setEmailError('');
     if (editing) {
@@ -184,7 +186,7 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
             </Field>
             {form.role === 'Label Rep' && <Field label="Company"><Input value={form.company || ''} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="e.g. the distributor they work for" /></Field>}
             <Field label="Work email">
-              <Input type="email" required value={form.email} onChange={e => { setForm({ ...form, email: e.target.value }); setEmailError(''); }} placeholder={'name@' + STAFF_EMAIL_DOMAINS[0]} aria-invalid={!!emailError} />
+              <Input type="email" required value={form.email} onChange={e => { setForm({ ...form, email: e.target.value }); setEmailError(''); }} placeholder={'name@' + emailDomainsFor(form.role)[0]} aria-invalid={!!emailError} />
               {emailError && <span className="text-xs" role="alert" style={{ color: C.red }}>{emailError}</span>}
             </Field>
             <Field label="Phone"><Input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Optional" /></Field>
