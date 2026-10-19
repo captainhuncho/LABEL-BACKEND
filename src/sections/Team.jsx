@@ -177,6 +177,8 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
             <Field label="Name"><Input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Dana Whitfield" /></Field>
             <Field label="Role">
               <Select value={form.role} onChange={e => changeRole(e.target.value)}>
+                {/* A role no longer offered (e.g. 'Other') still shows, so the box never displays the wrong one. */}
+                {form.role && !STAFF_ROLES.includes(form.role) && <option value={form.role} disabled>{form.role} (no longer used)</option>}
                 {STAFF_ROLES.filter(r => !proposesOnly || editingAdmin || !isTopRole(r)).map(r => <option key={r} value={r}>{r}</option>)}
               </Select>
             </Field>

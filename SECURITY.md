@@ -72,8 +72,33 @@ Please don't open a public issue or share details elsewhere until it's fixed.
     contract type, license years, effective date, reporting period, payout
     threshold, no-extension) change only through an Admin, i.e. an approved
     Deal change. A new artist can be added with starting terms.
-  The notify function, cron jobs and migrations are not affected; a
-  security-definer RPC called by a signed-in user is.
+  - Every other section (`app_data_section_rules` trigger, through
+    `private.check_section_write`): catalog needs Catalog, Roster or Artist
+    earnings plus Can edit; release submissions need Catalog + Can edit;
+    artist and profile requests need Roster + Can edit; notices need
+    Noticeboard; streams need Can edit; `staff` and `accessRequests` are Admin
+    and Legal only; `dataVersion` is Admin only; the activity log can only gain
+    entries. Invoices: only an Admin deletes one; adding needs Budgets &
+    expenses + Can edit; a status change needs the reviewer at its current
+    stage (the artist's PM at PM Approval, otherwise the people assigned in
+    the invoice workflow), the artist's PM returning it, or "Send to partner"
+    (Finance, Legal, the PM) to DP Queue; amount, payee or artist changes need
+    the PM before Pay Approved or the current reviewer. Admin may do all of it.
+    Unknown section names are refused for everyone.
+  This trigger checks direct API writes only (`current_user = 'authenticated'`):
+  artist and rep RPCs, the notify function, cron jobs and migrations are not
+  affected. The older `app_data_write_rules` trigger also applies to a
+  security-definer RPC called by a signed-in user.
+  Role-by-section checks: `supabase/tests/section_rules.sql` (runs in a
+  transaction and rolls back).
+- Royalty statement files (`statements` storage bucket) follow Artist earnings,
+  like `statementFiles`.
+- Multi-section saves (`save_app_data_pair`): an EMPIRE import, a publish to
+  artists and a stream-count re-read save both sections in one transaction,
+  each checked against the version the browser loaded; the caller's rules apply.
+- Restoring a backup (`restore_backup`, Admin only) checks the file, copies
+  every current section to `private.app_data_archive` as `pre-restore-<time>`
+  first, writes in one transaction and doesn't re-send emails.
 - **Artists** never read `app_data` directly. `artist_portal()` returns only
   their own catalog, revenue, payouts, expenses and requests, with each month's
   Inbound Banking Charge pre-split to their share, so label-wide totals never
@@ -118,8 +143,12 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - Supabase Edge Function `notify` (`supabase/functions/notify/index.ts`) sends
   and receives email through Resend. It runs with the service role, so it can
   read and write `app_data`.
-- A trigger on `app_data` (`private.app_data_events`) posts small event
-  descriptors to it via `pg_net`; a `pg_cron` job (`send-due-statements`) calls
+- A trigger on `app_data` (`private.app_data_events`) records each batch of
+  events in `private.email_deliveries` (same transaction as the change) and
+  posts it to the function via `pg_net`. The function claims the batch, marks
+  each event done, and adds the bell notice only after the email went; a failed
+  email is retried by cron `email-retry` every 10 minutes, 5 attempts in all.
+  Batches that give up show on the Email notifications page; a `pg_cron` job (`send-due-statements`) calls
   it every 10 minutes for scheduled statements. Both send a shared secret kept
   in `private.config` (schema not exposed to the API); the function checks it
   with `notify_secret_ok()`, callable only by the service role.
@@ -178,13 +207,15 @@ These are real and accepted for now. Don't treat them as protected.
    screens need them. Budgets keep a snapshot of the artist's deal at creation
    (`overheads.dealTerm`), readable by anyone with Budgets & expenses. Rows inside a
    section are not scoped per artist (a Product Manager's view of their own
-   artists is enforced in the app). Approval steps inside a section (who may
-   approve a revenue row, a budget overspend or an invoice stage) are app rules.
+   artists is enforced in the app). Invoice stages are enforced in the database;
+   other approval steps (a revenue row, a budget overspend) are still app rules.
 2. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
    Supabase, not this project) as callable by anyone. Review it in the Supabase
    dashboard.
-3. **Backups are manual.** Use Backup & Restore in the app, or Supabase's
-   backups on a paid plan. The free plan also pauses after a week without use.
+3. **Backups:** a daily automatic copy (cron `auto-backup`, kept 30 days) and a
+   copy before every restore (kept until removed), both in
+   `private.app_data_archive`; Admins download them on Backup & Restore. The
+   free plan pauses after a week without use.
 4. **Real data is in the repository** (`src/seed.js`, `data/`). Production
    builds leave it out of the public JavaScript (`OMIT_REAL_DATA`), but anyone
    with repo access can read it. Keep the repository private.

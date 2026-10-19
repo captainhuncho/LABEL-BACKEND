@@ -54,9 +54,12 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
     const direct = isAdmin || change.kind === 'licenseNotice';
     const stamp = new Date().toISOString();
     const entry = { id: uid(), artistId: a.id, artist: a.name, ...change, requestedBy: session.name, requestedAt: stamp, ...(direct ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }), ...(change.kind === 'licenseNotice' ? { sentToArtistAt: stamp, sentToArtistBy: session.name } : {}) };
-    updateChanges([entry, ...changes]);
-    logActivity(direct ? 'recorded and applied a license change' : 'recorded a license change', a.name + ': ' + describeLicenseChange(entry, catalog), a.id);
-    if (direct) applyKind(entry);
+    // The change applies only once its record is saved.
+    Promise.resolve(updateChanges([entry, ...changes])).then(ok => {
+      if (ok === false) return;
+      logActivity(direct ? 'recorded and applied a license change' : 'recorded a license change', a.name + ': ' + describeLicenseChange(entry, catalog), a.id);
+      if (direct) applyKind(entry);
+    });
     done();
   }
   function startRecord() {
@@ -92,37 +95,33 @@ export default function DealChanges({ roster, updateRoster, changes = [], update
       requestedBy: session.name, requestedAt: stamp,
       ...(isAdmin ? { status: 'Approved', approvedBy: session.name, approvedAt: stamp } : { status: 'Pending' }),
     };
-    updateChanges([entry, ...changes]);
-    logActivity(isAdmin ? 'recorded and approved a deal change' : 'recorded a deal change', a.name + ': ' + pctText(entry.artistPct) + ' from ' + entry.from + ' · ' + dealLabel(entry), a.id);
-    if (isAdmin) apply(entry);
+    Promise.resolve(updateChanges([entry, ...changes])).then(ok => {
+      if (ok === false) return;
+      logActivity(isAdmin ? 'recorded and approved a deal change' : 'recorded a deal change', a.name + ': ' + pctText(entry.artistPct) + ' from ' + entry.from + ' · ' + dealLabel(entry), a.id);
+      if (isAdmin) apply(entry);
+    });
     setForm(null); setError('');
   }
   function approve(entry) {
     if (entry.kind) {
-      applyKind(entry);
-      logActivity('approved a license change', entry.artist + ': ' + describeLicenseChange(entry, catalog), entry.artistId);
-      updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }));
+      Promise.resolve(updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }))).then(ok => { if (ok === false) return; applyKind(entry); logActivity('approved a license change', entry.artist + ': ' + describeLicenseChange(entry, catalog), entry.artistId); });
       setError(''); return;
     }
     const a = roster.find(x => x.id === entry.artistId);
     const p = problem(a, entry.from);
     if (p) { setError(p + ' Decline this change and record it again with a later month.'); return; }
-    apply(entry);
-    logActivity('approved a deal change', entry.artist + ': ' + pctText(entry.artistPct) + ' from ' + entry.from, entry.artistId);
-    updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }));
+    Promise.resolve(updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Approved', approvedBy: session.name, approvedAt: new Date().toISOString() }))).then(ok => { if (ok === false) return; apply(entry); logActivity('approved a deal change', entry.artist + ': ' + pctText(entry.artistPct) + ' from ' + entry.from, entry.artistId); });
     setError('');
   }
   // Nothing reaches the artist automatically: Admin or Legal sends it to their dashboard.
   const artistFacing = c => c.status === 'Approved' && (!c.kind || c.kind === 'rightsReturned');
   function sendToArtist(entry) {
-    updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, sentToArtistAt: new Date().toISOString(), sentToArtistBy: session.name }));
-    logActivity('sent a deal update to the artist’s dashboard', entry.artist + ': ' + (entry.kind ? describeLicenseChange(entry, catalog) : 'deal from ' + entry.from), entry.artistId);
+    Promise.resolve(updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, sentToArtistAt: new Date().toISOString(), sentToArtistBy: session.name }))).then(ok => ok !== false && logActivity('sent a deal update to the artist’s dashboard', entry.artist + ': ' + (entry.kind ? describeLicenseChange(entry, catalog) : 'deal from ' + entry.from), entry.artistId));
   }
   function decline(entry) {
     const note = (declineNote[entry.id] || '').trim();
     if (!note) { setError('Say why the change is declined.'); return; }
-    logActivity('declined a deal change', entry.artist + ': ' + note, entry.artistId);
-    updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Declined', approvedBy: session.name, approvedAt: new Date().toISOString(), declineNote: note }));
+    Promise.resolve(updateChanges(changes.map(c => c.id !== entry.id ? c : { ...c, status: 'Declined', approvedBy: session.name, approvedAt: new Date().toISOString(), declineNote: note }))).then(ok => { if (ok !== false) logActivity('declined a deal change', entry.artist + ': ' + note, entry.artistId); });
     setError('');
   }
 

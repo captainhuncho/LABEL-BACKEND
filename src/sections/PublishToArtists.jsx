@@ -2,7 +2,7 @@ import { ReportingLagNote } from '../ui.jsx';
 // Publish revenue to artists. The team's books stay internal; artists only see
 // the snapshot published here. Finance picks what to publish and sends it to an
 // Admin to approve; only an Admin publishes directly.
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, Eye, Send, ShieldCheck } from 'lucide-react';
 import { applyPublish, pctAt, publishChecks, publishDiff, revenueRowSplit, slug } from '../finance.js';
@@ -15,7 +15,7 @@ import { Badge, Btn, EmptyState, Field, Input, SectionHeader, Select, Td, TextAr
 const STATE_TONE = { New: 'amber', Changed: 'amber', Removed: 'red', 'Awaiting approval': 'default' };
 const STATE_LABEL = { New: 'Not published yet', Changed: 'Changed since publish', Removed: 'Removed from the books' };
 
-export default function PublishToArtists({ renderPreview = null, roster, approvedRevenue, masterGross, published, updatePublished, log, updateLog, labelSettings = {}, updateLabelSettings, session = {}, canEdit = true }) {
+export default function PublishToArtists({ renderPreview = null, roster, approvedRevenue, masterGross, published, updatePublished, log, updateLog, commitArtistPublish, commitArtistPublishLog, labelSettings = {}, updateLabelSettings, session = {}, canEdit = true }) {
   const isAdmin = session.role === 'Admin';
   // Only an Admin publishes directly; Finance always sends it to an Admin to approve.
   const direct = isAdmin;
@@ -28,6 +28,8 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
   const [done, setDone] = useState('');
   const [publishAt, setPublishAt] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
 
   const pending = log.filter(e => e.status === 'Awaiting approval');
   const scheduled = log.filter(e => e.status === 'Scheduled').sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
@@ -55,9 +57,21 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
   const snapshotRows = keys => applyPublish([], keys, approvedRevenue, masterGross, roster);
   function release(keys, items, extra) {
     const when = extra.scheduledFor;
-    if (when && Date.parse(when) > Date.now()) return { ...extra, status: 'Scheduled', rows: snapshotRows(keys) };
-    updatePublished(applyPublish(published, keys, approvedRevenue, masterGross, roster));
-    return { ...extra, status: 'Published', scheduledFor: '' };
+    if (when && Date.parse(when) > Date.now()) return { entry: { ...extra, status: 'Scheduled', rows: snapshotRows(keys) }, nextPublished: null };
+    return { entry: { ...extra, status: 'Published', scheduledFor: '' }, nextPublished: applyPublish(published, keys, approvedRevenue, masterGross, roster) };
+  }
+  async function save(nextLog, nextPublished = null) {
+    if (saving.current) return false;
+    saving.current = true;
+    setBusy(true); setError(''); setDone('');
+    try {
+      if (nextPublished) await commitArtistPublish(nextPublished, nextLog);
+      else await commitArtistPublishLog(nextLog);
+      return true;
+    } catch (e) {
+      setError('Could not confirm the save. The latest data was reloaded; check what artists can see before retrying. ' + (e.message || e));
+      return false;
+    } finally { saving.current = false; setBusy(false); }
   }
   function scheduleTime() {
     if (!publishAt) return '';
@@ -65,28 +79,30 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
     if (isNaN(t) || t <= Date.now()) { setError('Pick a publish time in the future, or clear it to publish now.'); return null; }
     return new Date(t).toISOString();
   }
-  function publishNow(keys, scope) {
+  async function publishNow(keys, scope) {
     const items = itemsFor(keys).filter(i => !requestedKeys.has(i.key));
     if (!items.length) return;
     const when = scheduleTime(); if (when === null) return;
-    const entry = release(items.map(i => i.key), items, { id: uid(), scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), approvedBy: session.name, approvedAt: stamp(), scheduledFor: when });
-    updateLog([entry, ...log]);
+    const { entry, nextPublished } = release(items.map(i => i.key), items, { id: uid(), scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), approvedBy: session.name, approvedAt: stamp(), scheduledFor: when });
+    if (!await save([entry, ...log], nextPublished)) return;
     logActivity(entry.status === 'Scheduled' ? 'scheduled publish to artists' : 'published to artists', items.map(i => i.artist + ' ' + i.month).join(', ') + (when ? ' at ' + when : ''));
     finish(items, entry.status === 'Scheduled' ? 'Scheduled for ' + fmtWhen(when) : 'Published');
   }
-  function requestApproval(keys, scope) {
+  async function requestApproval(keys, scope) {
     const items = itemsFor(keys).filter(i => !requestedKeys.has(i.key));
     if (!items.length) return;
     const when = scheduleTime(); if (when === null) return;
-    updateLog([{ id: uid(), status: 'Awaiting approval', scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), scheduledFor: when }, ...log]);
+    if (!await save([{ id: uid(), status: 'Awaiting approval', scope, items, note: note.trim(), requestedBy: session.name, requestedAt: stamp(), scheduledFor: when }, ...log])) return;
     logActivity('requested publish approval', items.map(i => i.artist + ' ' + i.month).join(', '));
     finish(items, 'Sent to an Admin for approval' + (when ? ', to publish ' + fmtWhen(when) : ''));
   }
-  function cancelScheduled(entry) { updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Cancelled', cancelledBy: session.name, cancelledAt: stamp() })); }
-  function publishScheduledNow(entry) {
+  async function cancelScheduled(entry) {
+    await save(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Cancelled', cancelledBy: session.name, cancelledAt: stamp() }));
+  }
+  async function publishScheduledNow(entry) {
     const keys = new Set((entry.items || []).map(i => i.key));
-    updatePublished([...published.filter(r => !keys.has(r.artistSlug + '|' + r.month)), ...(entry.rows || []).map(r => ({ ...r, publishedAt: stamp() }))]);
-    updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Published', publishedEarlyBy: session.name, approvedAt: stamp(), rows: undefined }));
+    await save(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Published', publishedEarlyBy: session.name, approvedAt: stamp(), rows: undefined }),
+      [...published.filter(r => !keys.has(r.artistSlug + '|' + r.month)), ...(entry.rows || []).map(r => ({ ...r, publishedAt: stamp() }))]);
   }
   function finish(items, what) {
     const artists = new Set(items.map(i => i.artistSlug)).size;
@@ -95,20 +111,20 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
   }
   // Every publish, request and approval is re-checked; any error stops it.
   const blocked = keys => { if (isStale()) { setError('A new version of IMSS Records is out. Reload the page before publishing.'); return true; } const c = publishChecks(keys, approvedRevenue, masterGross, roster, published); if (c.errors.length) { setError('Not published. Fix these first: ' + c.errors.join('; ') + '.'); return true; } return false; };
-  function go(keys, scope) { if (blocked(keys)) return; (direct ? publishNow : requestApproval)(keys, scope); }
+  function go(keys, scope) { if (busy || blocked(keys)) return; (direct ? publishNow : requestApproval)(keys, scope); }
 
-  function approve(entry) {
+  async function approve(entry) {
     const keys = (entry.items || []).map(i => i.key);
-    if (blocked(keys)) return;
-    const next = release(keys, entry.items, { ...entry, approvedBy: session.name, approvedAt: stamp() });
-    updateLog(log.map(e => e.id !== entry.id ? e : next));
+    if (busy || blocked(keys)) return;
+    const { entry: next, nextPublished } = release(keys, entry.items, { ...entry, approvedBy: session.name, approvedAt: stamp() });
+    if (!await save(log.map(e => e.id !== entry.id ? e : next), nextPublished)) return;
     logActivity('approved publish to artists', (entry.items || []).map(i => i.artist + ' ' + i.month).join(', '));
   }
-  function decline(entry) {
+  async function decline(entry) {
     const text = (declineNote[entry.id] || '').trim();
     if (!text) { setDeclineNote(d => ({ ...d, ['err_' + entry.id]: 'Say why, so Finance knows what to fix.' })); return; }
     logActivity('declined publish request', text);
-    updateLog(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Declined', approvedBy: session.name, approvedAt: stamp(), declineNote: text }));
+    await save(log.map(e => e.id !== entry.id ? e : { ...e, status: 'Declined', approvedBy: session.name, approvedAt: stamp(), declineNote: text }));
   }
 
   const liveGrossOf = key => (diff.find(d => d.key === key) || {}).liveGross;
@@ -119,6 +135,7 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
   return (
     <div>
       <SectionHeader title="Publish to artists" artistNote="exactly what was last published here: revenue, breakdowns, their Inbound Banking Charge share and statement files. Nothing else changes their earnings view." description="Revenue you import or edit stays inside the label until it’s published here. Artists see exactly what was published, and get an email when it is." />
+      {error && <div className="text-sm mb-3" role="alert" style={{ color: C.red }}>{error}</div>}
       <ReportingLagNote className="mb-4" />
 
       {pending.length > 0 && (
@@ -138,11 +155,11 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
                 {drift.length > 0 && <div className="text-xs mt-1" style={{ color: C.amber }}>{drift.length} of these changed after it was requested. Approving publishes the books as they are now.</div>}
                 {isAdmin && canEdit && (
                   <div className="flex gap-2 flex-wrap items-end mt-3">
-                    <Btn variant="primary" onClick={() => approve(e)}><CheckCircle2 size={14} /> Approve and publish</Btn>
+                    <Btn variant="primary" disabled={busy} onClick={() => approve(e)}><CheckCircle2 size={14} /> Approve and publish</Btn>
                     <div style={{ minWidth: 240, flex: 1 }}>
                       <TextArea rows={1} value={declineNote[e.id] || ''} onChange={ev => setDeclineNote(d => ({ ...d, [e.id]: ev.target.value, ['err_' + e.id]: '' }))} placeholder="Reason, if declining" aria-label="Reason for declining" />
                     </div>
-                    <Btn variant="danger" onClick={() => decline(e)}>Decline</Btn>
+                    <Btn variant="danger" disabled={busy} onClick={() => decline(e)}>Decline</Btn>
                   </div>
                 )}
                 {declineNote['err_' + e.id] && <div className="text-xs mt-1" role="alert" style={{ color: C.red }}>{declineNote['err_' + e.id]}</div>}
@@ -161,8 +178,8 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
                 <div className="text-xs" style={{ color: C.textDim }}>Publishes the figures as they were when scheduled. Changes since then need another publish.</div></div>
               {canEdit && (isAdmin || e.requestedBy === session.name) && (
                 <div className="flex gap-2">
-                  <Btn variant="ghost" onClick={() => publishScheduledNow(e)}>Publish now</Btn>
-                  <Btn variant="danger" onClick={() => cancelScheduled(e)}>Cancel</Btn>
+                  <Btn variant="ghost" disabled={busy} onClick={() => publishScheduledNow(e)}>Publish now</Btn>
+                  <Btn variant="danger" disabled={busy} onClick={() => cancelScheduled(e)}>Cancel</Btn>
                 </div>
               )}
             </div>
@@ -231,10 +248,9 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
                 {checks.errors.map((e, i) => <div key={'e' + i} className="mt-1" style={{ color: C.red }}>Blocks publishing: {e}</div>)}
                 {checks.warnings.map((w, i) => <div key={'w' + i} className="mt-1" style={{ color: C.amber }}>Check: {w}</div>)}
               </div>
-              {error && <div className="text-sm mt-2" role="alert" style={{ color: C.red }}>{error}</div>}
               <div className="flex gap-2 flex-wrap mt-3">
-                <Btn variant="primary" onClick={() => go(selectedKeys, 'selected')} disabled={!selectedKeys.length}><Send size={14} /> {direct ? (publishAt ? 'Schedule selected' : 'Publish selected') : 'Send selected for approval'}{selectedKeys.length ? ' (' + selectedKeys.length + ')' : ''}</Btn>
-                <Btn variant="ghost" onClick={() => go(diff.map(d => d.key), 'all')}><Send size={14} /> {direct ? (publishAt ? 'Schedule all' : 'Publish all') : 'Send all for approval'} ({diff.length})</Btn>
+                <Btn variant="primary" onClick={() => go(selectedKeys, 'selected')} disabled={busy || !selectedKeys.length}><Send size={14} /> {direct ? (publishAt ? 'Schedule selected' : 'Publish selected') : 'Send selected for approval'}{selectedKeys.length ? ' (' + selectedKeys.length + ')' : ''}</Btn>
+                <Btn variant="ghost" disabled={busy} onClick={() => go(diff.map(d => d.key), 'all')}><Send size={14} /> {direct ? (publishAt ? 'Schedule all' : 'Publish all') : 'Send all for approval'} ({diff.length})</Btn>
               </div>
               <div className="text-xs mt-2" style={{ color: C.textDim }}>{direct ? 'Artists see it straight away and get an email.' : 'An Admin approves it before artists see it. Artists get an email once it’s published.'}</div>
             </div>

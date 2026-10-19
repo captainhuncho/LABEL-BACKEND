@@ -40,7 +40,7 @@ export function artistStatusTone(status) {
   if (status === 'Former') return 'red';
   return 'default';
 }
-export const STAFF_ROLES = ['Admin', 'Legal', 'Finance', 'Product Manager', 'A&R', 'Label Manager', 'Marketing', 'Label Rep', 'Other'];
+export const STAFF_ROLES = ['Admin', 'Legal', 'Finance', 'Product Manager', 'A&R', 'Label Manager', 'Marketing', 'Label Rep'];
 // Admin and Legal both see everything. The difference is what happens when they
 // change someone's access: an Admin's change applies at once, Legal's is queued
 // for an Admin to approve.

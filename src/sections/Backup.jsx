@@ -39,7 +39,7 @@ export function BackupSection({ allData, updaters, onClearAll = null, onReseed =
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.rpc('backups_list').then(({ data }) => setAutos((data || []).filter(b => String(b.archive_id).startsWith('auto-'))));
+    supabase.rpc('backups_list').then(({ data }) => setAutos((data || []).filter(b => /^(auto|pre-restore)-/.test(String(b.archive_id)))));
     supabase.rpc('client_errors_list').then(({ data }) => setAppErrors(data || []));
   }, []);
 
@@ -99,12 +99,13 @@ export function BackupSection({ allData, updaters, onClearAll = null, onReseed =
     setBusy(true); setError('');
     try {
       if (supabase) {
-        // Keep a copy of what's here now, then write every section from the file and reload.
+        // The database checks the file, keeps a copy of what's here now (listed
+        // under automatic backups as pre-restore-…), writes every section in one
+        // transaction and logs it. A copy also downloads here, as before.
         const before = await liveSections();
         saveFile('imss-records-before-restore-' + todayStr() + '.json', { exportedAt: new Date().toISOString(), source: 'IMSS Records', ...before });
-        const { error: err } = await supabase.from('app_data').upsert(keys.map(key => ({ key, value: data[key], updated_at: new Date().toISOString() })));
+        const { error: err } = await supabase.rpc('restore_backup', { sections: data });
         if (err) throw err;
-        logActivity('restored a backup', (data.backupOf || data.exportedAt || 'file') + ' · ' + keys.length + ' sections');
         window.location.reload();
         return;
       }

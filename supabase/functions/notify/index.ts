@@ -9,6 +9,7 @@
 // RESEND_WEBHOOK_SECRET (whsec_…), RECEIVE_DOMAIN (e.g. reply.imssrecords.com).
 // Optional: APP_URL, MAIL_FROM.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const RESEND_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
@@ -31,9 +32,21 @@ async function section(key: string): Promise<Item[]> {
   const { data } = await db.from('app_data').select('value').eq('key', key).maybeSingle();
   return Array.isArray(data?.value) ? data!.value : [];
 }
-async function saveSection(key: string, value: Item[]) {
-  const { error } = await db.from('app_data').update({ value, updated_at: new Date().toISOString() }).eq('key', key);
-  if (error) throw error;
+// Change a section without overwriting someone's save made at the same moment:
+// write only over the version just read, and re-read and retry if it moved on.
+// change() returns null when there is nothing to save.
+async function changeSection(key: string, change: (items: Item[]) => Item[] | null): Promise<boolean> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error: readError } = await db.from('app_data').select('value, updated_at').eq('key', key).maybeSingle();
+    if (readError) throw readError;
+    if (!data) throw new Error('section missing: ' + key);
+    const next = change(Array.isArray(data.value) ? data.value : []);
+    if (!next) return false;
+    const { data: saved, error } = await db.from('app_data').update({ value: next }).eq('key', key).eq('updated_at', data.updated_at).select('key');
+    if (error) throw error;
+    if (saved && saved.length) return true;
+  }
+  throw new Error('section kept changing: ' + key);
 }
 const slug = (s: string) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const lower = (s: string) => String(s || '').trim().toLowerCase();
@@ -130,16 +143,20 @@ function toText(html: string) {
 const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'notice', 'security', 'release'];
 // Admin's On/Off switches (labelSettings.emailSwitches; same keys as
 // EMAIL_SWITCHES in src/constants.js). A switched-off email isn't sent; the
-// bell notification still is. SWITCH names the email being handled right now.
-let SWITCH = '';
-let switchCache: Record<string, boolean> | null = null;
+// bell notification still is. Each request keeps its own state (several can run
+// at once in one worker): which email it is handling, and the switches it read.
+type RequestState = { switchKey: string; switches: Record<string, boolean> | null };
+const requestState = new AsyncLocalStorage<RequestState>();
+const state = () => requestState.getStore() || { switchKey: '', switches: null };
+const setSwitch = (key: string) => { state().switchKey = key; };
 async function switchedOff(key: string) {
   if (!key) return false;
-  if (!switchCache) {
+  const st = state();
+  if (!st.switches) {
     const { data } = await db.from('app_data').select('value').eq('key', 'labelSettings').maybeSingle();
-    switchCache = (data?.value && data.value.emailSwitches) || {};
+    st.switches = (data?.value && data.value.emailSwitches) || {};
   }
-  return switchCache![key] === false;
+  return st.switches![key] === false;
 }
 async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true, attachments?: { filename: string; content: string }[]) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
@@ -152,14 +169,13 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
     }
   }
   if (!recipients.length) return { skipped: 'no recipients' };
-  if (await switchedOff(SWITCH)) {
+  if (await switchedOff(state().switchKey)) {
     const inAppOff = bell ? await notifyInApp(recipients, subject) : null;
-    return { skipped: 'email switched off: ' + SWITCH, inApp: inAppOff };
+    return { skipped: 'email switched off: ' + state().switchKey, inApp: inAppOff };
   }
   if (artistTopic) html = html.split(APP_URL).join(ARTIST_URL);
   html = maskEmails(html);
-  const inApp = bell ? await notifyInApp(recipients, subject) : null;
-  if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp };
+  if (!RESEND_KEY) return { skipped: 'no RESEND_API_KEY', inApp: bell ? await notifyInApp(recipients, subject) : null };
   // Only emails with a reply address (submissions, requests, invoices) say replies work.
   const replyable = Boolean(replyKey && RECEIVE_DOMAIN);
   const note = replyable ? '<p class="t2" style="margin:20px 0 0;font-size:14px;color:#6e6e73">You can reply to this email; your reply is added to the conversation in the app.</p>' : '';
@@ -171,7 +187,19 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
-  return { status: res.status, body: await res.text() };
+  const resBody = await res.text();
+  // A failed send throws, so the delivery is retried; the bell notice is added
+  // only once the email went, so a retry doesn't add it twice.
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${resBody.slice(0, 300)}`);
+  const inApp = bell ? await notifyInApp(recipients, subject) : null;
+  return { status: res.status, body: resBody, inApp };
+}
+
+// In loops that email many people one by one, one failed address must not stop
+// the rest or, on retry, re-send to everyone. Record it in the log and go on.
+async function sendOne(...args: Parameters<typeof send>) {
+  try { return await send(...args); }
+  catch (e) { await audit('could not send an email', `"${args[1]}" to ${args[0].join(', ')}: ${String(e).slice(0, 300)}`); return { error: String(e) }; }
 }
 
 const KEY_CODE: Record<string, string> = { releaseSubmissions: 's', artistRequests: 'q', invoices: 'i' };
@@ -212,10 +240,10 @@ async function handleEvent(ev: Event) {
   const item = items.find(x => x.id === ev.id);
   if (!item) return { skipped: 'not found' };
   const roster = await section('roster');
-  SWITCH = ev.type === 'earnings' ? 'earnings' : ev.type === 'notice' ? 'notice' : ev.type === 'deal' ? 'dealLegal'
+  setSwitch(ev.type === 'earnings' ? 'earnings' : ev.type === 'notice' ? 'notice' : ev.type === 'deal' ? 'dealLegal'
     : ev.type === 'repRelease' || ev.type === 'repInvoice' ? 'rep' : ev.type === 'statement' ? 'statement'
     : ev.key === 'invoices' ? (ev.type === 'stage' && ['Rejected', 'Needs changes', 'Paid'].includes(item.status) ? 'invoiceArtist' : 'invoiceTeam')
-    : 'submissions';
+    : 'submissions');
 
   // Earnings published: one email per artist, naming their months.
   if (ev.type === 'earnings') {
@@ -228,7 +256,7 @@ async function handleEvent(ev: Event) {
       if (!email) { results.push({ skipped: 'no email for ' + artistId }); continue; }
       const names = [...new Set(months)].sort().map(m => new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
       const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
-      results.push(await send([email], `Your IMSS Records earnings for ${list} are ready`,
+      results.push(await sendOne([email], `Your IMSS Records earnings for ${list} are ready`,
         page('New earnings in your portal', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records portal, with the breakdown by song, platform and country.`, LAG_NOTE],
           { label: 'See your earnings', url: `${APP_URL}/` }), undefined, 'earnings'));
     }
@@ -246,13 +274,13 @@ async function handleEvent(ev: Event) {
     for (const a of artists) {
       const email = lower(a.email);
       if (!email.includes('@')) continue;
-      results.push(await send([email], `Notice from IMSS Records: ${item.title}`,
+      results.push(await sendOne([email], `Notice from IMSS Records: ${item.title}`,
         page(item.title || 'Notice from IMSS Records', [`Hi ${esc(a.name)},`, esc(item.message || '').replace(/\n/g, '<br>')], { label: 'Open your portal', url: `${APP_URL}/` }), undefined, 'notice'));
     }
     for (const m of team) {
       const email = lower(m.email);
       if (!email.includes('@')) continue;
-      results.push(await send([email], `Notice: ${item.title}`,
+      results.push(await sendOne([email], `Notice: ${item.title}`,
         page(item.title || 'Notice', [esc(item.message || '').replace(/\n/g, '<br>')], { label: 'Open the dashboard', url: `${APP_URL}/` })));
     }
     await audit('sent a notice', `"${item.title}" to ${artists.length + team.length} ${artists.length + team.length === 1 ? 'person' : 'people'}`);
@@ -364,7 +392,7 @@ async function handleEvent(ev: Event) {
     const labelText = last && last.from === 'label' ? last.text : (ev.key === 'artistRequests' && item.response && (!last || last.from !== 'artist') ? item.response : null);
     if (labelText && ev.key !== 'invoices') return inAppOnly([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`);
     if (labelText) {
-      SWITCH = 'invoiceArtist';
+      setSwitch('invoiceArtist');
       return send([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`,
         page('The label replied', [`Hi ${esc(artistName)}, here’s a message about ${esc(what)}:`],
           { label: 'Open your portal', url: `${APP_URL}/` }, labelText), replyKey, 'invoice');
@@ -382,29 +410,42 @@ async function handleEvent(ev: Event) {
 
 // Scheduled statements whose time has come: stamp sentAt; the trigger then emails.
 async function sendDueStatements() {
-  const payouts = await section('payouts');
   const now = Date.now();
   let changed = 0;
-  const next = payouts.map(p => {
-    if (!p.sentAt && p.scheduledFor && Date.parse(p.scheduledFor) <= now) { changed++; return { ...p, sentAt: new Date().toISOString() }; }
-    return p;
+  await changeSection('payouts', payouts => {
+    changed = 0;
+    const next = payouts.map(p => {
+      if (!p.sentAt && p.scheduledFor && Date.parse(p.scheduledFor) <= now) { changed++; return { ...p, sentAt: new Date().toISOString() }; }
+      return p;
+    });
+    return changed ? next : null;
   });
-  if (changed) { await saveSection('payouts', next); await audit('sent statements (scheduled)', changed + ' statement' + (changed === 1 ? '' : 's') + ' reached their send time'); }
+  if (changed) { await audit('sent statements (scheduled)', changed + ' statement' + (changed === 1 ? '' : 's') + ' reached their send time'); }
 
   // Scheduled publishes to artists: swap in the rows saved when it was scheduled.
   // Marking it Published fires the trigger that emails the artists.
-  const log = await section('revenuePublish');
+  const { data: publishSections, error: readError } = await db.from('app_data')
+    .select('key, value, updated_at').in('key', ['publishedRevenue', 'revenuePublish']);
+  if (readError) throw readError;
+  const logSection = publishSections?.find(s => s.key === 'revenuePublish');
+  const revenueSection = publishSections?.find(s => s.key === 'publishedRevenue');
+  if (!logSection || !revenueSection) throw new Error('Publish sections are missing');
+  const log: Item[] = Array.isArray(logSection.value) ? logSection.value : [];
   const due = log.filter(e => e.status === 'Scheduled' && e.scheduledFor && Date.parse(e.scheduledFor) <= now);
   if (due.length) {
     const at = new Date().toISOString();
-    let published = await section('publishedRevenue');
+    let published: Item[] = Array.isArray(revenueSection.value) ? revenueSection.value : [];
     for (const e of due) {
       const keys = new Set((e.items || []).map((i: Item) => i.key));
       published = [...published.filter(r => !keys.has(r.artistSlug + '|' + r.month)), ...(e.rows || []).map((r: Item) => ({ ...r, publishedAt: at }))];
     }
-    await saveSection('publishedRevenue', published);
     const ids = new Set(due.map(e => e.id));
-    await saveSection('revenuePublish', log.map(e => ids.has(e.id) ? { ...e, status: 'Published', approvedAt: e.approvedAt || at, publishedAt: at, rows: undefined } : e));
+    const { error: saveError } = await db.rpc('save_app_data_pair', {
+      first_key: 'publishedRevenue', first_value: published, first_version: revenueSection.updated_at,
+      second_key: 'revenuePublish', second_value: log.map(e => ids.has(e.id) ? { ...e, status: 'Published', approvedAt: e.approvedAt || at, publishedAt: at, rows: undefined } : e),
+      second_version: logSection.updated_at,
+    });
+    if (saveError) throw saveError;
     for (const e of due) await audit('published to artists (scheduled)', (e.items || []).map((i: Item) => i.artist + ' ' + i.month).join(', '));
   }
   return { sent: changed, published: due.length };
@@ -457,12 +498,11 @@ async function handleInbound(data: Item) {
   else if (member) msg = { from: 'label', by: member.name, at: new Date().toISOString(), text, via: 'email' };
   else return { skipped: 'sender is not the artist or a team member' };
 
-  const next = items.map(x => x.id !== id ? x : {
+  await changeSection(key, latest => latest.map(x => x.id !== id ? x : {
     ...x,
     messages: [...(Array.isArray(x.messages) ? x.messages : []), msg],
     ...(key === 'releaseSubmissions' && msg.from === 'artist' && x.status === 'Needs info' ? { status: 'Pending' } : {}),
-  });
-  await saveSection(key, next);
+  }));
   return { added: msg.from };
 }
 
@@ -487,7 +527,7 @@ async function sendReleaseWeek() {
     const checklist = list.length ? (open.length ? `Still open on the release checklist: ${open.slice(0, 6).join(', ')}${open.length > 6 ? '…' : ''}.` : 'Everything on the release checklist is ticked.') : '';
     const when = day(r.releaseDate);
     if (lower(a.email).includes('@')) {
-      results.push(await send([lower(a.email)], `Release week: “${r.title}” is out ${when}`,
+      results.push(await sendOne([lower(a.email)], `Release week: “${r.title}” is out ${when}`,
         page(`“${r.title}” is out this week`, [
           `Hi ${esc(a.name)},`,
           `Your release <b>${esc(r.title)}</b> is out on <b>${esc(when)}</b>. Please check everything is ready: artwork, credits, links and anything you're posting.`,
@@ -496,7 +536,7 @@ async function sendReleaseWeek() {
         ], { label: 'Open your portal', url: `${APP_URL}/releases` }), undefined, 'release'));
     }
     if (pm && lower(pm.email).includes('@')) {
-      results.push(await send([lower(pm.email)], `Release week: “${r.title}” by ${a.name}, ${when}`,
+      results.push(await sendOne([lower(pm.email)], `Release week: “${r.title}” by ${a.name}, ${when}`,
         page(`Release week: ${r.title}`, [`<b>${esc(r.title)}</b> by ${esc(a.name)} is out on <b>${esc(when)}</b>. ${esc(a.name)} has been asked to check everything is ready and keep in touch with you.`, ...(checklist ? [checklist] : [])],
           { label: 'Open the release', url: `${APP_URL}/catalog` })));
     }
@@ -612,8 +652,15 @@ Deno.serve(async req => {
     const { data: ok } = await db.rpc('notify_secret_ok', { candidate: req.headers.get('x-notify-secret') || '' });
     if (!ok) return new Response('forbidden', { status: 403 });
     const body = JSON.parse(raw || '{}');
-    switchCache = null;
-    SWITCH = ({ releaseWeek: 'releaseWeek', welcome: 'welcome', teamWelcome: 'welcome', signinNotice: 'signin', signinAlert: 'signinAlert' } as Record<string, string>)[body.action] || '';
+    return await requestState.run({ switchKey: '', switches: null }, () => handleAction(body));
+  } catch (e) {
+    return new Response(String(e), { status: 500 });
+  }
+});
+
+async function handleAction(body: Item): Promise<Response> {
+  {
+    setSwitch(({ releaseWeek: 'releaseWeek', welcome: 'welcome', teamWelcome: 'welcome', signinNotice: 'signin', signinAlert: 'signinAlert' } as Record<string, string>)[body.action] || '');
     if (body.action === 'due') return Response.json(await sendDueStatements());
     if (body.action === 'signinNotice') return Response.json(await sendSigninNotice(lower(body.email), String(body.device || '')));
     if (body.action === 'signinAlert') {
@@ -627,13 +674,40 @@ Deno.serve(async req => {
     if (body.action === 'repReleaseSheet') return Response.json(await sendReleaseSheet(String(body.repId || ''), Array.isArray(body.ids) ? body.ids.map(String) : []));
     if (body.action === 'teamWelcome') return Response.json(await sendTeamWelcome(String(body.staffId || '')));
     if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));
-    if (body.action === 'events') {
-      const results = [];
-      for (const ev of (body.events || []) as Event[]) results.push(await handleEvent(ev).catch(e => ({ error: String(e) })));
-      return Response.json(results);
-    }
+    if (body.action === 'events') return Response.json(await handleEvents(body));
     return new Response('unknown action', { status: 400 });
-  } catch (e) {
-    return new Response(String(e), { status: 500 });
   }
-});
+}
+
+// A batch of change events from the database. With a delivery id (recorded in
+// private.email_deliveries) each event is done once: the batch is claimed so two
+// posts can't both send it, finished events are marked, and the rest are retried.
+async function handleEvents(body: Item) {
+  const events = (body.events || []) as Event[];
+  if (!body.delivery) {
+    const results = [];
+    for (const ev of events) results.push(await handleEvent(ev).catch(e => ({ error: String(e) })));
+    return results;
+  }
+  const id = Number(body.delivery);
+  const { data: claim, error: claimError } = await db.rpc('delivery_claim', { delivery_id: id });
+  if (claimError) throw claimError;
+  if (!claim) return { skipped: 'delivery already handled or in progress' };
+  const done = new Set<number>((claim.done || []) as number[]);
+  const results: unknown[] = [];
+  const errors: string[] = [];
+  for (let i = 0; i < events.length; i++) {
+    if (done.has(i)) { results.push({ skipped: 'already sent' }); continue; }
+    setSwitch('');
+    try {
+      results.push(await handleEvent(events[i]));
+      await db.rpc('delivery_event_done', { delivery_id: id, idx: i });
+    } catch (e) {
+      errors.push(`event ${i}: ${String(e)}`);
+      results.push({ error: String(e) });
+    }
+  }
+  const { data: status } = await db.rpc('delivery_finish', { delivery_id: id, err: errors.join('; ').slice(0, 1000) || null });
+  if (status === 'failed') await audit('gave up sending an email', errors.join('; ').slice(0, 300));
+  return { delivery: id, status, results };
+}

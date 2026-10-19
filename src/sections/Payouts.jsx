@@ -43,18 +43,17 @@ export function PayoutsSection({ invoices = [], payouts, update, roster, revenue
     update([...payouts, stmt]);
     setForm({ ...empty, artistId: form.artistId });
   }
-  function markPaid(id) { logActivity('marked statement paid', (payouts.find(p => p.id === id) || {}).artist || ''); update(payouts.map(p => p.id === id ? { ...p, status: 'paid' } : p)); }
+  function markPaid(id) { Promise.resolve(update(payouts.map(p => p.id === id ? { ...p, status: 'paid' } : p))).then(ok => { if (ok !== false) logActivity('marked statement paid', (payouts.find(p => p.id === id) || {}).artist || ''); }); }
   // Sending publishes the statement to the artist's portal and emails them;
   // a scheduled one goes out within 10 minutes of its time.
   const [scheduleId, setScheduleId] = useState(null);
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleError, setScheduleError] = useState('');
-  function sendNow(id) { const p0 = payouts.find(p => p.id === id); logActivity('sent statement to artist', p0 ? p0.artist + ' ' + p0.periodStart + '–' + p0.periodEnd : ''); update(payouts.map(p => p.id === id ? { ...p, sentAt: new Date().toISOString(), scheduledFor: '' } : p)); }
+  function sendNow(id) { const p0 = payouts.find(p => p.id === id); Promise.resolve(update(payouts.map(p => p.id === id ? { ...p, sentAt: new Date().toISOString(), scheduledFor: '' } : p))).then(ok => { if (ok !== false) logActivity('sent statement to artist', p0 ? p0.artist + ' ' + p0.periodStart + '–' + p0.periodEnd : ''); }); }
   function schedule(id) {
     const when = Date.parse(scheduleAt);
     if (!scheduleAt || isNaN(when) || when <= Date.now()) { setScheduleError('Pick a date and time in the future.'); return; }
-    logActivity('scheduled statement', new Date(when).toISOString());
-    update(payouts.map(p => p.id === id ? { ...p, scheduledFor: new Date(when).toISOString() } : p));
+    Promise.resolve(update(payouts.map(p => p.id === id ? { ...p, scheduledFor: new Date(when).toISOString() } : p))).then(ok => { if (ok !== false) logActivity('scheduled statement', new Date(when).toISOString()); });
     setScheduleId(null); setScheduleAt(''); setScheduleError('');
   }
   function cancelSchedule(id) { update(payouts.map(p => p.id === id ? { ...p, scheduledFor: '' } : p)); }

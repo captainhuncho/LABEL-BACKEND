@@ -8,7 +8,7 @@ import { aggregateEmpire, cleanTitle, isEmpireDetailed, parseEmpireDetailed } fr
 import { slug } from '../finance.js';
 import { formatCents, formatNumber, monthLabel, normalizeIsrc, todayStr, uid } from '../constants.js';
 import { isStreamType } from '../streams.js';
-import { saveStatementFile, statementFileUrl } from '../storage.js';
+import { removeStatementFile, removeUnreferenced, saveStatementFile, statementFileUrl } from '../storage.js';
 import { logActivity } from '../audit.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Btn, DropZone, Td, Th } from '../ui.jsx';
@@ -16,7 +16,7 @@ import { Btn, DropZone, Td, Th } from '../ui.jsx';
 const lower = s => String(s || '').trim().toLowerCase();
 const months = obj => Object.keys(obj || {}).sort().map(monthLabel).join(', ');
 
-export default function EmpireImport({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, masterGross = [], updateRevenue, statementFiles = [], updateStatementFiles, sessionName = '', onDone }) {
+export default function EmpireImport({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, masterGross = [], updateRevenue, commitEmpireImport, commitStoreStreams, statementFiles = [], updateStatementFiles, sessionName = '', onDone }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,9 +48,15 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
     }
     const n = Object.keys(found).length;
     if (n) {
-      updateRevenue(revenue.map(r => found[r.id] ? { ...r, storeStreams: found[r.id] } : r));
-      if (updatePublishedRevenue) updatePublishedRevenue(publishedRevenue.map(r => found[r.id] ? { ...r, storeStreams: found[r.id] } : r));
-      logActivity('re-read stream counts from statement files', n + ' song-months updated');
+      // The books and what artists see get the same counts, in one save.
+      try {
+        await commitStoreStreams(revenue.map(r => found[r.id] ? { ...r, storeStreams: found[r.id] } : r),
+          publishedRevenue.map(r => found[r.id] ? { ...r, storeStreams: found[r.id] } : r));
+        logActivity('re-read stream counts from statement files', n + ' song-months updated');
+      } catch (err) {
+        setError('Stream counts were not saved: ' + (err.message || err) + '. The latest data was reloaded.');
+        setBusy(false); return;
+      }
     }
     setReread({ n, problems });
     setBusy(false);
@@ -110,6 +116,8 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
     const matched = preview.groups.filter(g => g.artistRec);
     if (!matched.length) return;
     setBusy(true); setError('');
+    const uploadedPaths = [];
+    let commitStarted = false;
     try {
       // Keep each original file on every artist named in it.
       const records = [];
@@ -119,6 +127,7 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
         for (const [artistId, gs] of Object.entries(byArtist)) {
           const id = uid();
           const stored = await saveStatementFile(artistId, id, f.file);
+          if (stored.path) uploadedPaths.push(stored.path);
           records.push({
             id, artistId, fileIndex: f.index, name: f.name, source: 'EMPIRE', ...stored,
             months: [...new Set(gs.map(g => g.month))].sort(),
@@ -140,13 +149,20 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
         source: 'EMPIRE', statementFileId: fileFor(g),
       }));
       const ids = new Set(rows.map(r => r.id));
-      updateRevenue([...revenue.filter(r => !ids.has(r.id)), ...rows]);
+      commitStarted = true;
+      await commitEmpireImport(
+        [...revenue.filter(r => !ids.has(r.id)), ...rows],
+        [...records.map(({ fileIndex, ...r }) => r), ...statementFiles],
+      );
       logActivity('imported EMPIRE statements', preview.files.filter(f => !f.skipped).map(f => f.name).join(', ') + ' · ' + rows.length + ' song-months');
-      updateStatementFiles([...records.map(({ fileIndex, ...r }) => r), ...statementFiles]);
       setDone({ rows: rows.length, replaced: matched.filter(g => g.existing).length, gross: rows.reduce((t, r) => t + r.earning, 0), artists: new Set(records.map(r => r.artistId)).size, files: preview.files.filter(f => !f.skipped).length, skipped: preview.groups.length - matched.length });
       setPreview(null);
     } catch (err) {
-      setError('Import failed: ' + (err.message || err) + '. Nothing was booked.');
+      // Before the database call, no record can reference these new uploads.
+      // Once the call starts, a lost response makes its outcome uncertain.
+      if (!commitStarted) await Promise.allSettled(uploadedPaths.map(removeStatementFile));
+      else await removeUnreferenced(uploadedPaths);
+      setError('Import was not confirmed: ' + (err.message || err) + (commitStarted ? '. The latest books were reloaded; check them before trying again. Files not used by a saved import were removed.' : '. Uploaded files were cleaned up where possible.'));
     } finally {
       setBusy(false);
     }

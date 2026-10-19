@@ -21,6 +21,42 @@ const versions = new Map();
 function conflict(key) { const e = new Error('changed since loaded: ' + key); e.code = 'conflict'; e.key = key; return e; }
 export function isConflict(e) { return !!e && e.code === 'conflict'; }
 
+// The import and publish flows change two sections as one logical action.
+// Supabase commits both in a database transaction; local preview rolls back if
+// either localStorage write fails.
+export async function setSectionPair(firstKey, firstValue, secondKey, secondValue) {
+  const values = [[firstKey, firstValue], [secondKey, secondValue]];
+  if (!supabase) {
+    const before = values.map(([key]) => [key, window.localStorage.getItem(PREFIX + key), window.localStorage.getItem(PREFIX + 'v:' + key), versions.get(key)]);
+    for (const [key, , version] of before) {
+      const current = version || (window.localStorage.getItem(PREFIX + key) === null ? null : '0');
+      if (current !== null && versions.has(key) && versions.get(key) !== current) throw conflict(key);
+    }
+    try {
+      for (const [key, value] of values) await localStorageStorage.set(key, JSON.stringify(value));
+    } catch (e) {
+      for (const [key, raw, version, loaded] of before) {
+        if (raw === null) window.localStorage.removeItem(PREFIX + key); else window.localStorage.setItem(PREFIX + key, raw);
+        if (version === null) window.localStorage.removeItem(PREFIX + 'v:' + key); else window.localStorage.setItem(PREFIX + 'v:' + key, version);
+        if (loaded === undefined) versions.delete(key); else versions.set(key, loaded);
+      }
+      throw e;
+    }
+    return;
+  }
+  const first = realKey(firstKey), second = realKey(secondKey);
+  if (!versions.has(first) || !versions.has(second)) throw new Error('Reload before saving these sections');
+  const { data, error } = await supabase.rpc('save_app_data_pair', {
+    first_key: first, first_value: firstValue, first_version: versions.get(first),
+    second_key: second, second_value: secondValue, second_version: versions.get(second),
+  });
+  if (error) {
+    if (error.code === '40001') throw conflict(error.message.includes(second) ? secondKey : firstKey);
+    throw error;
+  }
+  versions.set(first, data[first]); versions.set(second, data[second]);
+}
+
 const localStorageStorage = {
   async get(key) {
     const raw = window.localStorage.getItem(PREFIX + key);
@@ -111,6 +147,24 @@ export async function saveStatementFile(artistId, fileId, file) {
   const { error } = await supabase.storage.from('statements').upload(path, file, { contentType: 'text/csv', upsert: true });
   if (error) throw error;
   return { path };
+}
+
+export async function removeStatementFile(path) {
+  if (!supabase || !path) return;
+  const { error } = await supabase.storage.from('statements').remove([path]);
+  if (error) throw error;
+}
+
+// After an import whose save outcome is unknown (the response was lost): read
+// the saved statement files fresh and remove only uploads nothing points to.
+// If that read fails, nothing is removed.
+export async function removeUnreferenced(paths) {
+  if (!supabase || !paths.length) return;
+  const { data, error } = await supabase.from('app_data').select('value').eq('key', 'statementFiles').maybeSingle();
+  if (error || !data || !Array.isArray(data.value)) return;
+  const used = new Set(data.value.map(f => f && f.path).filter(Boolean));
+  const orphans = paths.filter(p => !used.has(p));
+  if (orphans.length) await supabase.storage.from('statements').remove(orphans);
 }
 
 export async function statementFileUrl(record) {

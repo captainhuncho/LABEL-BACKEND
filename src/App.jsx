@@ -11,7 +11,7 @@ import { isStale } from './UpdateBanner.jsx';
 import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
 import { DATA_VERSION, SEED_PUBLISHED, SEED_PUBLISH_LOG, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
-import { supabase, isConflict, subscribeToChanges } from './storage.js';
+import { supabase, isConflict, setSectionPair, subscribeToChanges } from './storage.js';
 import { LegalFooter } from './Legal.jsx';
 import PublishToArtists from './sections/PublishToArtists.jsx';
 import DealChanges from './sections/DealChanges.jsx';
@@ -496,12 +496,15 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     return subscribeToChanges(key => { reloadSection(key); });
   }, [loading]);
 
+  // Resolves true once the database has the change. On any failure the section
+  // reloads from the database, so the screen never shows a change that wasn't saved.
   async function persist(key, value) {
     // A tab left open on an older version never saves: it could write back
     // figures that have since been changed or cleared.
-    if (isStale()) { setError('This page is out of date. Reload to keep working; that change wasn’t saved.'); return; }
+    if (isStale()) { await reloadSection(key); setError('This page is out of date. Reload to keep working; that change wasn’t saved.'); return false; }
     try {
       await window.storage.set(key, JSON.stringify(value), false);
+      return true;
     } catch (e) {
       if (isConflict(e)) {
         // The activity log only ever gains entries, so merge by id and retry.
@@ -513,16 +516,60 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
             const merged = [...value, ...theirs.filter(x => !seen.has(x.id))].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, 200);
             setActivityLog(merged);
             await window.storage.set(key, JSON.stringify(merged), false);
-            return;
+            return true;
           } catch (e2) { /* fall through to the message */ }
         }
         // Anything else: never overwrite. Show the latest and say so.
         await reloadSection(key);
         setError('This list changed since you opened it (someone else saved), so your last change wasn’t saved. The latest version is now showing; please make your change again.');
-        return;
+        return false;
       }
-      setError('Could not save your last change. It may not persist after this session.');
-      setTimeout(() => setError(''), 4500);
+      await reloadSection(key);
+      // The database says why it refused (e.g. "Only the reviewer at this stage can move this invoice").
+      setError(e && e.code === '42501' && e.message ? 'Not saved: ' + e.message + '.' : 'Could not save your last change, so it was undone. Check your connection and try again.');
+      return false;
+    }
+  }
+
+  async function persistPair(firstKey, firstValue, secondKey, secondValue) {
+    if (isStale()) throw new Error('This page is out of date. Reload before saving.');
+    try {
+      await setSectionPair(firstKey, firstValue, secondKey, secondValue);
+    } catch (e) {
+      // A lost response does not prove the server rolled back. Reload both.
+      await Promise.all([reloadSection(firstKey), reloadSection(secondKey)]);
+      throw e;
+    }
+  }
+
+  async function commitEmpireImport(nextRevenue, nextFiles) {
+    await persistPair('revenue', nextRevenue, 'statementFiles', nextFiles);
+    setRevenue(nextRevenue); setStatementFiles(nextFiles);
+    logChange('Revenue', revenue, nextRevenue);
+    logChange('Statement files', statementFiles, nextFiles);
+  }
+
+  async function commitStoreStreams(nextRevenue, nextPublished) {
+    await persistPair('revenue', nextRevenue, 'publishedRevenue', nextPublished);
+    setRevenue(nextRevenue); setPublishedRevenue(nextPublished);
+    logChange('Revenue', revenue, nextRevenue);
+  }
+
+  async function commitArtistPublish(nextPublished, nextLog) {
+    await persistPair('publishedRevenue', nextPublished, 'revenuePublish', nextLog);
+    setPublishedRevenue(nextPublished); setRevenuePublish(nextLog);
+    logChange('Publish to artists', revenuePublish, nextLog);
+  }
+
+  async function commitArtistPublishLog(nextLog) {
+    if (isStale()) throw new Error('This page is out of date. Reload before saving.');
+    try {
+      await window.storage.set('revenuePublish', JSON.stringify(nextLog), false);
+      setRevenuePublish(nextLog);
+      logChange('Publish to artists', revenuePublish, nextLog);
+    } catch (e) {
+      await reloadSection('revenuePublish');
+      throw e;
     }
   }
 
@@ -542,29 +589,29 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     });
   }
 
-  function updateRoster(next) { logChange('Roster', roster, next); setRoster(next); persist('roster', next); }
-  function updateCatalog(next) { next = next.map(({ license, licenseExpiration, ...c }) => c); logChange('Catalog', catalog, next); setCatalog(next); persist('catalog', next); }
-  function updateRevenue(next) { logChange('Revenue', revenue, next); setRevenue(next); persist('revenue', next); }
+  function updateRoster(next) { const prev = roster; setRoster(next); return persist('roster', next).then(ok => { if (ok) logChange('Roster', prev, next); return ok; }); }
+  function updateCatalog(next) { next = next.map(({ license, licenseExpiration, ...c }) => c); const prev = catalog; setCatalog(next); return persist('catalog', next).then(ok => { if (ok) logChange('Catalog', prev, next); return ok; }); }
+  function updateRevenue(next) { const prev = revenue; setRevenue(next); return persist('revenue', next).then(ok => { if (ok) logChange('Revenue', prev, next); return ok; }); }
   // Imported (EMPIRE) streams are computed from revenue, so only manual entries are saved.
-  function updateStreams(next) { next = next.filter(x => !x.imported); logChange('Streams', streams, next); setStreams(next); persist('streams', next); }
-  function updatePayouts(next) { logChange('Payouts', payouts, next); setPayouts(next); persist('payouts', next); }
-  function updateMasterGross(next) { logChange('Money received', masterGross, next); setMasterGross(next); persist('masterGross', next); }
-  function updateLabelSettings(next) { setLabelSettings(next); persist('labelSettings', next); }
-  function updateStaff(next) { logChange('Team', staff, next); setStaff(next); persist('staff', next); }
-  function updateTasks(next) { logChange('Tasks', tasks, next); setTasks(next); persist('tasks', next); }
-  function updateLedger(next) { logChange('Ledger', ledger, next); setLedger(next); persist('ledger', next); }
-  function updateNotices(next) { logChange('Noticeboard', notices, next); setNotices(next); persist('notices', next); }
-  function updateOverheads(next) { logChange('Budget', overheads, next); setOverheads(next); persist('overheads', next); }
-  function updateLabelBudgets(next) { logChange('Budget', labelBudgets, next); setLabelBudgets(next); persist('labelBudgets', next); }
-  function updateProfileRequests(next) { logChange('Profile requests', profileRequests, next); setProfileRequests(next); persist('profileRequests', next); }
-  function updateAccessRequests(next) { logChange('Access requests', accessRequests, next); setAccessRequests(next); persist('accessRequests', next); }
-  function updateArtistRequests(next) { logChange('Artist requests', artistRequests, next); setArtistRequests(next); persist('artistRequests', next); }
-  function updatePublishedRevenue(next) { setPublishedRevenue(next); persist('publishedRevenue', next); }
-  function updateDealChanges(next) { logChange('Deal changes', dealChanges, next); setDealChanges(next); persist('dealChanges', next); }
-  function updateRevenuePublish(next) { logChange('Publish to artists', revenuePublish, next); setRevenuePublish(next); persist('revenuePublish', next); }
-  function updateStatementFiles(next) { logChange('Statement files', statementFiles, next); setStatementFiles(next); persist('statementFiles', next); }
-  function updateInvoices(next) { logChange('Invoices', invoices, next); setInvoices(next); persist('invoices', next); }
-  function updateReleaseSubmissions(next) { logChange('Release submissions', releaseSubmissions, next); setReleaseSubmissions(next); persist('releaseSubmissions', next); }
+  function updateStreams(next) { next = next.filter(x => !x.imported); const prev = streams; setStreams(next); return persist('streams', next).then(ok => { if (ok) logChange('Streams', prev, next); return ok; }); }
+  function updatePayouts(next) { const prev = payouts; setPayouts(next); return persist('payouts', next).then(ok => { if (ok) logChange('Payouts', prev, next); return ok; }); }
+  function updateMasterGross(next) { const prev = masterGross; setMasterGross(next); return persist('masterGross', next).then(ok => { if (ok) logChange('Money received', prev, next); return ok; }); }
+  function updateLabelSettings(next) { setLabelSettings(next); return persist('labelSettings', next); }
+  function updateStaff(next) { const prev = staff; setStaff(next); return persist('staff', next).then(ok => { if (ok) logChange('Team', prev, next); return ok; }); }
+  function updateTasks(next) { const prev = tasks; setTasks(next); return persist('tasks', next).then(ok => { if (ok) logChange('Tasks', prev, next); return ok; }); }
+  function updateLedger(next) { const prev = ledger; setLedger(next); return persist('ledger', next).then(ok => { if (ok) logChange('Ledger', prev, next); return ok; }); }
+  function updateNotices(next) { const prev = notices; setNotices(next); return persist('notices', next).then(ok => { if (ok) logChange('Noticeboard', prev, next); return ok; }); }
+  function updateOverheads(next) { const prev = overheads; setOverheads(next); return persist('overheads', next).then(ok => { if (ok) logChange('Budget', prev, next); return ok; }); }
+  function updateLabelBudgets(next) { const prev = labelBudgets; setLabelBudgets(next); return persist('labelBudgets', next).then(ok => { if (ok) logChange('Budget', prev, next); return ok; }); }
+  function updateProfileRequests(next) { const prev = profileRequests; setProfileRequests(next); return persist('profileRequests', next).then(ok => { if (ok) logChange('Profile requests', prev, next); return ok; }); }
+  function updateAccessRequests(next) { const prev = accessRequests; setAccessRequests(next); return persist('accessRequests', next).then(ok => { if (ok) logChange('Access requests', prev, next); return ok; }); }
+  function updateArtistRequests(next) { const prev = artistRequests; setArtistRequests(next); return persist('artistRequests', next).then(ok => { if (ok) logChange('Artist requests', prev, next); return ok; }); }
+  function updatePublishedRevenue(next) { setPublishedRevenue(next); return persist('publishedRevenue', next); }
+  function updateDealChanges(next) { const prev = dealChanges; setDealChanges(next); return persist('dealChanges', next).then(ok => { if (ok) logChange('Deal changes', prev, next); return ok; }); }
+  function updateRevenuePublish(next) { const prev = revenuePublish; setRevenuePublish(next); return persist('revenuePublish', next).then(ok => { if (ok) logChange('Publish to artists', prev, next); return ok; }); }
+  function updateStatementFiles(next) { const prev = statementFiles; setStatementFiles(next); return persist('statementFiles', next).then(ok => { if (ok) logChange('Statement files', prev, next); return ok; }); }
+  function updateInvoices(next) { const prev = invoices; setInvoices(next); return persist('invoices', next).then(ok => { if (ok) logChange('Invoices', prev, next); return ok; }); }
+  function updateReleaseSubmissions(next) { const prev = releaseSubmissions; setReleaseSubmissions(next); return persist('releaseSubmissions', next).then(ok => { if (ok) logChange('Release submissions', prev, next); return ok; }); }
 
   function clearAll() {
     updateRoster([]); updateCatalog([]); updateRevenue([]); updateStreams([]); updatePayouts([]);
@@ -733,7 +780,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         )}
         {NAV.length === 0 && <EmptyState icon={ShieldCheck} title="No access granted yet" description="Ask your Admin to grant you access from the Team tab." />}
         {active === 'overview' && <Overview roster={roster} catalog={catalogView} revenue={approvedRevenue} masterGross={monthlyMasterGross} streams={streamsView} artistMap={artistMap} releaseMap={releaseMap} notices={notices} staff={staff} sessionName={session.name} canViewRoyalties={!!perms.royalties} attention={attention} onOpen={openItem} />}
-        {active === 'import' && <ImportSection publishedRevenue={publishedRevenue} updatePublishedRevenue={updatePublishedRevenue} roster={roster} catalog={catalogView} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
+        {active === 'import' && <ImportSection publishedRevenue={publishedRevenue} updatePublishedRevenue={updatePublishedRevenue} roster={roster} catalog={catalogView} revenue={revenue} streams={streams} updateRoster={updateRoster} updateCatalog={updateCatalog} updateRevenue={updateRevenue} updateStreams={updateStreams} commitEmpireImport={commitEmpireImport} commitStoreStreams={commitStoreStreams} masterGross={monthlyMasterGross} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={session.name} />}
         {active === 'roster' && <RosterSection focus={focus} updateStatementFiles={updateStatementFiles} updateCatalog={updateCatalog} updateTasks={updateTasks} invoices={invoices} dealChanges={dealChanges} updateDealChanges={updateDealChanges} session={session} publishedRevenue={publishedRevenue} statementFiles={statementFiles} roster={roster} update={updateRoster} catalog={catalogView} staff={staff} canEdit={canEdit} pmScope={pmScope} revenue={approvedRevenue} streams={streamsView} masterGross={monthlyMasterGross} payouts={payouts} ledger={approvedLedger} labelSettings={labelSettings} canViewRoyalties={!!perms.royalties} canViewSpend={!!perms.spend} tasks={tasks} sessionName={session.name} isAdmin={isAdmin} profileRequests={profileRequests} updateProfileRequests={updateProfileRequests} />}
         {active === 'artist-requests' && <ArtistRequestsSection artistRequests={artistRequests} update={updateArtistRequests} roster={roster} sessionName={session.name} pmScope={pmScope} />}
         {active === 'team' && <TeamSection roster={roster} updateRoster={updateRoster} staff={staff} update={updateStaff} sessionRole={session.role} sessionName={session.name} accessRequests={accessRequests} updateAccessRequests={updateAccessRequests} />}
@@ -753,7 +800,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'submissions' && <SubmissionsSection catalog={catalogView} releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection overheads={overheads} ledger={ledger} approver={canApproveBudgets(session, staff)} invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} />}
         {active === 'deals' && <DealChanges roster={roster} updateRoster={updateRoster} changes={dealChanges} updateChanges={updateDealChanges} publishedRevenue={publishedRevenue} session={session} canEdit={canEdit} catalog={catalog} updateCatalog={updateCatalog} tasks={tasks} updateTasks={updateTasks} ledger={approvedLedger} invoices={invoices} />}
-        {active === 'publish' && <PublishToArtists renderPreview={(artistSlug, rows, onClose) => { const a = roster.find(x => slug(x.name) === artistSlug); return a ? portalFor(a, rows, true, onClose) : null; }} roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
+        {active === 'publish' && <PublishToArtists renderPreview={(artistSlug, rows, onClose) => { const a = roster.find(x => slug(x.name) === artistSlug); return a ? portalFor(a, rows, true, onClose) : null; }} roster={roster} approvedRevenue={approvedRevenue} masterGross={monthlyMasterGross} published={publishedRevenue} updatePublished={updatePublishedRevenue} log={revenuePublish} updateLog={updateRevenuePublish} commitArtistPublish={commitArtistPublish} commitArtistPublishLog={commitArtistPublishLog} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} session={session} canEdit={canEdit} />}
         {active === 'payouts' && <PayoutsSection invoices={invoices} payouts={payouts} update={updatePayouts} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} ledger={approvedLedger} canEdit={canEdit} />}
         {active === 'ledger' && <LedgerSection overheads={overheads} approver={canApproveBudgets(session, staff)} invoices={invoices} ledger={ledger} update={updateLedger} roster={roster} revenue={approvedRevenue} masterGross={monthlyMasterGross} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} pmScope={pmScope} />}
         {active === 'budget' && <BudgetSection overheads={overheads} update={updateOverheads} roster={roster} catalog={catalogView} staff={staff} ledger={ledger} invoices={invoices} session={session} canEdit={canEdit} />}

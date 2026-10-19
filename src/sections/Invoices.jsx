@@ -94,16 +94,14 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
     const diffs = FIX_FIELDS.filter(([k]) => String(inv[k] ?? '') !== String(next[k] ?? '')).map(([k, label]) => label + (k === 'amount' ? ' $' + Number(inv.amount || 0).toFixed(2) + ' → $' + amount.toFixed(2) : ' changed'));
     if (!diffs.length) { setFixing(null); return; }
     const entry = { at: new Date().toISOString(), by: session.name, action: 'corrected', from: invoiceStatus(inv), to: invoiceStatus(inv), note: diffs.join('; ') + (fixing.why ? ' (' + fixing.why + ')' : '') };
-    logActivity('corrected an invoice', inv.title + ': ' + entry.note, inv.artistId);
-    update(invoices.map(i => i.id !== inv.id ? i : { ...i, ...Object.fromEntries(FIX_FIELDS.map(([k]) => [k, next[k]])), category: next.category, correctedNote: entry.note, history: [...(i.history || []), entry] }));
+    Promise.resolve(update(invoices.map(i => i.id !== inv.id ? i : { ...i, ...Object.fromEntries(FIX_FIELDS.map(([k]) => [k, next[k]])), category: next.category, correctedNote: entry.note, history: [...(i.history || []), entry] }))).then(ok => { if (ok !== false) logActivity('corrected an invoice', inv.title + ': ' + entry.note, inv.artistId); });
     setFixing(null); setError('');
   }
   function returnToArtist(inv) {
     const text = returnNote.trim();
     if (!text) { setError('Say what the artist needs to fix. They see this.'); return; }
     const entry = { at: new Date().toISOString(), by: session.name, action: 'returned to artist', from: invoiceStatus(inv), to: 'Needs changes', note: text };
-    logActivity('returned an invoice to the artist', inv.title + ': ' + text, inv.artistId);
-    update(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'Needs changes', reviewNote: text, history: [...(i.history || []), entry] }));
+    Promise.resolve(update(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'Needs changes', reviewNote: text, history: [...(i.history || []), entry] }))).then(ok => { if (ok !== false) logActivity('returned an invoice to the artist', inv.title + ': ' + text, inv.artistId); });
     setReturnNote(''); setError('');
   }
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
@@ -126,13 +124,12 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
     const to = action === 'approve' ? (INVOICE_STAGES[idx + 1] ? INVOICE_STAGES[idx + 1].status : 'Paid') : action === 'back' ? INVOICE_STAGES[idx - 1].status : 'Rejected';
     const stamp = new Date().toISOString();
     const entry = { at: stamp, by: session.name, action: action === 'approve' ? (to === 'Paid' ? 'paid' : 'approved') : action === 'back' ? 'sent back' : 'rejected', from, to, note: text };
-    logActivity('invoice ' + entry.action, inv.title + ' · ' + from + ' → ' + to, inv.artistId);
-    update(invoices.map(i => i.id !== inv.id ? i : {
+    Promise.resolve(update(invoices.map(i => i.id !== inv.id ? i : {
       ...i, status: to, history: [...(i.history || []), entry],
       reviewedBy: session.name, reviewedAt: stamp,
       ...(action === 'reject' ? { reviewNote: text } : {}),
       ...(to === 'Paid' ? { paidAt: stamp } : {}),
-    }));
+    }))).then(ok => { if (ok !== false) logActivity('invoice ' + entry.action, inv.title + ' · ' + from + ' → ' + to, inv.artistId); });
     setNote(''); setError('');
   }
   // Admin override: put an invoice straight into any queue when the people
@@ -142,11 +139,10 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
     if (!moveTo || moveTo === from) return;
     const stamp = new Date().toISOString();
     const entry = { at: stamp, by: session.name, action: 'moved by Admin', from, to: moveTo, note: note.trim() };
-    logActivity('invoice moved by Admin', inv.title + ' · ' + from + ' → ' + moveTo, inv.artistId);
-    update(invoices.map(i => i.id !== inv.id ? i : {
+    Promise.resolve(update(invoices.map(i => i.id !== inv.id ? i : {
       ...i, status: moveTo, history: [...(i.history || []), entry], reviewedBy: session.name, reviewedAt: stamp,
       ...(moveTo === 'Paid' ? { paidAt: stamp } : {}),
-    }));
+    }))).then(ok => { if (ok !== false) logActivity('invoice moved by Admin', inv.title + ' · ' + from + ' → ' + moveTo, inv.artistId); });
     setMoveTo(''); setNote(''); setError('');
   }
   function sendMessage(inv) {
@@ -326,8 +322,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                                 const over = spentOf(() => true) + amt > target.total + 1e-9 || (cat && spentOf(x => x.categoryId === cat.id) + amt > cat.allocated + 1e-9);
                                 if (over && !approver) { setError('That takes the budget over. An Admin needs to attach it.'); return; }
                               }
-                              logActivity('attached an expense claim to a budget', inv.title + (target ? ' → ' + target.title : ' (detached)'), inv.artistId);
-                              update(invoices.map(i => i.id !== inv.id ? i : { ...i, overheadId: overheadId || '', categoryId: categoryId || '' }));
+                              Promise.resolve(update(invoices.map(i => i.id !== inv.id ? i : { ...i, overheadId: overheadId || '', categoryId: categoryId || '' }))).then(ok => { if (ok !== false) logActivity('attached an expense claim to a budget', inv.title + (target ? ' → ' + target.title : ' (detached)'), inv.artistId); });
                             }
                             return (
                               <section className="imss-sub-wide">
@@ -360,9 +355,8 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                                 <h3 className="imss-sub-h">Partner</h3>
                                 <Btn variant="ghost" onClick={() => {
                                   const at = new Date().toISOString();
-                                  logActivity('sent an invoice to the partner', inv.title + (rep ? ' (shared with ' + rep.name + ')' : ''), inv.artistId);
-                                  update(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'DP Queue', sentToPartnerAt: at, sentToRepAt: rep ? at : i.sentToRepAt, sentToRepBy: session.name,
-                                    history: [...(i.history || []), { at, by: session.name, action: 'sent to partner', from: st, to: 'DP Queue', note: rep ? 'Shared with ' + rep.name : '' }] }));
+                                  Promise.resolve(update(invoices.map(i => i.id !== inv.id ? i : { ...i, status: 'DP Queue', sentToPartnerAt: at, sentToRepAt: rep ? at : i.sentToRepAt, sentToRepBy: session.name,
+                                    history: [...(i.history || []), { at, by: session.name, action: 'sent to partner', from: st, to: 'DP Queue', note: rep ? 'Shared with ' + rep.name : '' }] }))).then(ok => { if (ok !== false) logActivity('sent an invoice to the partner', inv.title + (rep ? ' (shared with ' + rep.name + ')' : ''), inv.artistId); });
                                 }}><Send size={14} /> Send to partner{rep ? ' (shares it with ' + rep.name + ')' : ''}</Btn>
                                 <div className="text-xs mt-1" style={{ color: C.textDim }}>Moves it to DP Queue.{rep ? ' The label rep can view and download it.' : ''}</div>
                               </section>
