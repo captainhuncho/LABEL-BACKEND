@@ -7,6 +7,7 @@ import { MfaGate } from './Mfa.jsx';
 import { supabase } from './storage.js';
 import { C, CANVAS_GRADIENT, GLOBAL_STYLES, HEADING_FONT, LOGO_DATA_URI } from './theme.js';
 import LoadingScreen from './LoadingScreen.jsx';
+import { sessionIdOf, startIdleSignOut } from './idleSignOut.js';
 
 // Two addresses, one app: artist.imssrecords.com is the artist portal ("For
 // Artists"), ops.imssrecords.com is for the team. Artists who sign in on ops
@@ -17,6 +18,7 @@ const OPS_URL = 'https://ops.imssrecords.com';
 
 export default function AuthGate({ children }) {
   const [authEmail, setAuthEmail] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
   // 'team', 'artist', or null (signed in but on neither list); undefined while checking.
   const [access, setAccess] = useState(undefined);
   const [checking, setChecking] = useState(!!supabase);
@@ -29,6 +31,8 @@ export default function AuthGate({ children }) {
   // Uninvited: the database refuses to create the account, so nothing about the
   // attempt (not even the email) is kept, and no email is sent.
   const [linkError, setLinkError] = useState(() => {
+    // Signed out for inactivity (see idleSignOut.js): say so once, on this page.
+    try { if (sessionStorage.getItem('imss:idle-signed-out')) { sessionStorage.removeItem('imss:idle-signed-out'); return 'You were signed out after 3 hours without activity. Sign in again to continue.'; } } catch { /* storage blocked */ }
     const u = window.location.search + window.location.hash;
     if (/otp_expired|expired/i.test(u)) return 'That sign-in link has expired or was already used. Ask for a new one.';
     if (/error=/.test(u) && !/Database(\+|%20| )error|invite_only/i.test(u)) return 'Sign-in didn’t finish. Please try again.';
@@ -41,10 +45,12 @@ export default function AuthGate({ children }) {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       setAuthEmail(data.session ? data.session.user.email : null);
+      setSessionId(data.session ? sessionIdOf(data.session.access_token) : null);
       setChecking(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthEmail(session ? session.user.email : null);
+      setSessionId(session ? sessionIdOf(session.access_token) : null);
       // Sign-in clears its token from the address but leaves a bare "#".
       if (window.location.href.endsWith('#')) window.history.replaceState(null, '', window.location.pathname + window.location.search);
     });
@@ -63,6 +69,24 @@ export default function AuthGate({ children }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
   }, [authEmail]);
+
+  // 3 hours without real interaction signs this session out, in every tab, and on
+  // the server too: activity is reported at most every 5 minutes, and
+  // private.end_idle_sessions() ends sessions with none for 3 h 10 min.
+  useEffect(() => {
+    if (!supabase || !authEmail || !sessionId) return;
+    let lastReport = 0;
+    const report = t => { if (t - lastReport < 5 * 60 * 1000) return; lastReport = t; supabase.rpc('touch_session').then(() => {}, () => {}); };
+    return startIdleSignOut({
+      sessionId,
+      onActive: report,
+      onTimeout: () => {
+        try { sessionStorage.setItem('imss:idle-signed-out', '1'); } catch { /* storage blocked */ }
+        // This session only (other devices keep theirs); the local copy is cleared even if offline.
+        supabase.auth.signOut({ scope: 'local' }).finally(() => window.location.reload());
+      },
+    });
+  }, [authEmail, sessionId]);
 
   useEffect(() => {
     if (!supabase || !authEmail) return;

@@ -22,6 +22,20 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 
 - No passwords. People sign in with Google or a one-time code emailed to them
   (Supabase Auth, sent through Resend).
+- Idle sign-out (ops, the artist portal and label reps): after 3 hours without
+  real interaction (pointer, keys, wheel, touch) the session is signed out, in
+  every tab of that browser, with "You were signed out after 3 hours without
+  activity" on the sign-in page (`src/idleSignOut.js`, `src/AuthGate.jsx`). A
+  tab that slept is checked the moment it wakes; reopening the app after 3 hours
+  away signs out at once. Server backstop: the app reports activity at most
+  every 5 minutes (`touch_session`) and cron `end-idle-sessions` (every 10
+  minutes) ends sessions with none for 3 h 10 min (`private.end_idle_sessions`).
+  Token refreshes by an open tab don't count as activity.
+- Supabase Pro only (not on the current Free plan): when the project moves to
+  Pro, also set Authentication → Sessions → **Inactivity timeout** to 3 h 10 min
+  and consider **Time-box user sessions** (e.g. 12 h). The inactivity timeout
+  counts token refreshes, so it only catches closed or abandoned devices; the
+  app-level rule above stays the one that measures real activity.
 - Invite only, enforced in the database: an account can only be created for an
   email on the Team list or an artist's Roster entry (`private.is_invited`, the
   Before User Created hook). Removing or archiving someone deletes their
