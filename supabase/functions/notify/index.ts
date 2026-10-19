@@ -145,7 +145,9 @@ const ARTIST_EMAIL_TOPICS = ['earnings', 'statement', 'invoice', 'welcome', 'not
 // EMAIL_SWITCHES in src/constants.js). A switched-off email isn't sent; the
 // bell notification still is. Each request keeps its own state (several can run
 // at once in one worker): which email it is handling, and the switches it read.
-type RequestState = { switchKey: string; switches: Record<string, boolean> | null };
+// delivery: set while handling one event of a recorded batch (see handleEvents).
+type Delivery = { id: number; event: number; sent: Set<string>; failed: boolean };
+type RequestState = { switchKey: string; switches: Record<string, boolean> | null; delivery?: Delivery };
 const requestState = new AsyncLocalStorage<RequestState>();
 const state = () => requestState.getStore() || { switchKey: '', switches: null };
 const setSwitch = (key: string) => { state().switchKey = key; };
@@ -196,10 +198,27 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
 }
 
 // In loops that email many people one by one, one failed address must not stop
-// the rest or, on retry, re-send to everyone. Record it in the log and go on.
+// the rest. Inside a recorded delivery, each email that went is recorded, so a
+// retry sends only the ones that failed, and a failure leaves the event open
+// (not done) so it is retried. Outside a delivery (release week) it is logged.
 async function sendOne(...args: Parameters<typeof send>) {
-  try { return await send(...args); }
-  catch (e) { await audit('could not send an email', `"${args[1]}" to ${args[0].join(', ')}: ${String(e).slice(0, 300)}`); return { error: String(e) }; }
+  const d = state().delivery;
+  const key = `${d ? d.event : ''}|${args[1]}|${args[0].map(lower).sort().join(',')}`;
+  if (d && d.sent.has(key)) return { skipped: 'already sent' };
+  let result;
+  try { result = await send(...args); }
+  catch (e) {
+    await audit('could not send an email', `"${args[1]}" to ${args[0].join(', ')}: ${String(e).slice(0, 300)}`);
+    if (d) d.failed = true;
+    return { error: String(e) };
+  }
+  if (d) {
+    // If this record fails, the event errors and is retried; that one email may then go twice.
+    const { error } = await db.rpc('delivery_recipient_sent', { delivery_id: d.id, sent_key: key });
+    if (error) throw error;
+    d.sent.add(key);
+  }
+  return result;
 }
 
 const KEY_CODE: Record<string, string> = { releaseSubmissions: 's', artistRequests: 'q', invoices: 'i' };
@@ -694,17 +713,26 @@ async function handleEvents(body: Item) {
   if (claimError) throw claimError;
   if (!claim) return { skipped: 'delivery already handled or in progress' };
   const done = new Set<number>((claim.done || []) as number[]);
+  const sent = new Set<string>((claim.sent || []) as string[]);
   const results: unknown[] = [];
   const errors: string[] = [];
   for (let i = 0; i < events.length; i++) {
     if (done.has(i)) { results.push({ skipped: 'already sent' }); continue; }
     setSwitch('');
+    const d: Delivery = { id, event: i, sent, failed: false };
+    state().delivery = d;
     try {
-      results.push(await handleEvent(events[i]));
-      await db.rpc('delivery_event_done', { delivery_id: id, idx: i });
+      const r = await handleEvent(events[i]);
+      results.push(r);
+      // Some of its emails failed (the rest were recorded): keep it open for a retry.
+      if (d.failed) { errors.push(`event ${i}: some emails failed`); continue; }
+      const { error } = await db.rpc('delivery_event_done', { delivery_id: id, idx: i });
+      if (error) throw error;
     } catch (e) {
       errors.push(`event ${i}: ${String(e)}`);
       results.push({ error: String(e) });
+    } finally {
+      state().delivery = undefined;
     }
   }
   const { data: status } = await db.rpc('delivery_finish', { delivery_id: id, err: errors.join('; ').slice(0, 1000) || null });
