@@ -211,9 +211,10 @@ Tailwind 4 migration.
 
 These are real and accepted for now. Don't treat them as protected.
 
-1. **Some data is still readable by the whole team.** Invoices (with amounts)
-   and the team list are readable by every team member, because several
-   screens need them. Budgets keep a snapshot of the artist's deal at creation
+1. **Some data is still readable by the whole team.** The team list is
+   readable by every team member, because several screens need it. Invoices are
+   readable only by Admin, Legal, Finance, Product Managers, anyone with Budgets
+   & expenses and anyone in the invoice workflow (`private.can_read_invoices`). Budgets keep a snapshot of the artist's deal at creation
    (`overheads.dealTerm`), readable by anyone with Budgets & expenses. Rows inside a
    section are not scoped per artist (a Product Manager's view of their own
    artists is enforced in the app). Invoice stages are enforced in the database;
