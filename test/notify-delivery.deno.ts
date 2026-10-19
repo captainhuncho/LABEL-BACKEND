@@ -2,7 +2,8 @@
 // with the database and Resend replaced in-process (no network, no live data).
 //   npx deno run --allow-env --allow-read --allow-net=registry.npmjs.org test/notify-delivery.deno.ts
 // One batch holds an earnings event (3 artists), a notice (3 artists) and a
-// statement (1 artist). Resend fails for b@x.com on the first attempt only.
+// statement (1 artist), then a release-week run. Resend fails for b@x.com on
+// each first attempt only.
 // Expected: attempt 1 sends the 4 emails to a@ and c@ and leaves all 3 events
 // open (status "retry"); attempt 2 sends only b@'s 3 emails (status "done");
 // no email and no bell notice is ever sent twice.
@@ -25,10 +26,12 @@ const data: Record<string, unknown> = {
   payouts: [{ id: 's1', artistSlug: 'bo', periodStart: '2026-08', periodEnd: '2026-08', artistShare: 5 }],
 };
 // Mirrors private.email_deliveries and the delivery_* functions.
+const deliveries = new Map<number, Row>();
 const delivery: Row = {
   id: 1, status: 'pending', attempts: 0, done: [] as number[], sent: [] as string[], last_error: null,
   events: [{ type: 'earnings', key: 'revenuePublish', id: 'p1' }, { type: 'notice', key: 'notices', id: 'n1' }, { type: 'statement', key: 'payouts', id: 's1' }],
 };
+deliveries.set(1, delivery);
 const emails: { to: string; subject: string }[] = [];
 const bells: { to: string; subject: string }[] = [];
 const failing = new Set(['b@x.com']);
@@ -36,16 +39,19 @@ const failing = new Set(['b@x.com']);
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } });
 const rpc: Record<string, (a: Row) => unknown> = {
   notify_secret_ok: () => true,
-  delivery_claim: () => {
-    if (!['pending', 'retry'].includes(delivery.status)) return null;
-    delivery.status = 'sending'; delivery.attempts++;
-    return { events: delivery.events, done: delivery.done, sent: delivery.sent, attempts: delivery.attempts };
+  delivery_create: a => { const id = deliveries.size + 1; deliveries.set(id, { id, status: 'pending', attempts: 0, done: [], sent: [], events: a.events }); return id; },
+  delivery_claim: a => {
+    const d = deliveries.get(a.delivery_id)!;
+    if (!['pending', 'retry'].includes(d.status)) return null;
+    d.status = 'sending'; d.attempts++;
+    return { events: d.events, done: d.done, sent: d.sent, attempts: d.attempts };
   },
-  delivery_event_done: a => { if (!delivery.done.includes(a.idx)) delivery.done.push(a.idx); return null; },
-  delivery_recipient_sent: a => { if (!delivery.sent.includes(a.sent_key)) delivery.sent.push(a.sent_key); return null; },
+  delivery_event_done: a => { const d = deliveries.get(a.delivery_id)!; if (!d.done.includes(a.idx)) d.done.push(a.idx); return null; },
+  delivery_recipient_sent: a => { const d = deliveries.get(a.delivery_id)!; if (!d.sent.includes(a.sent_key)) d.sent.push(a.sent_key); return null; },
   delivery_finish: a => {
-    delivery.status = delivery.done.length >= delivery.events.length ? 'done' : delivery.attempts >= 5 ? 'failed' : 'retry';
-    delivery.last_error = a.err; return delivery.status;
+    const d = deliveries.get(a.delivery_id)!;
+    d.status = d.done.length >= d.events.length ? 'done' : d.attempts >= 5 ? 'failed' : 'retry';
+    d.last_error = a.err; return d.status;
   },
 };
 
@@ -79,10 +85,10 @@ let handler: (req: Request) => Promise<Response> = () => { throw new Error('no h
 Deno.serve = (h: typeof handler) => { handler = h; return { finished: Promise.resolve(), shutdown: async () => {} }; };
 await import('../supabase/functions/notify/index.ts');
 
-const post = async () => (await handler(new Request('http://fn/notify', {
-  method: 'POST', headers: { 'x-notify-secret': 's' },
-  body: JSON.stringify({ action: 'events', events: delivery.events, delivery: delivery.id }),
+const call = async (body: Row) => (await handler(new Request('http://fn/notify', {
+  method: 'POST', headers: { 'x-notify-secret': 's' }, body: JSON.stringify(body),
 }))).json();
+const post = () => call({ action: 'events', events: delivery.events, delivery: delivery.id });
 
 let failures = 0;
 const check = (label: string, ok: boolean, got?: unknown) => { console.log((ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + JSON.stringify(got))); if (!ok) failures++; };
@@ -106,6 +112,19 @@ check('no bell notice twice', !dup(bells) && bells.length === 7, sorted(bells));
 
 const r3 = await post();
 check('a post after done sends nothing', emails.length === 7 && (r3 as Row).skipped !== undefined, r3);
+
+// Release week (Monday cron): goes through a recorded delivery too.
+const today = new Date().toISOString().slice(0, 10);
+data.catalog = [{ id: 'r1', title: 'Song A', artistId: 'A', releaseDate: today }, { id: 'r2', title: 'Song B', artistId: 'B', releaseDate: today }];
+failing.add('b@x.com');
+const before = emails.length;
+await call({ action: 'releaseWeek' });
+const week = deliveries.get(2)!;
+check('release week: recorded as delivery 2, status retry', !!week && week.status === 'retry', week);
+check('release week: a@ emailed, b@ failed', emails.length === before + 1 && emails[emails.length - 1].to === 'a@x.com', sorted(emails.slice(before)));
+failing.clear();
+await call({ action: 'events', events: week.events, delivery: 2 });
+check('release week retry: only b@ emailed, status done', emails.length === before + 2 && emails[emails.length - 1].to === 'b@x.com' && week.status === 'done', { week, new: sorted(emails.slice(before)) });
 
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
 if (failures) { console.log(JSON.stringify({ r1, r2 }, null, 1).slice(0, 3000)); Deno.exit(1); }

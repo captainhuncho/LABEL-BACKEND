@@ -25,7 +25,7 @@ const MAIL_FROM = Deno.env.get('MAIL_FROM') ?? 'IMSS Records <noreply@imssrecord
 const REPLY_TO = Deno.env.get('REPLY_TO') ?? '';
 
 type Item = Record<string, any>;
-type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice' | 'repRelease' | 'repInvoice' | 'budgetSent'; key: string; id: string };
+type Event = { type: 'new' | 'message' | 'statement' | 'stage' | 'earnings' | 'deal' | 'dealSent' | 'notice' | 'repRelease' | 'repInvoice' | 'budgetSent' | 'releaseWeek'; key: string; id: string };
 
 // ---------- data ----------
 async function section(key: string): Promise<Item[]> {
@@ -255,6 +255,8 @@ async function recordForLegal(item: Item, artist: Item | undefined) {
 
 // ---------- outgoing ----------
 async function handleEvent(ev: Event) {
+  // Monday's release-week emails (id = that Monday, YYYY-MM-DD).
+  if (ev.type === 'releaseWeek') { setSwitch('releaseWeek'); return sendReleaseWeek(ev.id); }
   const items = await section(ev.key);
   const item = items.find(x => x.id === ev.id);
   if (!item) return { skipped: 'not found' };
@@ -528,9 +530,9 @@ async function handleInbound(data: Item) {
 // Monday of release week (cron "release-week"): every release out this week
 // (Monday to Sunday, UTC) gets an email to the artist to check everything is
 // ready, and one to their PM to keep tabs on it.
-async function sendReleaseWeek() {
+async function sendReleaseWeek(week = '') {
   const [catalog, roster, staff] = await Promise.all([section('catalog'), section('roster'), section('staff')]);
-  const now = new Date();
+  const now = /^\d{4}-\d{2}-\d{2}$/.test(week) ? new Date(week + 'T00:00:00Z') : new Date();
   const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
   const sunday = new Date(monday.getTime() + 6 * 86400000);
   const from = monday.toISOString().slice(0, 10), to = sunday.toISOString().slice(0, 10);
@@ -689,7 +691,16 @@ async function handleAction(body: Item): Promise<Response> {
       const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
       return Response.json(await send(admins, `${label} signed in`, page(`${label} signed in`, [`They signed in to IMSS Records at <b>${esc(when)}</b>.`, 'You asked to be told when this account signs in.'], { label: 'Open the dashboard', url: `${APP_URL}/` })));
     }
-    if (body.action === 'releaseWeek') return Response.json(await sendReleaseWeek());
+    if (body.action === 'releaseWeek') {
+      // Recorded as a delivery like any other batch, so failed emails are retried
+      // and the ones that went aren't sent again.
+      const now = new Date();
+      const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7))).toISOString().slice(0, 10);
+      const events = [{ type: 'releaseWeek', key: 'catalog', id: monday }];
+      const { data: id, error } = await db.rpc('delivery_create', { events });
+      if (error) throw error;
+      return Response.json(await handleEvents({ events, delivery: id }));
+    }
     if (body.action === 'repReleaseSheet') return Response.json(await sendReleaseSheet(String(body.repId || ''), Array.isArray(body.ids) ? body.ids.map(String) : []));
     if (body.action === 'teamWelcome') return Response.json(await sendTeamWelcome(String(body.staffId || '')));
     if (body.action === 'welcome') return Response.json(await sendWelcome(String(body.artistId || '')));

@@ -97,6 +97,9 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   transaction and rolls back).
 - Royalty statement files (`statements` storage bucket) follow Artist earnings,
   like `statementFiles`.
+- Stored documents (`documents` bucket: invoice files, contracts) can be read
+  and uploaded by the team, never deleted or overwritten. Welcome emails are
+  limited to 20 an hour per Admin.
 - Multi-section saves (`save_app_data_pair`): an EMPIRE import, a publish to
   artists and a stream-count re-read save both sections in one transaction,
   each checked against the version the browser loaded; the caller's rules apply.
@@ -152,6 +155,8 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   posts it to the function via `pg_net`. The function claims the batch, marks
   each event done, and adds the bell notice only after the email went; a failed
   email is retried by cron `email-retry` every 10 minutes, 5 attempts in all.
+  Emails to many people in one event (earnings, notices, Monday's release week)
+  are tracked one by one, so a retry sends only the ones that failed.
   Batches that give up show on the Email notifications page; a `pg_cron` job (`send-due-statements`) calls
   it every 10 minutes for scheduled statements. Both send a shared secret kept
   in `private.config` (schema not exposed to the API); the function checks it
