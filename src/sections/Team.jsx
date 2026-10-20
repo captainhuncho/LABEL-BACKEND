@@ -88,13 +88,8 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
         return;
       }
       update(staff.map(s => s.id === editing ? { ...form, id: editing } : s));
-      // Artists name their PM and A&R by name: carry a rename over so the links hold.
-      const newName = form.name.trim();
-      if (before && updateRoster && before.name && before.name !== newName && roster.some(a => a.productManager === before.name || a.anr === before.name)) {
-        updateRoster(roster.map(a => (a.productManager === before.name || a.anr === before.name)
-          ? { ...a, productManager: a.productManager === before.name ? newName : a.productManager, anr: a.anr === before.name ? newName : a.anr }
-          : a));
-      }
+      // A rename is carried onto artists' PM and A&R by the database
+      // (private.staff_rename_follows); the roster reloads on its own.
     } else if (proposesOnly) {
       // A new hire Legal adds starts on their role's defaults; any custom
       // access Legal picked goes to an Admin as a proposal.
