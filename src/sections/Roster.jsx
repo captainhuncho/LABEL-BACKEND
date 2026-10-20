@@ -1,6 +1,6 @@
 import { Globe, Pencil, Plus, Search, Trash2, Users, Archive } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { ARTIST_STATUSES, DEAL_FIELDS, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid } from '../constants.js';
+import { ARTIST_STATUSES, DEAL_FIELDS, FUNDING_TIERS, DEAL_TYPES, dealLabel, GENRES, MARKETS, SUB_GENRES, artistStatusTone, expirationStatus, formatDate, todayStr, uid, isPmOf } from '../constants.js';
 import { DEFAULT_DELIVERY_DAYS } from '../finance.js';
 import { SOCIAL_LINKS } from '../seed.js';
 import DealChanges from './DealChanges.jsx';
@@ -54,7 +54,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
     resizeImageFile(file, 300, dataUrl => setForm(f => ({ ...f, photoUrl: dataUrl })));
   }
 
-  const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
+  const visibleRoster = pmScope ? roster.filter(a => isPmOf(a, pmScope)) : roster;
   const genres = Array.from(new Set(visibleRoster.map(a => a.genre).filter(Boolean))).sort();
   const marketsInUse = Array.from(new Set(visibleRoster.flatMap(a => [a.primaryMarket, a.secondaryMarket]).filter(Boolean))).sort();
 

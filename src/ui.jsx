@@ -383,3 +383,31 @@ export function ReleaseCountdown({ releases = [], artistMap = null, max = 4, tit
     </section>
   );
 }
+
+// A Product Manager's own artists as on/off chips. Used on Overview, Invoices
+// and Expenses & income; the choice is shared across them (held in App).
+export function ArtistToggle({ artists = [], hidden, setHidden }) {
+  const toggle = id => setHidden(h => { const n = new Set(h); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  return (
+    <div role="group" aria-label="Artists shown" className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <h2 style={{ fontWeight: 600, fontSize: 15 }}>Your artists</h2>
+        {hidden.size > 0 && <Btn variant="ghost" onClick={() => setHidden(new Set())}>Show all</Btn>}
+      </div>
+      {artists.length === 0 ? (
+        <div className="text-sm" style={{ color: C.textDim }}>No artists are assigned to you yet. An Admin sets the Product Manager on each artist.</div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {artists.map(a => {
+            const on = !hidden.has(a.id);
+            return (
+              <button key={a.id} type="button" aria-pressed={on} onClick={() => toggle(a.id)} className="rounded-full border px-4 text-sm" style={{ minHeight: 44, background: on ? C.amberSoft : 'transparent', borderColor: on ? C.amber : C.border, color: on ? C.text : C.textDim }}>
+                {a.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

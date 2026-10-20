@@ -1,12 +1,12 @@
 import { ChevronDown, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
-import { formatDate } from '../constants.js';
+import { formatDate, isPmOf } from '../constants.js';
 import { REQUEST_STATUSES } from '../seed.js';
 import { C } from '../theme.js';
 import { Badge, Btn, EmptyState, Field, KPICard, SectionHeader, Select, TextArea } from '../ui.jsx';
 
 export function ArtistRequestsSection({ artistRequests, update, roster, sessionName, pmScope = null }) {
-  const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
+  const visibleRoster = pmScope ? roster.filter(a => isPmOf(a, pmScope)) : roster;
   const visibleArtistIds = new Set(visibleRoster.map(a => a.id));
   const visibleRequests = pmScope ? artistRequests.filter(r => visibleArtistIds.has(r.artistId)) : artistRequests;
   const [filterArtist, setFilterArtist] = useState('all');

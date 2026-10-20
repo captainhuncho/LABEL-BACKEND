@@ -1,6 +1,6 @@
 import { CheckCircle2, Disc3, Mail, MessageSquare } from 'lucide-react';
 import React, { useState } from 'react';
-import { SPLIT_REQUIRED_ROLES, formatDate, missingRequiredDocs } from '../constants.js';
+import { SPLIT_REQUIRED_ROLES, formatDate, missingRequiredDocs, isPmOf } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { Badge, Btn, EmptyState, Field, SectionHeader, Td, TextArea, Th, DocLink } from '../ui.jsx';
 import { releasesOn } from './Catalog.jsx';
@@ -36,7 +36,7 @@ export function SubmissionsSection({ releaseSubmissions, update, roster, catalog
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const artistOf = id => roster.find(a => a.id === id) || {};
-  const scoped = releaseSubmissions.filter(sub => !pmScope || artistOf(sub.artistId).productManager === pmScope);
+  const scoped = releaseSubmissions.filter(sub => !pmScope || isPmOf(artistOf(sub.artistId), pmScope));
   const shown = scoped.filter(sub => status === 'all' || sub.status === status).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
   const count = st => scoped.filter(sub => sub.status === st).length;
 

@@ -1,16 +1,24 @@
 import { CheckCircle2, ChevronDown, ChevronRight, Disc3, DollarSign, FileText, Globe, Radio, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { PLATFORM_COLORS, formatCurrency, formatDate, formatNumber, monthLabel } from '../constants.js';
+import { PLATFORM_COLORS, formatCurrency, formatDate, formatNumber, monthLabel, isPmOf } from '../constants.js';
 import { companyFinanceTotals, slug } from '../finance.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, Field, Input, KPICard, SectionHeader, Td, Th, ReleaseCountdown } from '../ui.jsx';
+import { Badge, Btn, Field, Input, KPICard, SectionHeader, Td, Th, ReleaseCountdown, ArtistToggle } from '../ui.jsx';
 
 // Folded or open, remembered on this device only.
 const ATTN_KEY = 'imss:attn-folded';
 const readFolded = () => { try { return localStorage.getItem(ATTN_KEY) === '1'; } catch (e) { return false; } };
 
-export function Overview({ roster, catalog, revenue, masterGross = [], streams, artistMap, releaseMap, notices = [], staff = [], sessionName = '', canViewRoyalties = true, attention = [], onOpen }) {
+export function Overview({ roster: allRoster, catalog: allCatalog, revenue: allRevenue, masterGross = [], streams: allStreams, artistMap, releaseMap, notices = [], staff = [], sessionName = '', canViewRoyalties = true, attention = [], onOpen, pmScope = null, pmHidden: hidden = new Set(), setPmHidden: setHidden = () => {} }) {
+  // Product Managers pick which of their own artists the dashboard covers.
+  const myArtists = useMemo(() => pmScope ? allRoster.filter(a => isPmOf(a, pmScope)) : allRoster, [allRoster, pmScope]);
+  const roster = useMemo(() => myArtists.filter(a => !hidden.has(a.id)), [myArtists, hidden]);
+  const shownIds = useMemo(() => new Set(roster.map(a => a.id)), [roster]);
+  const shownSlugs = useMemo(() => new Set(roster.map(a => slug(a.name))), [roster]);
+  const catalog = pmScope ? allCatalog.filter(c => shownIds.has(c.artistId)) : allCatalog;
+  const revenue = pmScope ? allRevenue.filter(r => shownSlugs.has(r.artistSlug)) : allRevenue;
+  const streams = pmScope ? allStreams.filter(x => { const rel = releaseMap[x.releaseId]; return rel && shownIds.has(rel.artistId); }) : allStreams;
   const [attnFolded, setAttnFolded] = useState(readFolded);
   const toggleAttn = () => setAttnFolded(f => { try { localStorage.setItem(ATTN_KEY, f ? '0' : '1'); } catch (e) { /* storage blocked */ } return !f; });
   const [filters, setFilters] = useState({ startDate: '', endDate: '' });
@@ -139,6 +147,8 @@ export function Overview({ roster, catalog, revenue, masterGross = [], streams, 
           ))}
         </section>
       )}
+
+      {pmScope && <ArtistToggle artists={myArtists} hidden={hidden} setHidden={setHidden} />}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
         <div className="imss-form-grid gap-3">

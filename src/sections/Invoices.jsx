@@ -2,9 +2,9 @@ import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, FileText, Me
 import { logActivity } from '../audit.js';
 import { BUDGET_TYPES, catLabel, categoryChoices } from './Budget.jsx';
 import React, { useState } from 'react';
-import { formatCents, formatCurrency, formatDate } from '../constants.js';
+import { formatCents, formatCurrency, formatDate, isPmOf } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, EmptyState, Field, KPICard, SectionHeader, Select, Td, TextArea, Th, DocLink } from '../ui.jsx';
+import { Badge, Btn, EmptyState, Field, KPICard, SectionHeader, Select, Td, TextArea, Th, DocLink, ArtistToggle } from '../ui.jsx';
 
 export const INVOICE_KINDS = { expense: 'Expense claim', service: 'Services / fee' };
 // Invoice approval pipeline: Submitted → PM Approval → Finance Queue → LH Queue →
@@ -67,7 +67,7 @@ export function InvoiceThread({ inv, artistLabel }) {
   );
 }
 
-export function InvoicesSection({ invoices, update, roster, staff = [], labelSettings = {}, updateLabelSettings, canEdit = true, session = {}, pmScope = null, overheads = [], ledger = [], approver = false }) {
+export function InvoicesSection({ invoices, update, roster, staff = [], labelSettings = {}, updateLabelSettings, canEdit = true, session = {}, pmScope = null, overheads = [], ledger = [], approver = false, pmHidden = new Set(), setPmHidden = () => {} }) {
   const workflow = labelSettings.invoiceWorkflow || {};
   const isAdmin = session.role === 'Admin';
   const me = staff.find(m => m.name === session.name);
@@ -83,7 +83,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
   const [fixing, setFixing] = useState(null); // { id, ...fields } while correcting an invoice
   // The artist's PM corrects or returns an invoice up to Pay Approved; an Admin at any stage before Paid.
   const canFix = inv => canEdit && !['Paid', 'Rejected', 'Needs changes'].includes(invoiceStatus(inv))
-    && (isAdmin || (pmOf(inv) && pmOf(inv) === session.name && invoiceStatus(inv) !== 'Pay Approved'));
+    && (isAdmin || (isPmOf(roster.find(a => a.id === inv.artistId), session.name) && invoiceStatus(inv) !== 'Pay Approved'));
   const FIX_FIELDS = [['budgetCategory', 'What it’s for'], ['title', 'Description'], ['amount', 'Amount'], ['invoiceDate', 'Invoice date'], ['invoiceNumber', 'Invoice number'], ['payTo', 'Pay to'], ['details', 'Details']];
   function saveFix(inv) {
     const amount = Math.round(parseFloat(fixing.amount) * 100) / 100;
@@ -105,7 +105,8 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
     setReturnNote(''); setError('');
   }
   const artistName = id => (roster.find(a => a.id === id) || {}).name || 'Unknown artist';
-  const scoped = invoices.filter(i => !pmScope || assignedSomewhere || (roster.find(a => a.id === i.artistId) || {}).productManager === pmScope);
+  const scoped = invoices.filter(i => !pmScope || ((assignedSomewhere || isPmOf(roster.find(a => a.id === i.artistId), pmScope)) && !pmHidden.has(i.artistId)));
+  const myArtists = pmScope ? roster.filter(a => isPmOf(a, pmScope)) : [];
   const pmOf = inv => (roster.find(a => a.id === inv.artistId) || {}).productManager || '';
   const reviewersOf = inv => invoiceReviewers(inv, roster, staff, workflow);
   const canAct = inv => canEdit && !!invoiceStage(inv) && (isAdmin || reviewersOf(inv).some(m => me && m.id === me.id));
@@ -163,6 +164,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
     <div>
       <SectionHeader title="Invoices" artistNote="their own invoices with simple progress (In review, Approved for payment, Paid, Rejected), the rejection reason, and messages. Never the internal queue names or who holds it." description="Artist expense claims and service invoices move through PM Approval, Finance, LH and DP before they’re approved for payment and paid."
         action={isAdmin && <Btn variant="ghost" onClick={() => setShowWorkflow(v => !v)}><UserCog size={14} /> {showWorkflow ? 'Close workflow' : 'Workflow'}</Btn>} />
+      {pmScope && <ArtistToggle artists={myArtists} hidden={pmHidden} setHidden={setPmHidden} />}
 
       {isAdmin && showWorkflow && (
         <section aria-labelledby="wf-h" className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.borderLight }}>
@@ -346,7 +348,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                             // artist's label rep (view and download only) and moves to DP Queue.
                             const artistRec = roster.find(a => a.id === inv.artistId) || {};
                             const rep = staff.find(m => m.id === artistRec.labelRep && m.status !== 'Archived');
-                            const maysend = canEdit && (['Admin', 'Finance', 'Legal'].includes(session.role) || (session.role === 'Product Manager' && artistRec.productManager === session.name));
+                            const maysend = canEdit && (['Admin', 'Finance', 'Legal'].includes(session.role) || (session.role === 'Product Manager' && isPmOf(artistRec, session.name)));
                             const past = ['DP Queue', 'Pay Approved', 'Paid', 'Rejected'].includes(st);
                             if (inv.sentToRepAt || inv.sentToPartnerAt) return <section className="imss-sub-wide text-sm" style={{ color: C.textDim }}>Sent to the partner {String(inv.sentToPartnerAt || inv.sentToRepAt).slice(0, 10)}{inv.sentToRepBy ? ' by ' + inv.sentToRepBy : ''}{rep ? '; shared with ' + rep.name + ' (label rep)' : ''}.{rep && <span className="block mt-1" style={{ color: inv.repSentOutAt ? C.teal : C.textDim }}>{inv.repSentOutAt ? rep.name + ' confirmed sending it out ' + String(inv.repSentOutAt).slice(0, 10) + (inv.repSentOutNote ? ' (' + inv.repSentOutNote + ')' : '') + '.' : inv.repSeenAt ? rep.name + ' has seen it (' + String(inv.repSeenAt).slice(0, 10) + '), not sent out yet.' : 'Not seen by ' + rep.name + ' yet.'}</span>}</section>;
                             if (!maysend || past) return null;

@@ -1,15 +1,16 @@
 import { ClipboardList, DollarSign, Pencil, Plus, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { catLabel, categoryChoices } from './Budget.jsx';
-import { LEDGER_CATEGORIES, formatCurrency, formatDate, todayStr, uid } from '../constants.js';
+import { LEDGER_CATEGORIES, formatCurrency, formatDate, todayStr, uid, isPmOf } from '../constants.js';
 import { ledgerTotals, recoupmentForArtist } from '../finance.js';
 import { C } from '../theme.js';
-import { Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, Select, Td, Th } from '../ui.jsx';
+import { Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, Select, Td, Th, ArtistToggle } from '../ui.jsx';
 
-export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster: fullRoster, revenue, masterGross, canEdit = true, isAdmin = false, sessionName = '', pmScope = null, overheads = [], approver = false }) {
+export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster: fullRoster, revenue, masterGross, canEdit = true, isAdmin = false, sessionName = '', pmScope = null, overheads = [], approver = false, pmHidden = new Set(), setPmHidden = () => {} }) {
   // A Product Manager only sees the ledger for the artists they manage — never
   // company-wide overhead, and never another PM's roster.
-  const roster = useMemo(() => pmScope ? fullRoster.filter(a => a.productManager === pmScope) : fullRoster, [fullRoster, pmScope]);
+  const myArtists = useMemo(() => pmScope ? fullRoster.filter(a => isPmOf(a, pmScope)) : fullRoster, [fullRoster, pmScope]);
+  const roster = useMemo(() => pmScope ? myArtists.filter(a => !pmHidden.has(a.id)) : myArtists, [myArtists, pmScope, pmHidden]);
   const scopedNames = useMemo(() => new Set(roster.map(a => a.name)), [roster]);
   const ledger = useMemo(() => pmScope ? rawLedger.filter(l => l.artist && scopedNames.has(l.artist)) : rawLedger, [rawLedger, pmScope, scopedNames]);
   const empty = { type: 'expense', artist: '', category: LEDGER_CATEGORIES[0], description: '', amount: '', date: todayStr(), recoupable: false, enteredBy: '', overheadId: '', categoryId: '' };
@@ -75,6 +76,7 @@ export function LedgerSection({ invoices = [], ledger: rawLedger, update, roster
   return (
     <div>
       <SectionHeader title="Expenses & income" artistNote="approved expenses recorded against their name, in their Expenses tab. Recoupable ones reduce what they’re due." description="Non-royalty income and expenses — advances, recording costs, marketing spend, and anything else that isn't distributor revenue. Recoupable expenses reduce what an artist is due until their share covers them." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add entry</Btn>} />
+      {pmScope && <ArtistToggle artists={myArtists} hidden={pmHidden} setHidden={setPmHidden} />}
 
       <div className="flex flex-wrap gap-3 mb-6">
         <KPICard icon={TrendingUp} label="Income" value={formatCurrency(totals.income)} tone="teal" />

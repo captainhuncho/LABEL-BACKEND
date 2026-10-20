@@ -1,11 +1,11 @@
 import { ChevronRight, Disc3, FileSpreadsheet, Globe, ImagePlus, Pencil, Plus, Send, Trash2, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid } from '../constants.js';
+import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid, isPmOf } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
 import { ArtworkThumb, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToExcel, resizeImageFile, DocLink } from '../ui.jsx';
 
 export function CatalogSection({ focus = null, catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '', incomingSubmission = null, clearIncoming, onOpenSubmissions }) {
-  const visibleRoster = pmScope ? roster.filter(a => a.productManager === pmScope) : roster;
+  const visibleRoster = pmScope ? roster.filter(a => isPmOf(a, pmScope)) : roster;
   const visibleArtistIds = new Set(visibleRoster.map(a => a.id));
   const visibleCatalog = pmScope ? catalog.filter(c => visibleArtistIds.has(c.artistId)) : catalog;
   const visibleSubmissions = (pmScope ? releaseSubmissions.filter(s => visibleArtistIds.has(s.artistId)) : releaseSubmissions).filter(s => s.status === 'Pending');

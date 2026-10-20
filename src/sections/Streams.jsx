@@ -1,11 +1,16 @@
 import { Download, FileText, Pencil, Plus, Radio, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { PLATFORMS, computePlatformLeaderboard, formatDate, formatNumber, monthKey, monthLabel, todayStr, trackOptionLabel, uid } from '../constants.js';
+import { PLATFORMS, computePlatformLeaderboard, formatDate, formatNumber, monthKey, monthLabel, todayStr, trackOptionLabel, uid, isPmOf } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { Badge, Btn, ConfirmInline, EmptyState, Field, Input, KPICard, SectionHeader, Select, Td, Th } from '../ui.jsx';
+import { Badge, Btn, ConfirmInline, EmptyState, Field, Input, KPICard, SectionHeader, Select, Td, Th, ArtistToggle } from '../ui.jsx';
 
-export function StreamsSection({ streams, update, catalog, releaseMap, artistMap, canEdit = true }) {
+export function StreamsSection({ streams: allStreams, update, catalog: allCatalog, releaseMap, artistMap, canEdit = true, roster = [], pmScope = null, pmHidden = new Set(), setPmHidden = () => {} }) {
+  // A Product Manager sees streams only for their own artists, minus any switched off.
+  const myArtists = useMemo(() => pmScope ? roster.filter(a => isPmOf(a, pmScope)) : [], [roster, pmScope]);
+  const shownIds = useMemo(() => new Set(myArtists.filter(a => !pmHidden.has(a.id)).map(a => a.id)), [myArtists, pmHidden]);
+  const catalog = useMemo(() => pmScope ? allCatalog.filter(c => shownIds.has(c.artistId)) : allCatalog, [allCatalog, pmScope, shownIds]);
+  const streams = useMemo(() => pmScope ? allStreams.filter(x => { const rel = releaseMap[x.releaseId]; return rel && shownIds.has(rel.artistId); }) : allStreams, [allStreams, pmScope, shownIds, releaseMap]);
   const empty = { date: todayStr(), platform: 'Spotify', releaseId: catalog[0] ? catalog[0].id : '', count: '' };
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -24,11 +29,11 @@ export function StreamsSection({ streams, update, catalog, releaseMap, artistMap
     const cnt = Number(form.count);
     if (!cnt || cnt < 0 || !form.releaseId) return;
     const payload = { ...form, count: cnt };
-    if (editing) update(streams.map(s => s.id === editing ? { ...payload, id: editing } : s));
-    else update([...streams, { ...payload, id: uid() }]);
+    if (editing) update(allStreams.map(s => s.id === editing ? { ...payload, id: editing } : s));
+    else update([...allStreams, { ...payload, id: uid() }]);
     closeForm();
   }
-  function remove(id) { update(streams.filter(s => s.id !== id)); setConfirmId(null); }
+  function remove(id) { update(allStreams.filter(s => s.id !== id)); setConfirmId(null); }
   // Date range applies on Generate; product and search stay live.
   const [appliedRange, setAppliedRange] = useState({ startDate: '', endDate: '' });
   const [rangeError, setRangeError] = useState('');
@@ -106,6 +111,7 @@ export function StreamsSection({ streams, update, catalog, releaseMap, artistMap
   return (
     <div>
       <SectionHeader title="Streams" description="Track stream counts by platform and product over time." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
+      {pmScope && <ArtistToggle artists={myArtists} hidden={pmHidden} setHidden={setPmHidden} />}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
         <div className="imss-form-grid gap-3 mb-3">
