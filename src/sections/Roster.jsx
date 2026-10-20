@@ -12,6 +12,8 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
   const [detailId, setDetailId] = useState(focus && focus.artistId || null);
   // Deal terms (share, funding, contract) are for Admin, Finance, Legal and Artist earnings; the database hides them from everyone else.
   const canSeeDeals = canViewRoyalties || ['Admin', 'Finance', 'Legal'].includes(session.role);
+  // Only Admin and Legal add artists (enforced in the database too).
+  const canAddArtists = ['Admin', 'Legal'].includes(session.role);
   useEffect(() => { if (focus && focus.artistId) setDetailId(focus.artistId); }, [focus]);
   const empty = { name: '', genre: '', subGenre: '', royaltyRate: 50, signedDate: todayStr(), contractExpiration: '', email: '', status: 'Active', notes: '', photoUrl: '', productManager: pmScope || '', anr: '', primaryMarket: '', secondaryMarket: '', fundingTier: 'Non-Funded', annualBudget: '', driveFolder: '', reportingPeriod: 'quarterly', deliveryDays: '', payoutThreshold: '' };
   const [showForm, setShowForm] = useState(false);
@@ -78,7 +80,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
           Showing only artists assigned to you as Product Manager ({visibleRoster.length} of {roster.length} total).
         </div>
       )}
-      <SectionHeader title="Roster" description="Everyone signed to the label, their royalty terms, and status." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add artist</Btn>} />
+      <SectionHeader title="Roster" description="Everyone signed to the label, their royalty terms, and status." action={canEdit && canAddArtists && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add artist</Btn>} />
 
       {detailId && roster.find(a => a.id === detailId) ? (
         <ArtistDetailPanel

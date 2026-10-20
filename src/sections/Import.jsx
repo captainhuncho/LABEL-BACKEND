@@ -7,7 +7,7 @@ import EmpireImport from './EmpireImport.jsx';
 import { C, MONO_FONT } from '../theme.js';
 import { Btn, Field, Input, DropZone, SectionHeader, Select, Td, Th } from '../ui.jsx';
 
-export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams, commitEmpireImport, commitStoreStreams, masterGross = [], statementFiles = [], updateStatementFiles, sessionName = '' }) {
+export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, streams, updateRoster, updateCatalog, updateRevenue, updateStreams, commitEmpireImport, commitStoreStreams, masterGross = [], statementFiles = [], updateStatementFiles, sessionName = '', canAddArtists = false }) {
   const [mode, setMode] = useState(null);
   const [step, setStep] = useState('choose');
   const [fileName, setFileName] = useState('');
@@ -22,13 +22,13 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
 
   const [summaryHeaders, setSummaryHeaders] = useState([]);
   const [summaryRows, setSummaryRows] = useState([]);
-  const [summaryForm, setSummaryForm] = useState({ title: '', isrc: '', upc: '', artistChoice: '__new__', newArtistName: '', period: '', storeCol: 0, amountCol: 0, quantityCol: '' });
+  const [summaryForm, setSummaryForm] = useState({ title: '', isrc: '', upc: '', artistChoice: canAddArtists ? '__new__' : (roster[0] ? roster[0].id : ''), newArtistName: '', period: '', storeCol: 0, amountCol: 0, quantityCol: '' });
 
   function reset() {
     setMode(null); setStep('choose'); setFileName(''); setParseError(''); setSummary(null);
     setHeaders([]); setRawRows([]); setMapping({}); setGroups([]);
     setSummaryHeaders([]); setSummaryRows([]);
-    setSummaryForm({ title: '', isrc: '', upc: '', artistChoice: '__new__', newArtistName: '', period: '', storeCol: 0, amountCol: 0, quantityCol: '' });
+    setSummaryForm({ title: '', isrc: '', upc: '', artistChoice: canAddArtists ? '__new__' : (roster[0] ? roster[0].id : ''), newArtistName: '', period: '', storeCol: 0, amountCol: 0, quantityCol: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -131,6 +131,8 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
   }
 
   function confirmImport() {
+    // Only Admin and Legal add artists to the roster (the database refuses anyone else).
+    if (!canAddArtists && groups.some(g => g.releaseChoice === '__create__' && g.artistChoice === '__new__')) { window.alert('Only an Admin or Legal can add new artists. Pick an existing artist, or ask them to add this one first.'); return; }
     let nextRoster = [...roster];
     let nextCatalog = [...catalog];
     const newArtistIdByName = {};
@@ -277,7 +279,7 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
 
   const canReview = !!mapping.amount && (!!mapping.title || !!mapping.isrc);
   const matchedCount = groups.filter(g => g.releaseChoice !== '__create__' && g.releaseChoice !== '__skip__').length;
-  const canReviewSummary = !!summaryForm.title.trim() && !!summaryForm.period && (summaryForm.artistChoice !== '__new__' || !!summaryForm.newArtistName.trim());
+  const canReviewSummary = !!summaryForm.title.trim() && !!summaryForm.period && !!summaryForm.artistChoice && (summaryForm.artistChoice !== '__new__' || (canAddArtists && !!summaryForm.newArtistName.trim()));
 
   return (
     <div>
@@ -376,7 +378,7 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
             <Field label="Artist">
               <Select value={summaryForm.artistChoice} onChange={e => setSummaryForm({ ...summaryForm, artistChoice: e.target.value })}>
                 {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                <option value="__new__">+ New artist</option>
+                {canAddArtists && <option value="__new__">+ New artist</option>}
               </Select>
             </Field>
             {summaryForm.artistChoice === '__new__' && (
@@ -459,7 +461,7 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
                         <div className="mt-2">
                           <Select value={g.artistChoice} onChange={e => updateGroup(g.key, { artistChoice: e.target.value })} style={{ minWidth: 180 }}>
                             {roster.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                            <option value="__new__">+ New artist</option>
+                            {canAddArtists && <option value="__new__">+ New artist</option>}
                           </Select>
                           {g.artistChoice === '__new__' && (
                             <Input className="mt-2" placeholder="New artist name" value={g.newArtistName} onChange={e => updateGroup(g.key, { newArtistName: e.target.value })} style={{ minWidth: 180 }} />
