@@ -205,6 +205,8 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   });
   staff.forEach(s => {
     if ((s.status || 'Active') !== 'Onboarding') return;
+    // Onboarding is between the person and the Admins.
+    if (!isAdmin && s.name !== sessionName) return;
     const prog = onboardingProgress(s);
     items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team', focus: { id: s.id } });
   });
