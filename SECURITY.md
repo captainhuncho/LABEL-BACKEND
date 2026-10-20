@@ -191,8 +191,8 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 
 Every response from Vercel carries (`vercel.json`):
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only)
-- `Content-Security-Policy`: scripts only from this site; styles from this site
-  and Google Fonts; connections only to this site and the Supabase project;
+- `Content-Security-Policy`: scripts only from this site; styles and fonts
+  only from this site (system fonts, no third-party font service); connections only to this site and the Supabase project;
   no framing (`frame-ancestors 'none'`), no plugins, `base-uri`/`form-action`
   locked to self, insecure requests upgraded
 - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
