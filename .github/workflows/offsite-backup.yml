@@ -1,0 +1,60 @@
+# Off-site backup of the Supabase database and Storage, with a restore check.
+# Runs only after Max switches it on (repository variable BACKUP_ENABLED=true)
+# and adds the secrets below; see SECURITY.md → Backups for the runbook.
+#   secrets: SUPABASE_DB_URL (session pooler connection string), SUPABASE_URL,
+#            SUPABASE_SERVICE_ROLE_KEY, BACKUP_AGE_RECIPIENT (age public key;
+#            the private key stays offline with Max, never in GitHub)
+# Each run: dump the database, copy every Storage object with checksums, prove
+# the dump restores into a fresh Postgres (row checksums must match the live
+# ones), then encrypt and keep it as a 90-day workflow artifact (off Supabase).
+name: offsite-backup
+on:
+  schedule: [{ cron: '15 3 * * *' }]
+  workflow_dispatch: {}
+permissions: { contents: read }
+jobs:
+  backup:
+    if: vars.BACKUP_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      restore:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: rehearsal }
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --omit=dev
+      - name: Tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 age
+      - name: Dump database
+        env: { DB: '${{ secrets.SUPABASE_DB_URL }}' }
+        run: |
+          mkdir -p out
+          psql "$DB" -Atc "select key || '=' || md5(value::text) from public.app_data order by key" > out/app_data.md5
+          psql "$DB" -Atc "select count(*) from private.app_data_archive" > out/archive.count
+          pg_dump "$DB" -Fc --no-owner --no-privileges --schema=public --schema=private --schema=storage -f out/database.dump
+      - name: Copy Storage objects
+        env: { SUPABASE_URL: '${{ secrets.SUPABASE_URL }}', SUPABASE_SERVICE_ROLE_KEY: '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' }
+        run: node scripts/backup/storage-export.mjs out/storage
+      - name: Restore rehearsal
+        env: { R: 'postgresql://postgres:rehearsal@localhost:5432/postgres' }
+        run: |
+          psql "$R" -qc "create role anon; create role authenticated; create role service_role; create schema if not exists auth; create table auth.sessions (id uuid primary key); create table auth.users (id uuid primary key, email text);"
+          pg_restore -d "$R" --no-owner --no-privileges --schema=public --schema=private out/database.dump || true
+          psql "$R" -Atc "select key || '=' || md5(value::text) from public.app_data order by key" > out/restored.md5
+          diff out/app_data.md5 out/restored.md5
+          test "$(psql "$R" -Atc 'select count(*) from private.app_data_archive')" = "$(cat out/archive.count)"
+          node -e "const m=require('./out/storage/manifest.json');const fs=require('fs'),c=require('crypto');for(const o of m.objects){const h=c.createHash('sha256').update(fs.readFileSync('out/storage/'+o.bucket+'/'+o.path)).digest('hex');if(h!==o.sha256)throw new Error('checksum '+o.path)}console.log('storage checksums ok:',m.objects.length)"
+      - name: Encrypt
+        env: { RECIPIENT: '${{ secrets.BACKUP_AGE_RECIPIENT }}' }
+        run: tar -C out -czf - . | age -r "$RECIPIENT" -o imss-backup-$(date -u +%F).tar.gz.age
+      - uses: actions/upload-artifact@v4
+        with: { name: 'imss-backup-${{ github.run_id }}', path: 'imss-backup-*.age', retention-days: 90 }

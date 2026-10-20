@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
-import { installStorage } from './storage.js';
+import { installStorage, supabase } from './storage.js';
 // The dashboard and portal load after sign-in, so the sign-in page opens fast.
 const RecordLabelDashboard = lazy(() => import('./App.jsx'));
 import AuthGate from './AuthGate.jsx';
@@ -23,9 +23,20 @@ installPullToRefresh();
 if (window.location.hostname.startsWith('artist.')) document.title = 'IMSS Records — For Artists';
 stackWideTables();
 
+// Production fails closed: without the Supabase settings it never falls back to
+// this browser's local storage (data would look saved but be private to one
+// device). Local development and the demo build (VITE_DEMO=1) keep local mode.
+const misconfigured = import.meta.env.PROD && import.meta.env.VITE_DEMO !== '1' && !supabase;
+
 // Dev only: ?loading=ops|artist|rep shows the loading screen on its own.
 const previewLoading = import.meta.env.DEV && new URLSearchParams(window.location.search).get('loading');
-if (previewLoading) createRoot(document.getElementById('root')).render(<LoadingScreen variant={previewLoading} />);
+if (misconfigured) createRoot(document.getElementById('root')).render(
+  <main role="alert" style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 440, margin: '20vh auto', padding: 16, textAlign: 'center' }}>
+    <h1 style={{ fontSize: 22 }}>IMSS Records is unavailable</h1>
+    <p>This site isn’t connected to its database, so it won’t open. Please contact the label.</p>
+  </main>
+);
+else if (previewLoading) createRoot(document.getElementById('root')).render(<LoadingScreen variant={previewLoading} />);
 else createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <UpdateBanner />

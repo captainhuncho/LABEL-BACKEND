@@ -20,6 +20,10 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 
 ## Sign-in
 
+- Artist portal (`artist_portal()`) returns only what that artist may see:
+  notices for all artists or them, deal changes once sent to them, an allowlist
+  of their own record's fields, invoices without internal review history, and no
+  label settings (`20261020_artist_portal_minimize.sql`).
 - No passwords. People sign in with Google or a one-time code emailed to them
   (Supabase Auth, sent through Resend).
 - Idle sign-out (ops, the artist portal and label reps): after 3 hours without
@@ -228,21 +232,40 @@ These are real and accepted for now. Don't treat them as protected.
 1. **Some data is still readable by the whole team.** The team list is
    readable by every team member, because several screens need it. Invoices are
    readable only by Admin, Legal, Finance, Product Managers, anyone with Budgets
-   & expenses and anyone in the invoice workflow (`private.can_read_invoices`). Budgets keep a snapshot of the artist's deal at creation
-   (`overheads.dealTerm`), readable by anyone with Budgets & expenses. Rows inside a
-   section are not scoped per artist (a Product Manager's view of their own
-   artists is enforced in the app). Invoice stages are enforced in the database;
-   other approval steps (a revenue row, a budget overspend) are still app rules.
+   & expenses and anyone in the invoice workflow (`private.can_read_invoices`).
+   Budgets keep a snapshot of the artist's deal at creation (`overheads.dealTerm`),
+   readable by anyone with Budgets & expenses. **Reads** inside a section are not
+   scoped per artist: a Product Manager can still read other artists' items in
+   sections they may open (the app hides them). **Writes** are scoped: a Product
+   Manager can only add, change or remove their own artists' catalog, request,
+   submission, ledger, invoice (unless in the invoice workflow) and roster items,
+   and only an Admin approves or rejects ledger and revenue entries
+   (`20261020_pm_scope_approvals_grants.sql`). A budget overspend is still an app
+   rule. Per-artist read scoping needs a scoped-read RPC (planned).
 2. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
    Supabase, not this project) as callable by anyone. Review it in the Supabase
    dashboard.
 3. **Backups:** a daily automatic copy (cron `auto-backup`, kept 30 days) and a
-   copy before every restore (kept until removed), both in
-   `private.app_data_archive`; Admins download them on Backup & Restore. The
-   free plan pauses after a week without use.
-4. **Real data is in the repository** (`src/seed.js`, `data/`). Production
-   builds leave it out of the public JavaScript (`OMIT_REAL_DATA`), but anyone
-   with repo access can read it. Keep the repository private.
+   copy before every restore, both in `private.app_data_archive` inside the same
+   Supabase project (not off-site, no Storage files). The off-site backup
+   (`.github/workflows/offsite-backup.yml`) dumps the database, copies every
+   Storage object with SHA-256 checksums, restores the dump into a fresh Postgres
+   and compares every section's checksum, then encrypts with age and keeps it as
+   a 90-day GitHub artifact. It is **off until Max switches it on**: repository
+   variable `BACKUP_ENABLED=true` and secrets `SUPABASE_DB_URL`, `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `BACKUP_AGE_RECIPIENT` (the age private key stays
+   offline with Max). To restore: download the artifact, `age -d -i key.txt`,
+   `pg_restore` into the target project, and re-upload Storage files from the
+   manifest. The free plan pauses after a week without use.
+4. **Real data is in the repository and its history** (`src/seed.js`,
+   `data/ledger-source-export.json`, a 14-line EMPIRE extract in
+   `test/fixtures/empire-sample.csv`; in 10 commits since 2026-10-15). Production
+   builds leave it out of the public JavaScript (`OMIT_REAL_DATA`), and a
+   production build without the Supabase settings now refuses to open (fails
+   closed) instead of running on browser storage. Anyone with repo access can
+   still read it. Removal plan: move the data to an access-controlled store,
+   replace seeds with the demo data, then rewrite history (`git filter-repo`) and
+   force-push, which needs Max's decision and every clone re-made.
 5. **Version bumps:** with Supabase, changing `DATA_VERSION` no longer reseeds
    (which used to wipe shared data). Shape changes need a deliberate migration.
 

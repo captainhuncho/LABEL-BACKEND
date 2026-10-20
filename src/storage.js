@@ -11,6 +11,8 @@ export const supabase = url && publishableKey ? createClient(url, publishableKey
 
 export function installStorage() {
   if (window.storage) return;
+  // Production without Supabase settings fails closed (see main.jsx).
+  if (!supabase && import.meta.env.PROD && import.meta.env.VITE_DEMO !== '1') return;
   window.storage = supabase ? supabaseStorage : localStorageStorage;
 }
 
