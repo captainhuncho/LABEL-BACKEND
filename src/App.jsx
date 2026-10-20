@@ -8,7 +8,7 @@ import { streamsFromRevenue } from './streams.js';
 import { PasskeySettings } from './Passkeys.jsx';
 import { TwoFactorSettings } from './Mfa.jsx';
 import { isStale } from './UpdateBanner.jsx';
-import { checklistProgress, expirationStatus, formatCurrency, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
+import { checklistProgress, expirationStatus, formatCurrency, isPrivilegedRole, missingRequiredDocs, onboardingProgress, permissionsFor, todayStr, uid } from './constants.js';
 import { artistPublishedView, publishSnapshot, expandRemittances, lastClosedPeriod, slug } from './finance.js';
 import { DATA_VERSION, SEED_PUBLISHED, SEED_PUBLISH_LOG, SEED_ACCESS_REQUESTS, SEED_ACTIVITY_LOG, SEED_ARTIST_REQUESTS, SEED_CATALOG, SEED_INVOICES, SEED_LABEL_BUDGETS, SEED_LABEL_SETTINGS, SEED_LEDGER, SEED_MASTER_GROSS, SEED_NOTICES, SEED_PAYOUTS, SEED_PROFILE_REQUESTS, SEED_RELEASE_SUBMISSIONS, SEED_REVENUE, SEED_ROSTER, SEED_STAFF, SEED_STREAMS, SEED_TASKS } from './seed.js';
 import { supabase, isConflict, setSectionPair, subscribeToChanges } from './storage.js';
@@ -207,6 +207,7 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
     if ((s.status || 'Active') !== 'Onboarding') return;
     // Onboarding is between the person and the Admins.
     if (!isAdmin && s.name !== sessionName) return;
+    if (!isPrivilegedRole(role)) return; // the Team page is Admin and Legal only
     const prog = onboardingProgress(s);
     items.push({ id: 'onboard-' + s.id, tone: 'amber', text: s.name + ' onboarding: ' + prog.done + '/' + prog.total + ' tasks', tab: 'team', focus: { id: s.id } });
   });
@@ -281,7 +282,7 @@ function teamAttention({ roster, catalog, staff, tasks = [], revenue = [], ledge
   return items.sort((a, b) => (a.tone === 'red' ? 0 : 1) - (b.tone === 'red' ? 0 : 1));
 }
 
-function TopBar({ onLogout, openItem, roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, sessionName = '', notifications = [], setActive }) {
+function TopBar({ onLogout, openItem, roster, catalog, staff, tasks = [], revenue = [], ledger = [], notices = [], profileRequests = [], artistRequests = [], releaseSubmissions = [], accessRequests = [], isAdmin = false, isPrivileged = false, sessionName = '', notifications = [], setActive }) {
   const [query, setQuery] = useState('');
   const [showNotifs, setShowNotifs] = useState(false);
 
@@ -293,7 +294,7 @@ function TopBar({ onLogout, openItem, roster, catalog, staff, tasks = [], revenu
     catalog.forEach(c => {
       if (c.title.toLowerCase().includes(q) || (c.isrc || '').toLowerCase().includes(q) || (c.upc || '').toLowerCase().includes(q)) out.push({ label: c.title, type: 'Product', tab: 'catalog' });
     });
-    staff.forEach(s => { if (s.name.toLowerCase().includes(q)) out.push({ label: s.name, type: 'Team', tab: 'team', photoUrl: s.photoUrl || '' }); });
+    if (isPrivileged) staff.forEach(s => { if (s.name.toLowerCase().includes(q)) out.push({ label: s.name, type: 'Team', tab: 'team', photoUrl: s.photoUrl || '' }); });
     tasks.forEach(t => { if (t.title.toLowerCase().includes(q)) out.push({ label: t.title, type: 'Task', tab: 'tasks' }); });
     notices.forEach(n => { if (n.title.toLowerCase().includes(q)) out.push({ label: n.title, type: 'Notice', tab: 'notices' }); });
     return out.slice(0, 8);
@@ -681,8 +682,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
 
     isPrivileged && { id: 'team', label: 'Team', icon: UserCog, group: 'Team' },
     isPrivileged && { id: 'access-requests', label: 'Access requests', icon: ShieldCheck, group: 'Team' },
-    session && session.mode === 'team' && { id: 'tasks', label: 'Tasks', icon: ClipboardList, group: 'Team' },
-    perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: 'Team' },
+    session && session.mode === 'team' && { id: 'tasks', label: 'Tasks', icon: ClipboardList, group: isPrivileged ? 'Team' : 'Work' },
+    perms.notices && { id: 'notices', label: 'Noticeboard', icon: Bell, group: isPrivileged ? 'Team' : 'Work' },
     isPrivileged && { id: 'activity', label: 'Activity', icon: History, group: 'Team' },
 
     isAdmin && { id: 'emails', label: 'Email notifications', icon: Mail, group: 'System' },
@@ -776,7 +777,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       <div className="flex-1 min-w-0 imss-content">
         <div className="imss-content-inner">
           <img className="imss-print-logo" src={LOGO_DATA_URI} alt="" aria-hidden="true" />
-        <TopBar onLogout={logout} roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
+        <TopBar onLogout={logout} roster={roster} catalog={catalogView} staff={staff} tasks={tasks} revenue={revenue} ledger={ledger} notices={notices} profileRequests={profileRequests} artistRequests={artistRequests} releaseSubmissions={releaseSubmissions} accessRequests={accessRequests} isAdmin={isAdmin} isPrivileged={isPrivileged} sessionName={session.name} notifications={attention} setActive={setActive} openItem={openItem} />
         {error && (
           <div className="rounded px-3 py-2 text-xs mb-4" style={{ background: C.redSoft, color: C.red, border: '1px solid ' + C.red }}>{error}</div>
         )}
