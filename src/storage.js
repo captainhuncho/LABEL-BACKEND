@@ -82,17 +82,31 @@ const localStorageStorage = {
 const PUBLIC_COPY = { roster: 'rosterPublic' };
 const aliases = new Map();
 const realKey = key => aliases.get(key) || key;
+// Product Managers read artist sections through pm_read() (only their artists'
+// items) and save through pm_save(), which merges their items back.
+const pmKeys = new Set();
+async function readRow(key) {
+  const { data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+async function readPm(key) {
+  const { data, error } = await supabase.rpc('pm_read', { k: key });
+  if (error && error.code === 'PGRST202') return null; // function not deployed yet
+  if (error) throw error;
+  return data && data[0] ? data[0] : null;
+}
 const supabaseStorage = {
   async get(name) {
-    let key = realKey(name);
-    let { data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle();
-    if (!error && !data && PUBLIC_COPY[name] && key === name) {
-      key = PUBLIC_COPY[name];
-      ({ data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle());
-      if (data) aliases.set(name, key);
+    const candidates = aliases.has(name) ? [aliases.get(name)] : [name, PUBLIC_COPY[name]].filter(Boolean);
+    let key = null, data = null;
+    for (const k of candidates) {
+      data = pmKeys.has(k) ? await readPm(k) : await readRow(k);
+      if (!data && !pmKeys.has(k)) { data = await readPm(k); if (data) pmKeys.add(k); }
+      if (data) { key = k; break; }
     }
-    if (error) throw error;
     if (!data) throw new Error('not found: ' + name);
+    if (key !== name) aliases.set(name, key);
     versions.set(key, data.updated_at);
     // Sections are stored as JSON; dataVersion is a bare string.
     return { value: typeof data.value === 'string' ? data.value : JSON.stringify(data.value) };
@@ -102,6 +116,13 @@ const supabaseStorage = {
     let parsed;
     try { parsed = JSON.parse(value); } catch { parsed = value; }
     const updated_at = new Date().toISOString();
+    if (pmKeys.has(key)) {
+      const { data, error } = await supabase.rpc('pm_save', { k: key, v: parsed, expected: versions.get(key) });
+      if (error) throw error;
+      if (!data) throw conflict(name);
+      versions.set(key, data);
+      return true;
+    }
     if (!versions.has(key)) {
       // Never loaded (a new section): create it, but never replace one that exists.
       const { data, error } = await supabase.from('app_data').insert({ key, value: parsed, updated_at }).select('updated_at').maybeSingle();
