@@ -85,6 +85,7 @@ const realKey = key => aliases.get(key) || key;
 // Product Managers read artist sections through pm_read() (only their artists'
 // items) and save through pm_save(), which merges their items back.
 const pmKeys = new Set();
+const selfOnly = new Set();
 async function readRow(key) {
   const { data, error } = await supabase.from('app_data').select('value, updated_at').eq('key', key).maybeSingle();
   if (error) throw error;
@@ -105,6 +106,12 @@ const supabaseStorage = {
       if (!data && !pmKeys.has(k)) { data = await readPm(k); if (data) pmKeys.add(k); }
       if (data) { key = k; break; }
     }
+    // Only Admin and Legal read the team list; everyone else gets their own record.
+    if (!data && name === 'staff') {
+      const { data: self, error } = await supabase.rpc('staff_self');
+      if (error && error.code !== 'PGRST202') throw error;
+      if (self && self[0]) { data = self[0]; key = 'staff'; selfOnly.add('staff'); }
+    }
     if (!data) throw new Error('not found: ' + name);
     if (key !== name) aliases.set(name, key);
     versions.set(key, data.updated_at);
@@ -116,6 +123,9 @@ const supabaseStorage = {
     let parsed;
     try { parsed = JSON.parse(value); } catch { parsed = value; }
     const updated_at = new Date().toISOString();
+    if (selfOnly.has(key)) {
+      const e = new Error('Only Admin and Legal change the team list'); e.code = '42501'; throw e;
+    }
     if (pmKeys.has(key)) {
       const { data, error } = await supabase.rpc('pm_save', { k: key, v: parsed, expected: versions.get(key) });
       if (error) throw error;
