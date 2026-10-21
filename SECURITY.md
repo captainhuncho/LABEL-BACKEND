@@ -166,6 +166,39 @@ public security contact address.
 - A team member can't remove their own email from the staff list (the update
   check would lock them out, so the database refuses it).
 
+## Per-user isolation (checked 2026-10-21)
+
+Owner rule: each person sees only their own data. Checked against the live
+project's policies, grants and every function callable by `authenticated`:
+
+- **Signed-out visitors (`anon`)** have no table grants and can call no
+  function in `public`: they get nothing.
+- **Artists** never read `app_data`, `audit_log` or other people's
+  notifications. Every artist function (`artist_portal`, `artist_add`,
+  `artist_reply_invoice`, `artist_reply_submission`, `artist_resubmit_invoice`,
+  `artist_update_profile`, `artist_my_activity`) takes the artist from the
+  session (`my_artist()`, which also needs the second step), never from the
+  request, and only touches items whose `artistId` is theirs. Storage: an
+  artist reads and adds files only under their own `<artistId>/` folder.
+- **Label reps** go through `rep_portal`, `rep_acknowledge`,
+  `rep_email_releases` and `rep_can_read_document`, all limited to artists whose
+  `labelRep` is that rep (`private.my_rep()`, second step required).
+- **Team** reads sections by role (`can_read_section`); Product Managers' own
+  artists come through `pm_read`/`pm_save`. `app_data` is one row per section,
+  so within a section the team isolation is by role, not by person (Known
+  limitations, 1).
+- **Notifications** are read only by the address they were sent to.
+- **Admin-only lists** (backups, blocked sign-ins, client errors, failed
+  emails) check `private.is_admin()` inside the function.
+- **Confirmed email:** sign-in is by Google or an emailed code, so a session
+  means the email was proven. The database helpers match on the session's email
+  but don't themselves check that the account is confirmed. On 2026-10-21, 3
+  accounts had a password set and 2 were unconfirmed; neither unconfirmed
+  account has ever signed in or has a session.
+- **Two-user test:** `supabase/tests/artist_isolation.sql` (artist A against
+  artist B and a signed-out visitor; rolled back). Not yet run: it needs the
+  live database or a Supabase branch.
+
 ## Email
 
 - Supabase Edge Function `notify` (`supabase/functions/notify/index.ts`) sends
