@@ -51,6 +51,8 @@ export const STAFF_ROLES = ['Admin', 'Legal', 'Finance', 'Product Manager', 'A&R
 // Admin and Legal both get the Team and Access Requests screens.
 // Same match the database uses (private.pm_scope): case and spaces don't count.
 export function isPmOf(artist, pmName) { return !!pmName && String((artist && artist.productManager) || '').trim().toLowerCase() === String(pmName).trim().toLowerCase(); }
+// Roles that see every artist unless Admin or Legal restrict them (staff.artistIds; private.pm_scope).
+export const ARTIST_RESTRICTABLE_ROLES = ['Finance', 'Marketing'];
 export function isPrivilegedRole(role) { return role === 'Admin' || role === 'Legal'; }
 // Admin is the top of the tree: its access is fixed and nobody can dial it
 // down. Legal starts with everything but an Admin can change that.
