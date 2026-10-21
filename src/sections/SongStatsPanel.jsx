@@ -5,7 +5,8 @@ import { useMemo, useState } from 'react';
 import { ExternalLink, Music2, PlaySquare, Radio, Video } from 'lucide-react';
 import { formatDate, formatNumber } from '../constants.js';
 import { C } from '../theme.js';
-import { KPICard, Td, Th } from '../ui.jsx';
+import { ArtistToggle, KPICard, SectionHeader, Td, Th } from '../ui.jsx';
+import { isPmOf } from '../constants.js';
 
 const pick = (row, source, field) => {
   const s = (row.sources || []).find(x => x.source === source);
@@ -13,6 +14,21 @@ const pick = (row, source, field) => {
 };
 const num = v => (v === null ? '—' : formatNumber(v));
 const SHOWN = 15;
+
+// The "Live platform stats" page: Songstats numbers per song, apart from the
+// sales streams (EMPIRE statements and logged streams) on "Sales streams".
+export function LiveStatsSection({ songStats = [], artistMap = {}, roster = [], pmScope = null, pmHidden = new Set(), setPmHidden = () => {} }) {
+  const myArtists = useMemo(() => (pmScope ? roster.filter(a => isPmOf(a, pmScope)) : []), [roster, pmScope]);
+  const shownIds = useMemo(() => new Set(myArtists.filter(a => !pmHidden.has(a.id)).map(a => a.id)), [myArtists, pmHidden]);
+  return (
+    <div>
+      <SectionHeader title="Live platform stats" description="Public, near-live counts per song from Songstats: Spotify, TikTok, YouTube, Shazam and playlists. Updated daily. For what the label is paid on, see Sales streams." />
+      {pmScope && <ArtistToggle artists={myArtists} hidden={pmHidden} setHidden={setPmHidden} />}
+      {songStats.length ? <SongStatsPanel songStats={songStats} artistMap={artistMap} visibleArtistIds={pmScope ? shownIds : null} />
+        : <div className="text-sm" style={{ color: C.textDim }}>No stats yet. They're pulled from Songstats every morning.</div>}
+    </div>
+  );
+}
 
 export function SongStatsPanel({ songStats = [], artistMap = {}, visibleArtistIds = null }) {
   const [showAll, setShowAll] = useState(false);

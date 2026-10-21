@@ -3,10 +3,9 @@ import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PLATFORMS, computePlatformLeaderboard, formatDate, formatNumber, monthKey, monthLabel, todayStr, trackOptionLabel, uid, isPmOf } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
-import { SongStatsPanel } from './SongStatsPanel.jsx';
 import { Badge, Btn, ConfirmInline, EmptyState, Field, Input, KPICard, SectionHeader, Select, Td, Th, ArtistToggle } from '../ui.jsx';
 
-export function StreamsSection({ streams: allStreams, update, catalog: allCatalog, releaseMap, artistMap, canEdit = true, roster = [], pmScope = null, songStats = [], pmHidden = new Set(), setPmHidden = () => {} }) {
+export function StreamsSection({ streams: allStreams, update, catalog: allCatalog, releaseMap, artistMap, canEdit = true, roster = [], pmScope = null, pmHidden = new Set(), setPmHidden = () => {} }) {
   // A Product Manager sees streams only for their own artists, minus any switched off.
   const myArtists = useMemo(() => pmScope ? roster.filter(a => isPmOf(a, pmScope)) : [], [roster, pmScope]);
   const shownIds = useMemo(() => new Set(myArtists.filter(a => !pmHidden.has(a.id)).map(a => a.id)), [myArtists, pmHidden]);
@@ -111,9 +110,8 @@ export function StreamsSection({ streams: allStreams, update, catalog: allCatalo
 
   return (
     <div>
-      <SectionHeader title="Streams" description="Track stream counts by platform and product over time." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
+      <SectionHeader title="Sales streams" description="Stream counts from statements and logged by hand, by platform and product over time. Live public counts are on Live platform stats." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
       {pmScope && <ArtistToggle artists={myArtists} hidden={pmHidden} setHidden={setPmHidden} />}
-      <SongStatsPanel songStats={songStats} artistMap={artistMap} visibleArtistIds={pmScope ? shownIds : null} />
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>
         <div className="imss-form-grid gap-3 mb-3">
