@@ -1,8 +1,9 @@
 // Song stats from Songstats (Enterprise API), pulled server-side so the API key
 // (secret SONGSTATS_API_KEY) never reaches a browser. Called only with the
 // internal x-notify-secret (cron or an Admin tool), like `notify`.
-//   { action: 'probe', isrc }   one song, returns what Songstats sent; stores nothing
-//   { action: 'sync', limit? }  every catalog song with an ISRC → app_data 'songStats'
+//   { action: 'probe', isrc, labelId? }  one song, returns what Songstats sent; stores nothing
+//   { action: 'labels', q }     search Songstats labels (to find our songstats_label_id)
+//   { action: 'sync', offset?, limit? }  catalog songs with an ISRC → app_data 'songStats' (merged by ISRC, so it can run in batches)
 // Stats are kept apart from earnings: royalties only ever come from statements.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -11,6 +12,22 @@ const KEY = Deno.env.get('SONGSTATS_API_KEY') ?? '';
 const BASE = 'https://api.songstats.com/enterprise/v1';
 const MAX_SONGS = 500; // per run; the plan's monthly allowance is shared, so stay well inside it
 const ISRC = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/;
+// A label-based key must name the label on every track request (Songstats openapi: "entity-based API keys").
+// IMSS RECORDS, then the partner imprints Songstats lists as their own labels (from /labels/search, 2026-10-21).
+const IMSS_LABEL = Deno.env.get('SONGSTATS_LABEL_ID') || 'x6wult4n';
+const IMPRINTS: [RegExp, string[]][] = [
+  [/frzngh/i, ['mkit0u6f']],
+  [/\btsd\b/i, ['fn74xvya']],
+  [/kwamzy/i, ['37qprjis']],
+  [/inshadow/i, ['1ep3zhdv']],
+  [/via\s*seri/i, ['sbwo821a']],
+  [/falyn/i, ['0jz1idye']],
+  [/q17/i, ['762azq1r', 'xpzqs89v', 'nedxcw7u']],
+];
+const LABEL_ID = IMSS_LABEL;
+const withLabel = (params: Record<string, string>, labelId = LABEL_ID) => (labelId ? { ...params, songstats_label_id: labelId } : params);
+// Labels to try for a song, best first: the one that worked last time, IMSS, then its imprint.
+const labelsFor = (song: Item, last = '') => [...new Set([last, IMSS_LABEL, ...IMPRINTS.filter(([re]) => re.test(String(song.label || ''))).flatMap(([, ids]) => ids)].filter(Boolean))];
 
 type Item = Record<string, unknown>;
 
@@ -49,28 +66,37 @@ async function section(key: string): Promise<Item[]> {
   return Array.isArray(data?.value) ? data!.value as Item[] : [];
 }
 
-async function sync(limit: number) {
+async function fetchSong(c: Item, prev: Item | undefined): Promise<Item | null> {
+  const isrc = String(c.isrc).trim().toUpperCase();
+  let lastStatus = 0;
+  for (const labelId of labelsFor(c, String(prev?.labelId || ''))) {
+    const r = await songstats('/tracks/stats', withLabel({ isrc, with_links: 'true' }, labelId));
+    lastStatus = r.status;
+    const sources = r.status === 200 ? bySource(r.body) : [];
+    if (!sources.length) continue;
+    const info = ((r.body as Item).track_info || {}) as Item;
+    return { id: isrc, isrc, releaseId: c.id, artistId: c.artistId, title: c.title, labelId, songstatsTrackId: info.songstats_track_id || '', songstatsUrl: info.site_url || '', fetchedAt: new Date().toISOString(), sources };
+  }
+  // keep the last good numbers rather than blanking a song on a bad day
+  return prev ? { ...prev, releaseId: c.id, artistId: c.artistId, title: c.title, lastError: `HTTP ${lastStatus}`, lastTriedAt: new Date().toISOString() } : null;
+}
+
+async function sync(offset: number, limit: number) {
   const songs = (await section('catalog')).filter(c => typeof c.isrc === 'string' && ISRC.test(String(c.isrc).trim().toUpperCase()));
   const prev = new Map((await section('songStats')).map(s => [String(s.isrc), s]));
-  const out: Item[] = [];
-  let ok = 0, failed = 0;
-  for (const c of songs.slice(0, limit)) {
-    const isrc = String(c.isrc).trim().toUpperCase();
-    const r = await songstats('/tracks/stats', { isrc });
-    const sources = r.status === 200 ? bySource(r.body) : [];
-    if (sources.length) {
-      ok++;
-      out.push({ id: isrc, isrc, releaseId: c.id, artistId: c.artistId, title: c.title, fetchedAt: new Date().toISOString(), sources });
-    } else {
-      failed++;
-      // keep the last good numbers rather than blanking a song on a bad day
-      const old = prev.get(isrc);
-      if (old) out.push({ ...old, releaseId: c.id, artistId: c.artistId, title: c.title, lastError: `HTTP ${r.status}` });
-    }
+  const batch = songs.slice(offset, offset + limit);
+  const results: (Item | null)[] = [];
+  for (let i = 0; i < batch.length; i += 4) { // a few at a time, well inside the function's time limit
+    results.push(...await Promise.all(batch.slice(i, i + 4).map(c => fetchSong(c, prev.get(String(c.isrc).trim().toUpperCase())))));
   }
-  const { error } = await db.from('app_data').upsert({ key: 'songStats', value: out, updated_at: new Date().toISOString() });
+  const merged = new Map(prev);
+  results.forEach(r => { if (r) merged.set(String(r.isrc), r); });
+  const live = new Set(songs.map(c => String(c.isrc).trim().toUpperCase()));
+  const value = [...merged.values()].filter(s => live.has(String(s.isrc)));
+  const { error } = await db.from('app_data').upsert({ key: 'songStats', value, updated_at: new Date().toISOString() });
   if (error) throw error;
-  return { songs: songs.length, fetched: ok, failed, stored: out.length };
+  const fetched = results.filter(r => r && !r.lastError);
+  return { songs: songs.length, offset, batch: batch.length, fetched: fetched.length, notFound: batch.filter((c, i) => !results[i] || results[i]!.lastError).map(c => c.title), stored: value.length, next: offset + limit < songs.length ? offset + limit : null };
 }
 
 Deno.serve(async req => {
@@ -83,11 +109,13 @@ Deno.serve(async req => {
     if (body.action === 'probe') {
       const isrc = String(body.isrc || '').trim().toUpperCase();
       if (!ISRC.test(isrc)) return Response.json({ error: 'Give one valid ISRC' }, { status: 400 });
-      const info = await songstats('/tracks/info', { isrc });
-      const stats = await songstats('/tracks/stats', { isrc });
+      const labelId = String(body.labelId || LABEL_ID);
+      const info = await songstats('/tracks/info', withLabel({ isrc }, labelId));
+      const stats = await songstats('/tracks/stats', withLabel({ isrc }, labelId));
       return Response.json({ info, stats, parsed: bySource(stats.body) });
     }
-    if (body.action === 'sync') return Response.json(await sync(Math.min(Number(body.limit) || MAX_SONGS, MAX_SONGS)));
+    if (body.action === 'labels') return Response.json(await songstats('/labels/search', { q: String(body.q || '').slice(0, 100), limit: '10' }));
+    if (body.action === 'sync') return Response.json(await sync(Math.max(0, Number(body.offset) || 0), Math.min(Number(body.limit) || 30, MAX_SONGS)));
     return Response.json({ error: 'unknown action' }, { status: 400 });
   } catch (e) {
     return new Response(String(e), { status: 500 });
