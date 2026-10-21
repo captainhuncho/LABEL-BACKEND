@@ -10,7 +10,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
   const visibleCatalog = pmScope ? catalog.filter(c => visibleArtistIds.has(c.artistId)) : catalog;
   const visibleSubmissions = (pmScope ? releaseSubmissions.filter(s => visibleArtistIds.has(s.artistId)) : releaseSubmissions).filter(s => s.status === 'Pending');
 
-  const empty = { artistId: visibleRoster[0] ? visibleRoster[0].id : '', title: '', type: 'Single', genre: '', releaseDate: todayStr(), isrc: '', upc: '', status: 'Processing', artworkUrl: '', enteredBy: '', hasVideo: false, licenseExpiration: '', collaborators: [], primaryArtists: [], primaryMarket: '', secondaryMarket: '', checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs(), label: '', explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits() };
+  const empty = { artistId: visibleRoster[0] ? visibleRoster[0].id : '', title: '', type: 'Single', album: '', genre: '', releaseDate: todayStr(), isrc: '', upc: '', status: 'Processing', artworkUrl: '', enteredBy: '', hasVideo: false, licenseExpiration: '', collaborators: [], primaryArtists: [], primaryMarket: '', secondaryMarket: '', checklist: makeReleaseChecklist(), distributionDocs: makeDistributionDocs(), label: '', explicit: 'Not Set', dolbyAtmos: false, lyrics: '', duration: '', credits: emptyCredits() };
   const [distributorEmail, setDistributorEmail] = useState('');
   const [fromSubmissionId, setFromSubmissionId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -260,6 +260,10 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
               {RELEASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </Field>
+          {/* The album or EP a track belongs to, as the distributor names it; tracks sharing it are one product. */}
+          {(form.type === 'Album Track' || form.type === 'EP Track' || form.album) && (
+            <Field label={form.type === 'EP Track' ? 'EP' : 'Album'}><Input value={form.album || ''} onChange={e => setForm({ ...form, album: e.target.value })} placeholder="e.g. USHUKELA (Disc A)" /></Field>
+          )}
           <Field label="Genre"><Input value={form.genre} onChange={e => setForm({ ...form, genre: e.target.value })} placeholder={(roster.find(a => a.id === form.artistId) || {}).genre || 'e.g. Alt-Pop'} /></Field>
           <Field label="Release date">
             <Input type="date" value={form.releaseDate} onChange={e => setForm({ ...form, releaseDate: e.target.value })} />
@@ -413,8 +417,9 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
 
       {roster.length === 0 && <div className="text-sm mb-4" style={{ color: C.textDim }}>Add an artist to the roster before creating a release.</div>}
 
-      <ExportBar filename="imss-catalog" headers={['Title', 'Artist', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'License Expiration', 'Has Video', 'Collaborators', 'Entered By']} rows={sorted.map(r => [
+      <ExportBar filename="imss-catalog" headers={['Title', 'Album', 'Artist', 'Type', 'Release Date', 'ISRC', 'UPC', 'Status', 'Primary Market', 'Secondary Market', 'License Expiration', 'Has Video', 'Collaborators', 'Entered By']} rows={sorted.map(r => [
         r.title,
+        r.album || '',
         artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown',
         r.type,
         r.releaseDate,
@@ -517,6 +522,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
                 <div className="p-3">
                   <div className="text-xs" style={{ color: C.textFaint }}>{formatDate(r.releaseDate)}</div>
                   <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, marginTop: 2 }}>{canEdit ? <button onClick={e => { e.stopPropagation(); openEdit(r); }} style={{ font: 'inherit', textAlign: 'left' }}>{r.title}</button> : r.title}</div>
+                  {r.album && <div style={{ fontSize: 12, color: C.textFaint, marginTop: 1 }}>{r.album}</div>}
                   <div style={{ fontStyle: 'italic', fontSize: 13, color: C.textDim, marginTop: 1 }}>
                     {[artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown', ...(r.primaryArtists || [])].join(' & ')}
                     {r.collaborators && r.collaborators.length > 0 && ' feat. ' + r.collaborators.map(c => c.name).join(', ')}
@@ -553,7 +559,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
               {sorted.map(r => (
                 <tr key={r.id} data-focus={r.id}>
                   <Td><ArtworkThumb release={r} size={36} /></Td>
-                  <Td>{r.title}{r.collaborators && r.collaborators.length > 0 && <div className="text-xs" style={{ color: C.textFaint }}>feat. {r.collaborators.map(c => c.name).join(', ')}</div>}</Td>
+                  <Td>{r.title}{r.album && <div className="text-xs" style={{ color: C.textFaint }}>{r.album}</div>}{r.collaborators && r.collaborators.length > 0 && <div className="text-xs" style={{ color: C.textFaint }}>feat. {r.collaborators.map(c => c.name).join(', ')}</div>}</Td>
                   <Td>{artistMap[r.artistId] ? artistMap[r.artistId].name : 'Unknown'}</Td>
                   <Td>{r.type}{r.hasVideo && <Video size={12} style={{ display: 'inline', marginLeft: 5, verticalAlign: 'middle', color: C.textFaint }} />}</Td>
                   <Td>{r.primaryMarket || '—'}{r.secondaryMarket && <div className="text-xs" style={{ color: C.textFaint }}>+ {r.secondaryMarket}</div>}</Td>
