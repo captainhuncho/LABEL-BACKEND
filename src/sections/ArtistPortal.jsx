@@ -1,4 +1,4 @@
-import { Calendar, ChevronDown, Megaphone, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, History, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
+import { Calendar, ChevronDown, Megaphone, ChevronRight, ClipboardList, Coins, Disc3, DollarSign, Eye, FileText, Globe, LayoutDashboard, History, Activity, LogOut, MessageSquare, Plus, Trash2, TrendingUp, Upload, UserCog, Video, Wallet } from 'lucide-react';
 import { DOC_MAX_BYTES, uploadDocument, supabase } from '../storage.js';
 import React, { useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -32,8 +32,9 @@ import { ProfileTab } from './portal/ProfileTab.jsx';
 import { ReleasesTab } from './portal/ReleasesTab.jsx';
 import { OverviewTab } from './portal/OverviewTab.jsx';
 import { MyActivity } from '../RepApp.jsx';
+import { SongStatsPanel } from './SongStatsPanel.jsx';
 
-export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [], resubmitInvoice = null, preview = false }) {
+export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, masterGross = [], payouts, ledger = [], notices = [], profileRequests = [], updateProfileRequests, artistRequests = [], updateArtistRequests, releaseSubmissions = [], updateReleaseSubmissions, invoices = [], updateInvoices, replyToSubmission = null, replyToInvoice = null, statementFiles = [], dealChanges = [], labelSettings, onLogout, saveProfile = null, budgets = [], resubmitInvoice = null, preview = false, songStats = [] }) {
   // Same published figures the artist sees decide whether a license is held (src/licenses.js).
   const licenseCtx = { ledger, invoices, publishedRevenue: revenue };
   // A rights return shows to the artist only once Admin or Legal has sent it to their dashboard.
@@ -282,6 +283,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
     { id: 'payouts', label: 'Payouts', icon: Wallet },
     (isFunded || budgets.length > 0) && { id: 'budget', label: 'Budget', icon: ClipboardList },
     { id: 'releases', label: 'Releases', icon: Disc3 },
+    songStats.length > 0 && { id: 'stats', label: 'Live stats', icon: Activity },
     { id: 'requests', label: 'Requests', icon: MessageSquare },
     { id: 'profile', label: 'Profile', icon: UserCog },
     { id: 'activity', label: 'My activity', icon: History },
@@ -518,6 +520,7 @@ export function ArtistPortalShell({ artist, roster, catalog, revenue, streams, m
 
         {tab === 'releases' && <ReleasesTab addSubmitCollaborator={addSubmitCollaborator} addSubmitPrimaryArtist={addSubmitPrimaryArtist} artist={artist} artistAddError={artistAddError} artistCatalog={artistCatalog} artistCategory={artistCategory} collabError={collabError} featuredPct={featuredPct} handleSplitSheet={handleSplitSheet} handleSubmitArtwork={handleSubmitArtwork} licenseCtx={licenseCtx} mySubmissions={mySubmissions} newSubmitCollab={newSubmitCollab} newSubmitPrimaryArtist={newSubmitPrimaryArtist} pickedReleases={pickedReleases} removeSubmitCollaborator={removeSubmitCollaborator} removeSubmitPrimaryArtist={removeSubmitPrimaryArtist} replyDrafts={replyDrafts} replyError={replyError} rightsArtist={rightsArtist} sendSubmissionReply={sendSubmissionReply} sendsTo={sendsTo} setArtistAddError={setArtistAddError} setArtistCategory={setArtistCategory} setCollabError={setCollabError} setFeaturedPct={setFeaturedPct} setNewSubmitCollab={setNewSubmitCollab} setNewSubmitPrimaryArtist={setNewSubmitPrimaryArtist} setPickedReleases={setPickedReleases} setReplyDrafts={setReplyDrafts} setShowSubmitForm={setShowSubmitForm} setSubmitDocNote={setSubmitDocNote} setSubmitError={setSubmitError} setSubmitForm={setSubmitForm} showSubmitForm={showSubmitForm} splitSheetRef={splitSheetRef} splitsTotal={splitsTotal} submitArtworkRef={submitArtworkRef} submitError={submitError} submitForm={submitForm} submitReleaseSubmission={submitReleaseSubmission} toggleSubmitDoc={toggleSubmitDoc} />}
 
+        {tab === 'stats' && <><h1 className="imss-portal-title">Live stats</h1><SongStatsPanel songStats={songStats} artistMap={{ [artist.id]: artist }} note="Public, all-time counts for your songs from Songstats, updated daily. They aren't your royalties: those come from the statements in Royalties and Statements." /></>}
         {tab === 'activity' && <MyActivity title={false} demo={!supabase} repName={artist.name} rpc="artist_my_activity" intro="What you’ve done here: sign-ins, requests, invoices and messages. Only you and the label’s Admins can see this." empty="As you send requests, invoices and messages, they show here." />}
         {tab === 'profile' && <ProfileTab artist={artist} cropFile={cropFile} handleProfilePhoto={handleProfilePhoto} monthLong={monthLong} myPendingRequest={myPendingRequest} myProfileRequests={myProfileRequests} paid={paid} pctLabel={pctLabel} profileForm={profileForm} profileInputRef={profileInputRef} profileSaved={profileSaved} saveProfile={saveProfile} setCropFile={setCropFile} setProfileForm={setProfileForm} submitProfileRequest={submitProfileRequest} />}
 

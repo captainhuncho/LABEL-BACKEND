@@ -30,7 +30,7 @@ export function LiveStatsSection({ songStats = [], artistMap = {}, roster = [], 
   );
 }
 
-export function SongStatsPanel({ songStats = [], artistMap = {}, visibleArtistIds = null }) {
+export function SongStatsPanel({ songStats = [], artistMap = {}, visibleArtistIds = null, note = null }) {
   const [showAll, setShowAll] = useState(false);
   const rows = useMemo(() => songStats
     .filter(r => Array.isArray(r.sources) && r.sources.length)
@@ -56,10 +56,10 @@ export function SongStatsPanel({ songStats = [], artistMap = {}, visibleArtistId
         <span className="text-xs" style={{ color: C.textFaint }}>From Songstats{updated ? ' · updated ' + formatDate(updated.slice(0, 10)) : ''}</span>
       </div>
       <p className="text-xs mb-4" style={{ color: C.textDim, maxWidth: '70ch' }}>
-        Public, all-time counts per song. Kept apart from the EMPIRE streams on this page: those are what the label is paid on, these are a near-live picture, so they're never added together. TikTok counts views of every video using the sound.
+        {note || "Public, all-time counts per song. Kept apart from the sales streams: those are what the label is paid on, these are a near-live picture, so they're never added together. TikTok counts views of every video using the sound."}
       </p>
       <div className="imss-bento mb-4">
-        <div className="imss-bento-span-1"><KPICard icon={Radio} label="Spotify streams" value={formatNumber(total('spotify'))} sub={rows.length + ' songs'} tone="teal" /></div>
+        <div className="imss-bento-span-1"><KPICard icon={Radio} label="Spotify streams" value={formatNumber(total('spotify'))} sub={rows.length + (rows.length === 1 ? ' song' : ' songs')} tone="teal" /></div>
         <div className="imss-bento-span-1"><KPICard icon={Video} label="TikTok views" value={formatNumber(total('tiktok'))} /></div>
         <div className="imss-bento-span-1"><KPICard icon={PlaySquare} label="YouTube views" value={formatNumber(total('youtube'))} /></div>
         <div className="imss-bento-span-1"><KPICard icon={Music2} label="Shazams" value={formatNumber(total('shazam'))} /></div>

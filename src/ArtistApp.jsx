@@ -56,6 +56,7 @@ export default function ArtistApp({ signOut }) {
       statementFiles={data.statementFiles || []}
       dealChanges={data.dealChanges || []}
       budgets={data.budgets || []}
+      songStats={data.songStats || []}
       resubmitInvoice={async (id, changes) => {
         // Fixing a returned invoice is like submitting one: it needs a fresh passkey or code.
         if (!(await askStepUp())) { load(); return; }
