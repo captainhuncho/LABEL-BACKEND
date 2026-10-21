@@ -1,6 +1,6 @@
 # Off-site backup of the Supabase database and Storage, with a restore check.
-# Runs only after Max switches it on (repository variable BACKUP_ENABLED=true)
-# and adds the secrets below; see SECURITY.md → Backups for the runbook.
+# Runs only after Max switches it on (variable BACKUP_ENABLED=true) and adds the
+# secrets below, all in the GitHub environment named below; see SECURITY.md → Backups.
 #   secrets: SUPABASE_DB_URL (session pooler connection string), SUPABASE_URL,
 #            SUPABASE_SERVICE_ROLE_KEY, BACKUP_AGE_RECIPIENT (age public key;
 #            the private key stays offline with Max, never in GitHub)
@@ -14,7 +14,8 @@ on:
 permissions: { contents: read }
 jobs:
   backup:
-    if: vars.BACKUP_ENABLED == 'true'
+    # the secrets and BACKUP_ENABLED live in this environment (named when it was set up)
+    environment: BACKUP_AGE_RECIPIENT
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -24,6 +25,10 @@ jobs:
         ports: ['5432:5432']
         options: --health-cmd pg_isready --health-interval 5s --health-retries 20
     steps:
+      # environment variables aren't visible to a job-level `if`, so the switch is checked here
+      - name: Switched on?
+        if: vars.BACKUP_ENABLED != 'true'
+        run: echo 'BACKUP_ENABLED is not true; nothing to do.' && exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
