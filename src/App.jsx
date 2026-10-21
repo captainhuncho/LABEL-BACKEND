@@ -355,6 +355,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [catalog, setCatalog] = useState([]);
   const [revenue, setRevenue] = useState([]);
   const [streams, setStreams] = useState([]);
+  const [songStats, setSongStats] = useState([]); // Songstats pull (songstats edge function); read-only here
   const [payouts, setPayouts] = useState([]);
   const [masterGross, setMasterGross] = useState([]);
   const [labelSettings, setLabelSettings] = useState(SEED_LABEL_SETTINGS);
@@ -415,6 +416,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['catalog', setCatalog, SEED_CATALOG],
         ['revenue', setRevenue, SEED_REVENUE],
         ['streams', setStreams, SEED_STREAMS],
+        ['songStats', setSongStats, []],
         ['payouts', setPayouts, SEED_PAYOUTS],
         ['masterGross', setMasterGross, SEED_MASTER_GROSS],
         ['labelSettings', setLabelSettings, SEED_LABEL_SETTINGS],
@@ -800,7 +802,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'catalog' && <CatalogSection focus={focus} catalog={catalogView} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
         {active === 'calendar' && <ReleaseCalendarSection focus={focus} catalog={catalogView} roster={roster} artistMap={artistMap} tasks={tasks} />}
         {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} catalog={catalogView} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
-        {active === 'streams' && <StreamsSection streams={streamsView} update={updateStreams} catalog={catalogView} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} roster={roster} pmScope={pmScope} pmHidden={pmHidden} setPmHidden={setPmHidden} />}
+        {active === 'streams' && <StreamsSection songStats={songStats} streams={streamsView} update={updateStreams} catalog={catalogView} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} roster={roster} pmScope={pmScope} pmHidden={pmHidden} setPmHidden={setPmHidden} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection catalog={catalogView} releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}
         {active === 'invoices' && <InvoicesSection overheads={overheads} ledger={ledger} approver={canApproveBudgets(session, staff)} invoices={invoices} update={updateInvoices} roster={roster} staff={staff} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} session={session} pmScope={pmScope} pmHidden={pmHidden} setPmHidden={setPmHidden} />}

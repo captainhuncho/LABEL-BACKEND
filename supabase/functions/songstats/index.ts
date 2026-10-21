@@ -82,7 +82,8 @@ async function fetchSong(c: Item, prev: Item | undefined): Promise<Item | null> 
 }
 
 async function sync(offset: number, limit: number) {
-  const songs = (await section('catalog')).filter(c => typeof c.isrc === 'string' && ISRC.test(String(c.isrc).trim().toUpperCase()));
+  // `statsWith`: a version Songstats counts under another song (e.g. Dolby Atmos under the main song), so it isn't looked up
+  const songs = (await section('catalog')).filter(c => typeof c.isrc === 'string' && ISRC.test(String(c.isrc).trim().toUpperCase()) && !c.statsWith);
   const prev = new Map((await section('songStats')).map(s => [String(s.isrc), s]));
   const batch = songs.slice(offset, offset + limit);
   const results: (Item | null)[] = [];
