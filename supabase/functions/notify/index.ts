@@ -498,7 +498,7 @@ const addressOf = (s: string) => lower((String(s).match(/<([^>]+)>/) || [, s])[1
 
 async function handleInbound(data: Item) {
   const emailId = data.email_id || data.id;
-  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, { headers: { Authorization: `Bearer ${RESEND_KEY}` } });
+  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, { headers: { Authorization: `Bearer ${RESEND_KEY}` }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) return { skipped: 'could not fetch email ' + res.status };
   const email = await res.json();
   const toList: string[] = [].concat(email.to || data.to || []).map(addressOf);

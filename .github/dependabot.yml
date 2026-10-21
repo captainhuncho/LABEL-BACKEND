@@ -1,0 +1,12 @@
+# Monthly dependency updates, at most two open at a time so each upgrade is
+# checked on its own (the ci workflow runs on every Dependabot pull request).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 2
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 2
