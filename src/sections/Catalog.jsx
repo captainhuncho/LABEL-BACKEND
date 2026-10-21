@@ -2,6 +2,7 @@ import { ChevronRight, Disc3, FileSpreadsheet, Globe, ImagePlus, Pencil, Plus, S
 import { useEffect, useRef, useState } from 'react';
 import { COLLABORATOR_ROLES, EXPLICIT_OPTIONS, MARKETS, RELEASE_STATUSES, RELEASE_TYPES, checklistProgress, emptyCredits, formatDate, makeDistributionDocs, makeReleaseChecklist, missingRequiredDocs, releaseStatusTone, todayStr, uid, isPmOf } from '../constants.js';
 import { C, MONO_FONT } from '../theme.js';
+import { CatalogImport } from './CatalogImport.jsx';
 import { ArtworkThumb, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, PeopleInput, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, exportRowsToExcel, resizeImageFile, DocLink } from '../ui.jsx';
 
 export function CatalogSection({ focus = null, catalog, update, roster, artistMap, canEdit = true, pmScope = null, releaseSubmissions = [], updateReleaseSubmissions, sessionName = '', incomingSubmission = null, clearIncoming, onOpenSubmissions }) {
@@ -14,6 +15,7 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
   const [distributorEmail, setDistributorEmail] = useState('');
   const [fromSubmissionId, setFromSubmissionId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [filterArtist, setFilterArtist] = useState('all');
@@ -171,7 +173,8 @@ export function CatalogSection({ focus = null, catalog, update, roster, artistMa
 
   return (
     <div>
-      <SectionHeader title="Catalog" description="Every release across the roster — singles, EPs, and albums." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add release</Btn>} />
+      <SectionHeader title="Catalog" description="Every release across the roster — singles, EPs, and albums." action={canEdit && <div className="flex gap-2 flex-wrap"><Btn variant="ghost" onClick={() => setShowImport(v => !v)}><FileSpreadsheet size={14} /> Import catalog</Btn><Btn variant="primary" onClick={openAdd}><Plus size={14} /> Add release</Btn></div>} />
+      {canEdit && showImport && <CatalogImport catalog={catalog} roster={visibleRoster} update={update} onClose={() => setShowImport(false)} />}
 
       {canEdit && visibleSubmissions.length > 0 && onOpenSubmissions && (
         <button onClick={onOpenSubmissions} className="w-full text-left rounded border px-4 py-3 mb-6 text-sm" style={{ background: C.amberSoft, borderColor: C.amber, color: C.text }}>
