@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import { useRef, useState } from 'react';
 import { IMPORT_FIELD_LABELS, buildImportGroups, extractPivotTable, formatCurrency, formatNumber, guessColumnIndex, guessMapping, guessPlatform, guessReleaseTitleFromFilename, monthLabel, normalizeIsrc, normalizeStr, parseAmount, parseQuantity, parseStatementDate, todayStr, trackOptionLabel, uid } from '../constants.js';
 import { slug } from '../finance.js';
+import { catalogCodeFills } from '../empire.js';
 import EmpireImport from './EmpireImport.jsx';
 import { C, MONO_FONT } from '../theme.js';
 import { Btn, Field, Input, DropZone, SectionHeader, Select, Td, Th } from '../ui.jsx';
@@ -196,12 +197,16 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
     });
 
     const revenueAdds = Object.values(revenueByKey);
+    // Rule: an import always fills in a song's missing ISRC/UPC (never replaces one).
+    const codes = catalogCodeFills(resolved.filter(g => g.resolvedReleaseId).map(g => ({ release: nextCatalog.find(c => c.id === g.resolvedReleaseId), isrc: g.isrc, upc: g.upc })), nextCatalog);
+    nextCatalog = codes.next;
     updateRoster(nextRoster);
     updateCatalog(nextCatalog);
     if (revenueAdds.length) updateRevenue([...revenue.filter(r => !revenueByKey[r.id]), ...revenueAdds]);
     if (streamAdds.length) updateStreams([...streams, ...streamAdds]);
 
     setSummary({
+      codesAdded: codes.filled.length, codeMismatches: codes.mismatches,
       revenueCount: revenueAdds.length,
       streamCount: streamAdds.length,
       newArtistCount: nextRoster.length - roster.length,
@@ -262,12 +267,15 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
       revenueAdds.push({ id: key, artist: artist.name, artistSlug, title: release.title, month, earning: earningTotal, stores, type: release.type || 'Single', epAlbum: null, releaseDate: release.releaseDate || null, approvalStatus: 'Approved', approvedBy: 'Import', approvedAt: todayStr() });
     }
 
+    const codes = catalogCodeFills([{ release, isrc: summaryForm.isrc, upc: summaryForm.upc }], nextCatalog);
+    nextCatalog = codes.next;
     updateRoster(nextRoster);
     updateCatalog(nextCatalog);
     if (revenueAdds.length) updateRevenue([...revenue.filter(r => r.id !== revenueAdds[0].id), ...revenueAdds]);
     if (streamAdds.length) updateStreams([...streams, ...streamAdds]);
 
     setSummary({
+      codesAdded: codes.filled.length, codeMismatches: codes.mismatches,
       earningsCount: revenueAdds.length,
       streamCount: streamAdds.length,
       newArtistCount: nextRoster.length - roster.length,
@@ -286,7 +294,7 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
       <SectionHeader title="Import" artistNote="nothing yet. Imported revenue and statement files stay internal until you publish them." description="Upload a royalty statement CSV from a distributor or DSP. IMSS Records matches it to your roster and catalog, and logs the earnings automatically — including the store-by-store breakdown artists see." />
 
       {mode === 'empire' && (
-        <EmpireImport publishedRevenue={publishedRevenue} updatePublishedRevenue={updatePublishedRevenue} roster={roster} catalog={catalog} revenue={revenue} masterGross={masterGross} updateRevenue={updateRevenue} commitEmpireImport={commitEmpireImport} commitStoreStreams={commitStoreStreams} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} onDone={reset} />
+        <EmpireImport publishedRevenue={publishedRevenue} updatePublishedRevenue={updatePublishedRevenue} roster={roster} catalog={catalog} revenue={revenue} masterGross={masterGross} updateRevenue={updateRevenue} commitEmpireImport={commitEmpireImport} commitStoreStreams={commitStoreStreams} updateCatalog={updateCatalog} statementFiles={statementFiles} updateStatementFiles={updateStatementFiles} sessionName={sessionName} onDone={reset} />
       )}
 
       {step === 'choose' && (
@@ -519,6 +527,8 @@ export function ImportSection({ publishedRevenue = [], updatePublishedRevenue, r
               {summary.streamCount > 0 && <> and {formatNumber(summary.streamCount)} stream {summary.streamCount === 1 ? 'entry' : 'entries'}</>}.
               {summary.newReleaseCount > 0 && <> Created {summary.newReleaseCount} new {summary.newReleaseCount === 1 ? 'release' : 'releases'}.</>}
               {summary.newArtistCount > 0 && <> Added {summary.newArtistCount} new {summary.newArtistCount === 1 ? 'artist' : 'artists'} to the roster.</>}
+              {summary.codesAdded > 0 && <> Added {summary.codesAdded} missing ISRC/UPC {summary.codesAdded === 1 ? 'code' : 'codes'} to the Catalog.</>}
+              {(summary.codeMismatches || []).map(m => <span key={m.id + m.field}> {m.title}: the Catalog has {m.field.toUpperCase()} {m.have || 'none'}, the file says {m.statement}; left as it is.</span>)}
               {summary.skippedRows > 0 && <> Skipped {summary.skippedRows} {summary.skippedRows === 1 ? 'row' : 'rows'} with no usable amount.</>}
             </div>
           </div>

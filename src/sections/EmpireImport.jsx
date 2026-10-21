@@ -4,7 +4,7 @@
 import { useRef, useState } from 'react';
 import Papa from 'papaparse';
 import { CheckCircle2, FileText, Upload } from 'lucide-react';
-import { aggregateEmpire, cleanTitle, isEmpireDetailed, parseEmpireDetailed } from '../empire.js';
+import { aggregateEmpire, catalogCodeFills, cleanTitle, isEmpireDetailed, parseEmpireDetailed } from '../empire.js';
 import { slug } from '../finance.js';
 import { formatCents, formatNumber, monthLabel, normalizeIsrc, todayStr, uid } from '../constants.js';
 import { isStreamType } from '../streams.js';
@@ -16,7 +16,7 @@ import { Btn, DropZone, Td, Th } from '../ui.jsx';
 const lower = s => String(s || '').trim().toLowerCase();
 const months = obj => Object.keys(obj || {}).sort().map(monthLabel).join(', ');
 
-export default function EmpireImport({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, masterGross = [], updateRevenue, commitEmpireImport, commitStoreStreams, statementFiles = [], updateStatementFiles, sessionName = '', onDone }) {
+export default function EmpireImport({ publishedRevenue = [], updatePublishedRevenue, roster, catalog, revenue, masterGross = [], updateRevenue, commitEmpireImport, commitStoreStreams, statementFiles = [], updateStatementFiles, updateCatalog, sessionName = '', onDone }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -154,8 +154,15 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
         [...revenue.filter(r => !ids.has(r.id)), ...rows],
         [...records.map(({ fileIndex, ...r }) => r), ...statementFiles],
       );
+      // Rule: an import always fills in a song's missing ISRC/UPC (never replaces one).
+      let codesSaved = 0, codesError = '';
+      const codes = catalogCodeFills(matched, catalog);
+      if (codes.filled.length && updateCatalog) {
+        try { if ((await updateCatalog(codes.next)) !== false) codesSaved = codes.filled.length; else codesError = 'not saved'; }
+        catch (e) { codesError = e.message || String(e); }
+      }
       logActivity('imported EMPIRE statements', preview.files.filter(f => !f.skipped).map(f => f.name).join(', ') + ' · ' + rows.length + ' song-months');
-      setDone({ rows: rows.length, replaced: matched.filter(g => g.existing).length, gross: rows.reduce((t, r) => t + r.earning, 0), artists: new Set(records.map(r => r.artistId)).size, files: preview.files.filter(f => !f.skipped).length, skipped: preview.groups.length - matched.length });
+      setDone({ codesSaved, codesError, codeMismatches: codes.mismatches, rows: rows.length, replaced: matched.filter(g => g.existing).length, gross: rows.reduce((t, r) => t + r.earning, 0), artists: new Set(records.map(r => r.artistId)).size, files: preview.files.filter(f => !f.skipped).length, skipped: preview.groups.length - matched.length });
       setPreview(null);
     } catch (err) {
       // Before the database call, no record can reference these new uploads.
@@ -175,6 +182,8 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
         <p className="text-sm" style={{ color: C.textDim }}>
           Booked {done.rows} song-month{done.rows === 1 ? '' : 's'} totalling <span style={{ fontFamily: MONO_FONT, color: C.text }}>{formatCents(done.gross)}</span> gross
           {done.replaced > 0 ? ' (' + done.replaced + ' replaced figures already in the app)' : ''}. The {done.files === 1 ? 'file is' : 'files are'} saved on {done.artists} artist profile{done.artists === 1 ? '' : 's'}.
+          {done.codesSaved > 0 ? ' Added ' + done.codesSaved + ' missing ISRC/UPC code' + (done.codesSaved === 1 ? '' : 's') + ' to the Catalog.' : ''}
+          {done.codesError ? ' The missing ISRC/UPC codes weren’t saved to the Catalog (' + done.codesError + '); importing again adds them.' : ''}
           {done.skipped > 0 ? ' ' + done.skipped + ' line group' + (done.skipped === 1 ? ' was' : 's were') + ' skipped (artist not on the Roster).' : ''}
         </p>
         <div className="flex gap-2 mt-4">
@@ -190,6 +199,7 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
   const usable = preview ? preview.files.filter(f => !f.skipped) : [];
   const fileOk = f => !f.totals || Math.abs(f.totals.gross - f.parsed) < 0.01;
   const totalsOk = usable.every(fileOk);
+  const codePlan = preview ? catalogCodeFills(matched, catalog) : { filled: [], mismatches: [] };
   const monthsInFile = preview ? [...new Set(preview.groups.map(g => g.month))].sort() : [];
 
   return (
@@ -235,6 +245,10 @@ export default function EmpireImport({ publishedRevenue = [], updatePublishedRev
                     <span>{monthLabel(m)}: statement gross {formatCents(statement)} · money received {mg ? formatCents(mg.totalGross) + (mg.receivedOn ? ', in the bank ' + mg.receivedOn : mg.paidOn ? ', sent by EMPIRE ' + mg.paidOn : '') + ' (all songs, Inbound Banking Charge ' + formatCents(mg.swiftFee) + ')' : 'not logged against this statement month yet. Add it under Money received before publishing'}</span></li>
                 );
               })}
+              {codePlan.filled.length > 0 && <li className="is-ok"><CheckCircle2 size={15} aria-hidden="true" /><span>{codePlan.filled.filter(f => f.field === 'isrc').length} ISRC{codePlan.filled.filter(f => f.field === 'isrc').length === 1 ? '' : 's'} and {codePlan.filled.filter(f => f.field === 'upc').length} UPC{codePlan.filled.filter(f => f.field === 'upc').length === 1 ? '' : 's'} will be added to Catalog songs that don’t have one.</span></li>}
+              {codePlan.mismatches.map(m => (
+                <li key={m.id + m.field} className="is-miss"><span className="imss-check-miss" aria-hidden="true" /><span><b>{m.title}</b>: {m.have ? 'the Catalog has ' + m.field.toUpperCase() + ' ' + m.have + ', this statement says ' + m.statement + '. Left as it is; check which is right.' : 'this statement gives more than one ' + m.field.toUpperCase() + ' (' + m.statement + '). None added; set it on the Catalog.'}</span></li>
+              ))}
               {unmatched.length > 0 && <li className="is-miss"><span className="imss-check-miss" aria-hidden="true" /><span>{[...new Set(unmatched.map(g => g.artist))].join(', ')} {[...new Set(unmatched.map(g => g.artist))].length === 1 ? 'isn’t' : 'aren’t'} on the Roster: {formatCents(unmatched.reduce((t, g) => t + g.gross, 0))} will be skipped. Add the artist first, then import again.</span></li>}
             </ul>
           </section>

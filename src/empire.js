@@ -97,3 +97,36 @@ export function aggregateEmpire(lines) {
   });
   return Object.values(groups).sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title) || a.month.localeCompare(b.month));
 }
+
+// Codes from a statement for the Catalog: a matched song with no ISRC/UPC gets
+// the statement's; a code already on a song is never replaced. Where they differ,
+// or one song gets two different codes from the statement, it's flagged instead.
+// groups: matched import groups ({ release, isrc, upc }); returns the next catalog.
+const codeOf = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+export function catalogCodeFills(groups, catalog) {
+  const seen = {};
+  for (const g of groups) {
+    if (!g.release) continue;
+    const s = (seen[g.release.id] = seen[g.release.id] || { release: g.release, isrc: new Set(), upc: new Set() });
+    if (codeOf(g.isrc)) s.isrc.add(codeOf(g.isrc));
+    if (codeOf(g.upc)) s.upc.add(codeOf(g.upc));
+  }
+  const filled = [], mismatches = [], patch = {};
+  for (const { release, isrc, upc } of Object.values(seen)) {
+    for (const [field, codes] of [['isrc', isrc], ['upc', upc]]) {
+      if (!codes.size) continue;
+      const have = codeOf(release[field]);
+      if (have) {
+        if (!codes.has(have)) mismatches.push({ id: release.id, title: release.title, field, have: release[field], statement: [...codes].join(', ') });
+      } else if (codes.size > 1) {
+        mismatches.push({ id: release.id, title: release.title, field, have: '', statement: [...codes].join(', ') });
+      } else {
+        const value = [...codes][0];
+        patch[release.id] = { ...(patch[release.id] || {}), [field]: value };
+        filled.push({ id: release.id, title: release.title, field, value });
+      }
+    }
+  }
+  const next = catalog.map(c => patch[c.id] ? { ...c, ...patch[c.id] } : c);
+  return { next, filled, mismatches };
+}
