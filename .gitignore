@@ -4,6 +4,9 @@ dist/
 *.local
 .env
 .env.*
+!.env.example
+.mcp.json
+skills-lock.json
 ops-upload.zip
 .impeccable/*
 !.impeccable/design.json

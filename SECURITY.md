@@ -8,6 +8,9 @@ does not protect yet, and how to report a problem.
 Email **maxwelladjavon@gmail.com** with what you found and how to reproduce it.
 Please don't open a public issue or share details elsewhere until it's fixed.
 
+There is no `/.well-known/security.txt` yet: it waits for Max to choose the
+public security contact address.
+
 ## Where things run
 
 | Piece | Service | Notes |
@@ -220,10 +223,14 @@ to the CSP or it will be blocked.
 
 ## Dependencies
 
-`npm audit --omit=dev` reports 0 vulnerabilities for what ships. Vite is on v8.
-The remaining dev-only findings are in Tailwind 3's file-watching chain
-(braces, postcss-selector-parser): build-time slowdowns only. They clear with a
-Tailwind 4 migration.
+`npm run audit` (`npm audit --omit=dev`) checks only what ships; it must show
+no high or critical finding before any push. On 2026-10-21 it reported
+0 vulnerabilities. Vite is on v8.
+The full `npm audit` (dev tools included) shows 7 (5 high, 2 moderate), all in
+Tailwind 3's build-time chain (tailwindcss, braces, chokidar, micromatch,
+fast-glob, postcss-nested, postcss-selector-parser): denial-of-service on the
+developer's machine during a build, nothing in the shipped app. They clear with
+a Tailwind 4 migration.
 
 ## Known limitations
 
@@ -270,6 +277,13 @@ These are real and accepted for now. Don't treat them as protected.
    (which used to wipe shared data). Shape changes need a deliberate migration.
 
 ## Rules for changes
+
+- **Never** (the owner's alone; ask Max first, one yes per action): secrets,
+  deleting data, databases, buckets, sign-in accounts or branches, production
+  and dashboard settings, new third-party skills/hooks/plugins, legal wording.
+  Full list: AGENTS.md, "Never". No force-push.
+- Before every push: `npm test`, `npm run build`, `npm run audit` (no high or
+  critical) and, after a database change, `supabase/tests/section_rules.sql`.
 
 - Never commit secrets: no Supabase `service_role`/secret key, no Resend API
   key, no `.env` files. The only keys in the app are the Supabase URL and
