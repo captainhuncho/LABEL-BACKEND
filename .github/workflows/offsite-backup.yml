@@ -54,7 +54,9 @@ jobs:
       - name: Restore rehearsal
         env: { R: 'postgresql://postgres:rehearsal@localhost:5432/postgres' }
         run: |
-          psql "$R" -qc "create role anon; create role authenticated; create role service_role; create schema if not exists auth; create table auth.sessions (id uuid primary key); create table auth.users (id uuid primary key, email text);"
+          # a bare Postgres stands in for Supabase: its roles, the schemas pg_restore
+          # doesn't create when filtering by schema, and the auth pieces the dump refers to
+          psql "$R" -qc "create role anon; create role authenticated; create role service_role; create schema if not exists auth; create schema if not exists private; create table auth.sessions (id uuid primary key); create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz); create function auth.jwt() returns jsonb language sql as 'select null::jsonb'; create function auth.uid() returns uuid language sql as 'select null::uuid';"
           pg_restore -d "$R" --no-owner --no-privileges --schema=public --schema=private out/database.dump || true
           psql "$R" -Atc "select key || '=' || md5(value::text) from public.app_data order by key" > out/restored.md5
           diff out/app_data.md5 out/restored.md5
