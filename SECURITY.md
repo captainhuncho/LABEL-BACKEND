@@ -120,13 +120,13 @@ public security contact address.
   like `statementFiles`.
 - Stored documents (`documents` bucket: invoice files, split sheets, signed
   agreements, label PDF statements) are never deleted or overwritten by the
-  team. **Live today** every team member can read and add every artist's
-  documents. **Written, not yet applied** (`20261022_documents_by_section.sql`):
-  a team member opens a file only when a section they may read refers to it
+  team. Since 2026-10-22 (`20261022_documents_by_section.sql`; before it every
+  team member could read and add every artist's documents) a team member opens
+  a file only when a section they may read refers to it
   (same rules as `app_data`), label PDFs need Artist earnings, Product Managers
   only their own artists' folders, and uploads need invoice or deal access.
-  Check: `supabase/tests/documents_and_portal_match.sql`; run on live with both
-  migrations on 2026-10-22, rolled back: all 18 rows ok (only an Admin and a
+  Check: `supabase/tests/documents_and_portal_match.sql`; run on live after
+  applying both migrations on 2026-10-22, rolled back: all 18 rows ok (only an Admin and a
   Product Manager have confirmed accounts, so other roles weren't exercised).
   Welcome emails are
   limited to 20 an hour per Admin.
@@ -205,14 +205,15 @@ project's policies, grants and every function callable by `authenticated`:
   confirmed and matches the session's email), live since 2026-10-21. On that
   day 3 accounts had a password set and 2 were unconfirmed; neither unconfirmed
   account has ever signed in or has a session.
-- **Matching money to the artist:** **live today** the portal matches
+- **Matching money to the artist:** until 2026-10-22 the portal matched
   published revenue and payouts on the artist's name slug and ledger lines on
   the exact name, so two Roster artists whose names slug the same ("A.J." and
-  "A J") would see each other's money. **Written, not yet applied**
-  (`20261022_artist_portal_match_by_id.sql`): match by `artistId`; rows without
+  "A J") would have seen each other's money. Since then
+  (`20261022_artist_portal_match_by_id.sql`, live): match by `artistId`; rows without
   one fall back to the name only while no other Roster entry shares the slug.
-  The app now stamps `artistId` on publish and refuses to publish a shared name
-  (`src/finance.js`, tested in `test/finance.test.js`). Same-slug twin, rename
+  The app stamps `artistId` on publish and refuses to publish a shared name
+  (`src/finance.js`, tested in `test/finance.test.js`; reaches production only
+  when this branch is merged and deployed). Same-slug twin, rename
   and fallback checks passed on live, rolled back, on 2026-10-22. Deal notices, budgets,
   statements, invoices and requests already match by id; `artist_my_activity`
   by the signed-in email.
