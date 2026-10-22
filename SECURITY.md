@@ -243,6 +243,11 @@ project's policies, grants and every function callable by `authenticated`:
 - Resend's inbound webhook is verified with its signing secret (Svix HMAC,
   5-minute window). A reply is only added to a thread if it comes from that
   artist's email or a staff member's email.
+- Calls to Resend give up after 15 s. Every email sent inside a recorded
+  delivery carries a Resend `Idempotency-Key` (delivery, event, subject and
+  recipients), so a retry after a lost reply returns the first result instead
+  of emailing the person again (`test/notify-delivery.deno.ts`). Takes effect
+  when `notify` is deployed.
 - Secrets live in Supabase → Edge Functions → Secrets: `RESEND_API_KEY`,
   `RESEND_WEBHOOK_SECRET`, `RECEIVE_DOMAIN`. Never in the repo.
 - Receiving uses Resend's `entuurboou.resend.app` address, so the main
@@ -349,6 +354,9 @@ These are real and accepted for now. Don't treat them as protected.
   key, no `.env` files. The only keys in the app are the Supabase URL and
   publishable key, which are public by design. `.env*` and `*.local` are
   git-ignored.
+- `npm run build` first runs `scripts/check-rls.mjs`: it fails if a table in
+  `public` lacks row-level security or a policy, or if schema `private` is
+  left usable by `anon`, `authenticated` or `public`.
 - After any database change, run Supabase's security advisor and fix new
   findings before shipping.
 - New database functions: `security definer` with `set search_path = ''`,
