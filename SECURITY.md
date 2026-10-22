@@ -190,14 +190,18 @@ project's policies, grants and every function callable by `authenticated`:
 - **Notifications** are read only by the address they were sent to.
 - **Admin-only lists** (backups, blocked sign-ins, client errors, failed
   emails) check `private.is_admin()` inside the function.
-- **Confirmed email:** sign-in is by Google or an emailed code, so a session
-  means the email was proven. The database helpers match on the session's email
-  but don't themselves check that the account is confirmed. On 2026-10-21, 3
-  accounts had a password set and 2 were unconfirmed; neither unconfirmed
+- **Confirmed email:** sign-in is by Google or an emailed code, and the
+  database also checks it: artist, rep and team helpers need
+  `private.email_confirmed()` (the session's `sub` is an account whose email is
+  confirmed and matches the session's email), live since 2026-10-21. On that
+  day 3 accounts had a password set and 2 were unconfirmed; neither unconfirmed
   account has ever signed in or has a session.
-- **Two-user test:** `supabase/tests/artist_isolation.sql` (artist A against
-  artist B and a signed-out visitor; rolled back). Not yet run: it needs the
-  live database or a Supabase branch.
+- **Two-user test:** `supabase/tests/artist_isolation.sql` (rolled back): a
+  confirmed artist A against a synthetic artist B's invoices, submissions,
+  requests and files; an unconfirmed account with A's email; a signed-out
+  visitor. Positive controls prove A really gets their own portal, so the
+  checks can't pass by A getting nothing. An equivalent copy ran on the live
+  project on 2026-10-21 with every row ok (run by the roles session).
 
 ## Email
 
