@@ -14,8 +14,8 @@ on:
 permissions: { contents: read }
 jobs:
   backup:
-    # the secrets and BACKUP_ENABLED live in this environment (named when it was set up)
-    environment: BACKUP_AGE_RECIPIENT
+    # the secrets and BACKUP_ENABLED live in this GitHub environment (main branch only)
+    environment: backup
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
