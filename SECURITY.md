@@ -20,13 +20,13 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 
 ## Sign-in
 
-- Artist portal (`artist_portal()`) returns only what that artist may see:
+- Artists Access (`artist_portal()`) returns only what that artist may see:
   notices for all artists or them, deal changes once sent to them, an allowlist
   of their own record's fields, invoices without internal review history, and no
   label settings (`20261020_artist_portal_minimize.sql`).
 - No passwords. People sign in with Google or a one-time code emailed to them
   (Supabase Auth, sent through Resend).
-- Idle sign-out (ops, the artist portal and label reps): after 3 hours without
+- Idle sign-out (ops, Artists Access and label reps): after 3 hours without
   real interaction (pointer, keys, wheel, touch) the session is signed out, in
   every tab of that browser, with "You were signed out after 3 hours without
   activity" on the sign-in page (`src/idleSignOut.js`, `src/AuthGate.jsx`). A
