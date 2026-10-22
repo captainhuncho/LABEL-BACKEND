@@ -103,7 +103,7 @@ export function AuditSection({ roster = [] }) {
   const counts = { team: (rows || []).filter(r => r.actor_kind !== 'artist').length, artist: (rows || []).filter(r => r.actor_kind === 'artist').length };
   return (
     <div>
-      <SectionHeader title="Activity" description="What people do on the platform and in the artist portal: sign-ins, exports, downloads, submissions, approvals, publishing and changes. Entries can’t be edited or deleted." />
+      <SectionHeader title="Activity" description="What people do on the platform and in Artists Access: sign-ins, exports, downloads, submissions, approvals, publishing and changes. Entries can’t be edited or deleted." />
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
         <div className="imss-seg" role="tablist" aria-label="Whose activity">
           <button role="tab" aria-selected={side === 'team'} className={side === 'team' ? 'is-on' : ''} onClick={() => { setSide('team'); setOpen({}); }}>Team{counts.team ? ' · ' + counts.team : ''}</button>

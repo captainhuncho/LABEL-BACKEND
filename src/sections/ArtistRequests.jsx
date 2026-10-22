@@ -67,7 +67,7 @@ export function ArtistRequestsSection({ artistRequests, update, roster, sessionN
       </div>
 
       {sorted.length === 0 ? (
-        <EmptyState icon={MessageSquare} title="No requests" description="Requests artists submit from their portal will show up here." />
+        <EmptyState icon={MessageSquare} title="No requests" description="Requests artists submit from Artists Access will show up here." />
       ) : (
         <div className="flex flex-col gap-3">
           {sorted.map(r => {

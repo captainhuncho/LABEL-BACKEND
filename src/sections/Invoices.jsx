@@ -304,7 +304,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
                                   <div className="text-xs mt-2 mb-3" style={{ color: C.textDim }}>Edits are logged in the history and the artist sees what changed. The invoice carries on through the queues as usual.</div>
                                   <Field label="Return to the artist: what needs fixing?"><TextArea rows={2} value={returnNote} onChange={e => { setReturnNote(e.target.value); setError(''); }} placeholder="e.g. Receipt missing, or the amount doesn’t match it" /></Field>
                                   <div className="mt-2"><Btn variant="danger" onClick={() => returnToArtist(inv)}>Return to artist</Btn></div>
-                                  <div className="text-xs mt-1" style={{ color: C.textDim }}>They get an email, fix it in their portal and resubmit. It comes back to PM Approval.</div>
+                                  <div className="text-xs mt-1" style={{ color: C.textDim }}>They get an email, fix it in Artists Access and resubmit. It comes back to PM Approval.</div>
                                 </>
                               )}
                             </section>

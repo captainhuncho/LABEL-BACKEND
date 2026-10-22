@@ -287,7 +287,7 @@ export default function PublishToArtists({ renderPreview = null, roster, approve
         const name = (artistsInDiff.find(([s]) => s === preview.artistSlug) || [])[1] || '';
         // Rendered at page level so it covers the whole window, not just this panel.
         return createPortal(
-          <div role="dialog" aria-modal="true" aria-label={'Preview of ' + name + "'s portal"} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg, #f5f5f7)', display: 'flex', flexDirection: 'column' }}>
+          <div role="dialog" aria-modal="true" aria-label={'Preview of ' + name + "'s Artists Access"} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg, #f5f5f7)', display: 'flex', flexDirection: 'column' }}>
             <div className="flex items-center gap-3 flex-wrap" style={{ padding: '10px 16px', background: C.amberSoft, borderBottom: '1px solid ' + C.amber, color: C.text }}>
               <Eye size={16} aria-hidden="true" />
               <b>Preview: what {name} sees</b>

@@ -580,7 +580,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   }
 
   function logChange(section, prevArr, nextArr) {
-    const actor = session && session.mode === 'team' ? session.name : (session && session.mode === 'artist' ? 'Artist portal' : 'Unknown');
+    const actor = session && session.mode === 'team' ? session.name : (session && session.mode === 'artist' ? 'Artists Access' : 'Unknown');
     let action = 'updated';
     if (Array.isArray(prevArr) && Array.isArray(nextArr)) {
       if (nextArr.length > prevArr.length) action = 'added an entry to';

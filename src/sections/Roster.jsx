@@ -201,7 +201,7 @@ export function RosterSection({ updateStatementFiles, focus = null, updateCatalo
           )}
           <Field label="Signed date"><Input type="date" value={form.signedDate} onChange={e => setForm({ ...form, signedDate: e.target.value })} /></Field>
           <Field label="Contract expiration"><Input type="date" value={form.contractExpiration} onChange={e => setForm({ ...form, contractExpiration: e.target.value })} /></Field>
-          <Field label="Sign-in email (artist portal)"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Sign-in email (Artists Access)"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label="Dropbox / Drive folder" full><Input type="url" value={form.driveFolder} onChange={e => setForm({ ...form, driveFolder: e.target.value })} placeholder="https://drive.google.com/... or Dropbox link" /></Field>
           <Field label="Product Manager">
             <Select value={form.productManager} onChange={e => setForm({ ...form, productManager: e.target.value })}>

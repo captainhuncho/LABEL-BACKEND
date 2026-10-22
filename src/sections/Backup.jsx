@@ -153,7 +153,7 @@ export function BackupSection({ allData, updaters, onClearAll = null, onReseed =
       {supabase && (
         <div className="rounded p-5 mb-6" style={{ background: C.panel }}>
           <div style={{ fontWeight: 600 }} className="mb-1">App errors</div>
-          <div className="text-sm mb-3" style={{ color: C.textDim }}>Errors people hit in their browser, on ops and the artist portal. Last 30 days, newest first.</div>
+          <div className="text-sm mb-3" style={{ color: C.textDim }}>Errors people hit in their browser, on ops and Artists Access. Last 30 days, newest first.</div>
           {appErrors === null ? <div className="text-sm" style={{ color: C.textDim }}>Loading…</div> : appErrors.length === 0 ? <div className="text-sm" style={{ color: C.teal }}>No errors reported.</div> : (
             <ul style={{ borderTop: '1px solid ' + C.border }}>
               {appErrors.map((e, i) => (
