@@ -1,7 +1,7 @@
 import { Archive, Mail, Pencil, Plus, Trash2, UserCog, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { BlockedSignins } from './BlockedSignins.jsx';
-import { emailDomainsFor, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
+import { ARTIST_RESTRICTABLE_ROLES, emailDomainsFor, isStaffEmailAllowed, PERMISSION_FIELDS, STAFF_ROLES, STAFF_STATUSES, defaultPermissionsForRole, isTopRole, makeOnboardingChecklist, onboardingProgress, permissionsFor, todayStr, uid } from '../constants.js';
 import { C } from '../theme.js';
 import { Avatar, Badge, Btn, ConfirmInline, EmptyState, ExportBar, Field, Input, KPICard, SectionHeader, SegmentedToggle, Select, Td, TextArea, Th, resizeImageFile } from '../ui.jsx';
 import { supabase } from '../storage.js';
@@ -26,7 +26,9 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
   function openAdd() { setForm({ ...empty, permissions: defaultPermissionsForRole('Product Manager'), onboarding: makeOnboardingChecklist() }); setEditing(null); setShowForm(true); }
   function openEdit(s) { setForm({ ...empty, ...s, permissions: permissionsFor(s), onboarding: s.onboarding && s.onboarding.length ? s.onboarding : makeOnboardingChecklist() }); setEditing(s.id); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditing(null); setNewTaskLabel(''); if (photoInputRef.current) photoInputRef.current.value = ''; }
-  function changeRole(role) { setForm(f => ({ ...f, role, permissions: defaultPermissionsForRole(role) })); }
+  // A new role starts fresh: its default access, and no artist restriction.
+  function changeRole(role) { setForm(f => ({ ...f, role, permissions: defaultPermissionsForRole(role), artistIds: [] })); }
+  function toggleArtistAccess(id) { setForm(f => { const ids = f.artistIds || []; return { ...f, artistIds: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id] }; }); }
   function togglePermission(key) { setForm(f => ({ ...f, permissions: { ...f.permissions, [key]: !f.permissions[key] } })); }
   function toggleTask(taskId) {
     setForm(f => {
@@ -125,6 +127,11 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
   const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   const lockedAccess = isTopRole(form.role);
   // Legal cannot touch an Admin — Admin is the highest power.
+  // Artists that a role change would take off this person (the database clears them: staff_role_change_unassigns).
+  const editingRecord = editing ? staff.find(s => s.id === editing) : null;
+  const roleChangeArtists = editingRecord && form.role !== editingRecord.role
+    ? roster.filter(a => [a.productManager, a.anr].some(n => n && n.trim().toLowerCase() === editingRecord.name.trim().toLowerCase())).map(a => a.name)
+    : [];
   const editingAdmin = editing ? isTopRole((staff.find(s => s.id === editing) || {}).role) : false;
   const blockedByRank = proposesOnly && editingAdmin;
   const onboardingCount = staff.filter(s => (s.status || 'Active') === 'Onboarding').length;
@@ -178,6 +185,11 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
                 {form.role && !STAFF_ROLES.includes(form.role) && <option value={form.role} disabled>{form.role} (no longer used)</option>}
                 {STAFF_ROLES.filter(r => !proposesOnly || editingAdmin || !isTopRole(r)).map(r => <option key={r} value={r}>{r}</option>)}
               </Select>
+              {roleChangeArtists.length > 0 && (
+                <div className="text-xs mt-1" style={{ color: C.amber }}>
+                  A new role starts fresh: they stop being Product Manager or A&amp;R on {roleChangeArtists.length === 1 ? roleChangeArtists[0] : roleChangeArtists.length + ' artists'}, and their access resets to the new role. You can assign artists to them again on the Roster.
+                </div>
+              )}
             </Field>
             {form.role === 'Label Rep' && <Field label="Company"><Input value={form.company || ''} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="e.g. the distributor they work for" /></Field>}
             <Field label="Work email">
@@ -220,6 +232,27 @@ export function TeamSection({ roster = [], updateRoster, staff, update, sessionR
               ))}
             </div>
           </div>
+
+          {ARTIST_RESTRICTABLE_ROLES.includes(form.role) && (
+            <>
+              <div className="text-xs mb-2" style={{ color: C.textFaint }}>Artists they can see — none ticked means all artists. Royalty screens stay label-wide.</div>
+              <div className="rounded border p-3 mb-4" style={{ borderColor: C.border, background: C.bg }}>
+                {roster.length === 0 ? <div className="text-sm" style={{ color: C.textDim }}>No artists on the roster yet.</div> : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {[...roster].filter(a => a.status !== 'Archived').sort((x, y) => x.name.localeCompare(y.name)).map(a => (
+                      <label key={a.id} className="flex items-center gap-2 text-sm" style={{ minHeight: 32 }}>
+                        <input type="checkbox" checked={(form.artistIds || []).includes(a.id)} onChange={() => toggleArtistAccess(a.id)} />
+                        <span>{a.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="text-xs mt-2" style={{ color: (form.artistIds || []).length ? C.amber : C.textFaint }}>
+                  {(form.artistIds || []).length ? 'Restricted to ' + form.artistIds.length + ' of ' + roster.length + ' artists.' : 'Sees all artists.'}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="text-xs mb-2" style={{ color: C.textFaint }}>Onboarding checklist — {onboardingProgress(form).done}/{onboardingProgress(form).total} complete</div>
           <div className="rounded border p-3 mb-4" style={{ borderColor: C.border, background: C.bg }}>

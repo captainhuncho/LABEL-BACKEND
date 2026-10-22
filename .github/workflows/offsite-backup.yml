@@ -1,6 +1,6 @@
 # Off-site backup of the Supabase database and Storage, with a restore check.
-# Runs only after Max switches it on (repository variable BACKUP_ENABLED=true)
-# and adds the secrets below; see SECURITY.md → Backups for the runbook.
+# Runs only after Max switches it on (variable BACKUP_ENABLED=true) and adds the
+# secrets below, all in the GitHub environment named below; see SECURITY.md → Backups.
 #   secrets: SUPABASE_DB_URL (session pooler connection string), SUPABASE_URL,
 #            SUPABASE_SERVICE_ROLE_KEY, BACKUP_AGE_RECIPIENT (age public key;
 #            the private key stays offline with Max, never in GitHub)
@@ -14,7 +14,8 @@ on:
 permissions: { contents: read }
 jobs:
   backup:
-    if: vars.BACKUP_ENABLED == 'true'
+    # the secrets and BACKUP_ENABLED live in this GitHub environment (main branch only)
+    environment: backup
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -24,6 +25,10 @@ jobs:
         ports: ['5432:5432']
         options: --health-cmd pg_isready --health-interval 5s --health-retries 20
     steps:
+      # environment variables aren't visible to a job-level `if`, so the switch is checked here
+      - name: Switched on?
+        if: vars.BACKUP_ENABLED != 'true'
+        run: echo 'BACKUP_ENABLED is not true; nothing to do.' && exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
@@ -34,6 +39,8 @@ jobs:
           sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 age
+          # the runner's own Postgres 16 tools come first otherwise; the server is 17
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
       - name: Dump database
         env: { DB: '${{ secrets.SUPABASE_DB_URL }}' }
         run: |
@@ -47,7 +54,9 @@ jobs:
       - name: Restore rehearsal
         env: { R: 'postgresql://postgres:rehearsal@localhost:5432/postgres' }
         run: |
-          psql "$R" -qc "create role anon; create role authenticated; create role service_role; create schema if not exists auth; create table auth.sessions (id uuid primary key); create table auth.users (id uuid primary key, email text);"
+          # a bare Postgres stands in for Supabase: its roles, the schemas pg_restore
+          # doesn't create when filtering by schema, and the auth pieces the dump refers to
+          psql "$R" -qc "create role anon; create role authenticated; create role service_role; create schema if not exists auth; create schema if not exists private; create table auth.sessions (id uuid primary key); create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz); create function auth.jwt() returns jsonb language sql as 'select null::jsonb'; create function auth.uid() returns uuid language sql as 'select null::uuid';"
           pg_restore -d "$R" --no-owner --no-privileges --schema=public --schema=private out/database.dump || true
           psql "$R" -Atc "select key || '=' || md5(value::text) from public.app_data order by key" > out/restored.md5
           diff out/app_data.md5 out/restored.md5

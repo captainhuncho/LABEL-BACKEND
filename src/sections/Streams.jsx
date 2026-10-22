@@ -110,7 +110,7 @@ export function StreamsSection({ streams: allStreams, update, catalog: allCatalo
 
   return (
     <div>
-      <SectionHeader title="Streams" description="Track stream counts by platform and product over time." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
+      <SectionHeader title="Sales streams" description="Stream counts from statements and logged by hand, by platform and product over time. Live public counts are on Live platform stats." action={canEdit && <Btn variant="primary" onClick={openAdd}><Plus size={14} /> Log streams</Btn>} />
       {pmScope && <ArtistToggle artists={myArtists} hidden={pmHidden} setHidden={setPmHidden} />}
 
       <div className="rounded border p-4 mb-6" style={{ background: C.panel, borderColor: C.border }}>

@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Mail, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
+import { Activity, ArrowLeft, Bell, Mail, Calendar, ClipboardList, Coins, Disc3, DollarSign, Eye, FileDown, FileText, Send, History, LayoutDashboard, LogOut, MessageSquare, Radio, Search, ShieldCheck, Upload, UserCog, Users, Wallet, TriangleAlert } from 'lucide-react';
 import { logActivity, logSignIn } from './audit.js';
 import { MobileNav } from './MobileNav.jsx';
 import { usePageUrl } from './pageUrl.js';
@@ -36,6 +36,7 @@ import { RevenueSection } from './sections/Revenue.jsx';
 import { RosterSection } from './sections/Roster.jsx';
 import { StatementsSection } from './sections/Statements.jsx';
 import { StreamsSection } from './sections/Streams.jsx';
+import { LiveStatsSection } from './sections/SongStatsPanel.jsx';
 import { SubmissionsSection } from './sections/Submissions.jsx';
 import { TasksSection } from './sections/Tasks.jsx';
 import { TeamSection } from './sections/Team.jsx';
@@ -355,6 +356,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const [catalog, setCatalog] = useState([]);
   const [revenue, setRevenue] = useState([]);
   const [streams, setStreams] = useState([]);
+  const [songStats, setSongStats] = useState([]); // Songstats pull (songstats edge function); read-only here
   const [payouts, setPayouts] = useState([]);
   const [masterGross, setMasterGross] = useState([]);
   const [labelSettings, setLabelSettings] = useState(SEED_LABEL_SETTINGS);
@@ -415,6 +417,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['catalog', setCatalog, SEED_CATALOG],
         ['revenue', setRevenue, SEED_REVENUE],
         ['streams', setStreams, SEED_STREAMS],
+        ['songStats', setSongStats, []],
         ['payouts', setPayouts, SEED_PAYOUTS],
         ['masterGross', setMasterGross, SEED_MASTER_GROSS],
         ['labelSettings', setLabelSettings, SEED_LABEL_SETTINGS],
@@ -660,7 +663,8 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
   const inInvoiceWorkflow = !!sessionStaff && Object.values((labelSettings || {}).invoiceWorkflow || {}).some(ids => (ids || []).includes(sessionStaff.id));
   const NAV = [
     perms.analytics && { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Analytics' },
-    perms.analytics && { id: 'streams', label: 'Streams', icon: Radio, group: 'Analytics' },
+    perms.analytics && { id: 'streams', label: 'Sales streams', icon: Radio, group: 'Analytics' },
+    perms.analytics && { id: 'live-stats', label: 'Live platform stats', icon: Activity, group: 'Analytics' },
 
     perms.roster && { id: 'roster', label: 'Roster', icon: Users, group: 'Artists & catalog' },
     perms.roster && { id: 'artist-requests', label: 'Artist requests', icon: MessageSquare, group: 'Artists & catalog' },
@@ -736,7 +740,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
     const shownPayouts = payouts.filter(p => p.artistSlug === slug(artist.name) && p.sentAt);
     const shownLedger = approvedLedger.filter(l => lastPub && String(l.date || '').slice(0, 7) <= lastPub);
     const shownFiles = statementFiles.filter(f => f.artistId === artist.id && (f.months || []).every(m => view.revenue.some(r => r.month === m)));
-    return <ArtistPortalShell preview={preview} artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={preview ? noop : updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={preview ? noop : updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={preview ? noop : updateReleaseSubmissions} invoices={invoices} updateInvoices={preview ? noop : updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} budgets={artistBudgetsFor(artist.id, overheads, ledger, invoices)} labelSettings={labelSettings} onLogout={onClose || logout} />;
+    return <ArtistPortalShell songStats={songStats.filter(x => x.artistId === artist.id && catalog.some(c => c.id === x.releaseId && c.artistId === artist.id))} preview={preview} artist={artist} roster={roster} catalog={catalogView} revenue={view.revenue} streams={streams} masterGross={view.masterGross} payouts={shownPayouts} ledger={shownLedger} notices={notices} profileRequests={profileRequests} updateProfileRequests={preview ? noop : updateProfileRequests} artistRequests={artistRequests} updateArtistRequests={preview ? noop : updateArtistRequests} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={preview ? noop : updateReleaseSubmissions} invoices={invoices} updateInvoices={preview ? noop : updateInvoices} statementFiles={shownFiles} dealChanges={dealChanges.filter(c => c.artistId === artist.id && c.status === 'Approved')} budgets={artistBudgetsFor(artist.id, overheads, ledger, invoices)} labelSettings={labelSettings} onLogout={onClose || logout} />;
   }
 
   // Local preview only (demo / no database): the label rep view from local data,
@@ -800,6 +804,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         {active === 'catalog' && <CatalogSection focus={focus} catalog={catalogView} update={updateCatalog} roster={roster} artistMap={artistMap} canEdit={canEdit} pmScope={pmScope} releaseSubmissions={releaseSubmissions} updateReleaseSubmissions={updateReleaseSubmissions} sessionName={session.name}  incomingSubmission={acceptingSubmission} clearIncoming={() => setAcceptingSubmission(null)} onOpenSubmissions={() => setActive('submissions')} />}
         {active === 'calendar' && <ReleaseCalendarSection focus={focus} catalog={catalogView} roster={roster} artistMap={artistMap} tasks={tasks} />}
         {active === 'revenue' && <RevenueSection revenue={revenue} update={updateRevenue} roster={roster} catalog={catalogView} canEdit={canEdit} isAdmin={isAdmin} sessionName={session.name} />}
+        {active === 'live-stats' && <LiveStatsSection songStats={songStats} artistMap={artistMap} roster={roster} pmScope={pmScope} pmHidden={pmHidden} setPmHidden={setPmHidden} />}
         {active === 'streams' && <StreamsSection streams={streamsView} update={updateStreams} catalog={catalogView} releaseMap={releaseMap} artistMap={artistMap} canEdit={canEdit} roster={roster} pmScope={pmScope} pmHidden={pmHidden} setPmHidden={setPmHidden} />}
         {active === 'mastergross' && <MasterGrossSection masterGross={masterGross} update={updateMasterGross} roster={roster} revenue={approvedRevenue} labelSettings={labelSettings} updateLabelSettings={updateLabelSettings} canEdit={canEdit} />}
         {active === 'submissions' && <SubmissionsSection catalog={catalogView} releaseSubmissions={releaseSubmissions} update={updateReleaseSubmissions} roster={roster} pmScope={pmScope} canEdit={canEdit} sessionName={session.name} onAccept={sub => { setAcceptingSubmission(sub); setActive('catalog'); }} />}

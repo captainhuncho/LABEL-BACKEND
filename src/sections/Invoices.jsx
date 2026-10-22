@@ -35,7 +35,7 @@ export function invoiceReviewers(inv, roster, staff, workflow) {
   if (!stage) return [];
   if (stage.who === 'pm') {
     const pm = String((roster.find(a => a.id === inv.artistId) || {}).productManager || '').trim().toLowerCase();
-    return staff.filter(m => pm && m.name.trim().toLowerCase() === pm);
+    return staff.filter(m => pm && m.role === 'Product Manager' && m.name.trim().toLowerCase() === pm);
   }
   const ids = (workflow || {})[stage.who] || [];
   return staff.filter(m => ids.includes(m.id));
@@ -83,7 +83,7 @@ export function InvoicesSection({ invoices, update, roster, staff = [], labelSet
   const [fixing, setFixing] = useState(null); // { id, ...fields } while correcting an invoice
   // The artist's PM corrects or returns an invoice up to Pay Approved; an Admin at any stage before Paid.
   const canFix = inv => canEdit && !['Paid', 'Rejected', 'Needs changes'].includes(invoiceStatus(inv))
-    && (isAdmin || (isPmOf(roster.find(a => a.id === inv.artistId), session.name) && invoiceStatus(inv) !== 'Pay Approved'));
+    && (isAdmin || (session.role === 'Product Manager' && isPmOf(roster.find(a => a.id === inv.artistId), session.name) && invoiceStatus(inv) !== 'Pay Approved'));
   const FIX_FIELDS = [['budgetCategory', 'What it’s for'], ['title', 'Description'], ['amount', 'Amount'], ['invoiceDate', 'Invoice date'], ['invoiceNumber', 'Invoice number'], ['payTo', 'Pay to'], ['details', 'Details']];
   function saveFix(inv) {
     const amount = Math.round(parseFloat(fixing.amount) * 100) / 100;
