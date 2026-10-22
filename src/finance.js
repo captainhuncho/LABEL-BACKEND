@@ -218,10 +218,14 @@ export function labelPnL(roster, revenue, masterGross, ledger) {
 export function publishSnapshot(rows, approvedRevenue, masterGross, roster = null) {
   const at = new Date().toISOString();
   const pctOf = (s, month) => { const a = roster && roster.find(x => slug(x.name) === s); return a && termsAt(a, month).artistPct != null ? pctAt(a, month) : null; };
+  // The artist portal matches published rows by artistId; only a name no other
+  // Roster entry shares gets one (publishChecks refuses a shared name).
+  const idOf = s => { const m = roster ? roster.filter(x => slug(x.name) === s) : []; return m.length === 1 ? m[0].id : null; };
   return rows.map(r => {
-    const charge = revenueRowSplit(r, approvedRevenue, masterGross, 0).charge, pct = pctOf(r.artistSlug, r.month);
+    const charge = revenueRowSplit(r, approvedRevenue, masterGross, 0).charge, pct = pctOf(r.artistSlug, r.month), id = idOf(r.artistSlug);
+    const row = id ? { ...r, artistId: id } : r;
     // With the artist's % known, the row is final: charge, % and earnings are fixed here.
-    return pct == null ? { ...r, swiftShare: charge, publishedAt: at } : { ...r, swiftShare: charge, artistPct: pct, artistShare: (r.earning - charge) * pct, final: true, publishedAt: at };
+    return pct == null ? { ...row, swiftShare: charge, publishedAt: at } : { ...row, swiftShare: charge, artistPct: pct, artistShare: (r.earning - charge) * pct, final: true, publishedAt: at };
   });
 }
 
@@ -340,6 +344,7 @@ export function publishChecks(keys, approvedRevenue, masterGross, roster, publis
     const artist = roster.find(a => slug(a.name) === aSlug);
     const label = nameOf(aSlug) + ' ' + month;
     if (!artist) errors.push(label + ': artist isn’t on the Roster');
+    else if (roster.filter(a => slug(a.name) === aSlug).length > 1) errors.push(label + ': more than one Roster artist has this name, so their earnings can’t be told apart; rename one first');
     else if (termsAt(artist, month).artistPct == null || pctAt(artist, month) < 0 || pctAt(artist, month) > 1) errors.push(label + ': artist % isn’t set correctly on the Roster');
     if (fee[month] === undefined) warnings.push(label + ': no Money received for this month, so no Inbound Banking Charge is taken');
     const gross = mine.reduce((t, r) => t + r.earning, 0);

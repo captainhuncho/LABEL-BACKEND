@@ -214,3 +214,16 @@ test('a cash repayment the label asked for settles spend without touching earnin
   const r = recoupmentForArtist(artist, ledger, rev, [], []);
   assert.equal(r.earned, 140); assert.equal(r.recouped, 140); assert.equal(r.unrecouped, 210);
 });
+
+test('publishing stamps the artist id, and refuses two artists whose names slug the same', async () => {
+  const { applyPublish, publishChecks, slug } = await import('../src/finance.js');
+  const mg = [{ month: '2026-06', totalGross: 100, swiftFee: 0 }];
+  const rev = [{ id: 'r', artistSlug: slug('A.J.'), artist: 'A.J.', month: '2026-06', earning: 50 }];
+  const one = [{ id: 'art-1', name: 'A.J.', artistPct: 0.5 }];
+  assert.equal(applyPublish([], ['a-j|2026-06'], rev, mg, one)[0].artistId, 'art-1');
+  assert.deepEqual(publishChecks(['a-j|2026-06'], rev, mg, one).errors, []);
+  // "A.J." and "A J" both slug to a-j: no id is guessed and publishing is blocked.
+  const two = [...one, { id: 'art-2', name: 'A J', artistPct: 0.5 }];
+  assert.equal(applyPublish([], ['a-j|2026-06'], rev, mg, two)[0].artistId, undefined);
+  assert.match(publishChecks(['a-j|2026-06'], rev, mg, two).errors.join(' '), /more than one Roster artist has this name/);
+});

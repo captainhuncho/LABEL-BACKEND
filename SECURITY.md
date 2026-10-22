@@ -118,8 +118,14 @@ public security contact address.
   transaction and rolls back).
 - Royalty statement files (`statements` storage bucket) follow Artist earnings,
   like `statementFiles`.
-- Stored documents (`documents` bucket: invoice files, contracts) can be read
-  and uploaded by the team, never deleted or overwritten. Welcome emails are
+- Stored documents (`documents` bucket: invoice files, split sheets, signed
+  agreements, label PDF statements) are never deleted or overwritten by the
+  team. **Live today** every team member can read and add every artist's
+  documents. **Written, not yet applied** (`20261022_documents_by_section.sql`):
+  a team member opens a file only when a section they may read refers to it
+  (same rules as `app_data`), label PDFs need Artist earnings, Product Managers
+  only their own artists' folders, and uploads need invoice or deal access.
+  Check: `supabase/tests/documents_and_portal_match.sql`. Welcome emails are
   limited to 20 an hour per Admin.
 - Multi-section saves (`save_app_data_pair`): an EMPIRE import, a publish to
   artists and a stream-count re-read save both sections in one transaction,
@@ -196,6 +202,16 @@ project's policies, grants and every function callable by `authenticated`:
   confirmed and matches the session's email), live since 2026-10-21. On that
   day 3 accounts had a password set and 2 were unconfirmed; neither unconfirmed
   account has ever signed in or has a session.
+- **Matching money to the artist:** **live today** the portal matches
+  published revenue and payouts on the artist's name slug and ledger lines on
+  the exact name, so two Roster artists whose names slug the same ("A.J." and
+  "A J") would see each other's money. **Written, not yet applied**
+  (`20261022_artist_portal_match_by_id.sql`): match by `artistId`; rows without
+  one fall back to the name only while no other Roster entry shares the slug.
+  The app now stamps `artistId` on publish and refuses to publish a shared name
+  (`src/finance.js`, tested in `test/finance.test.js`). Deal notices, budgets,
+  statements, invoices and requests already match by id; `artist_my_activity`
+  by the signed-in email.
 - **Two-user test:** `supabase/tests/artist_isolation.sql` (rolled back): a
   confirmed artist A against a synthetic artist B's invoices, submissions,
   requests and files; an unconfirmed account with A's email; a signed-out
@@ -286,10 +302,12 @@ These are real and accepted for now. Don't treat them as protected.
    and only an Admin approves or rejects ledger and revenue entries
    (`20261020_pm_scope_approvals_grants.sql`). A budget overspend is still an app
    rule. Per-artist read scoping needs a scoped-read RPC (planned).
-2. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
+2. **Leaked-password protection** (Supabase → Auth) was off on 2026-10-22;
+   Max is turning it on in the dashboard. Mark it done here once confirmed.
+3. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
    Supabase, not this project) as callable by anyone. Review it in the Supabase
    dashboard.
-3. **Backups:** a daily automatic copy (cron `auto-backup`, kept 30 days) and a
+4. **Backups:** a daily automatic copy (cron `auto-backup`, kept 30 days) and a
    copy before every restore, both in `private.app_data_archive` inside the same
    Supabase project (not off-site, no Storage files). The off-site backup
    (`.github/workflows/offsite-backup.yml`) dumps the database, copies every
@@ -301,7 +319,7 @@ These are real and accepted for now. Don't treat them as protected.
    offline with Max). To restore: download the artifact, `age -d -i key.txt`,
    `pg_restore` into the target project, and re-upload Storage files from the
    manifest. The free plan pauses after a week without use.
-4. **Real data is in the repository and its history** (`src/seed.js`,
+5. **Real data is in the repository and its history** (`src/seed.js`,
    `data/ledger-source-export.json`, a 14-line EMPIRE extract in
    `test/fixtures/empire-sample.csv`; in 10 commits since 2026-10-15). Production
    builds leave it out of the public JavaScript (`OMIT_REAL_DATA`), and a
@@ -310,7 +328,7 @@ These are real and accepted for now. Don't treat them as protected.
    still read it. Removal plan: move the data to an access-controlled store,
    replace seeds with the demo data, then rewrite history (`git filter-repo`) and
    force-push, which needs Max's decision and every clone re-made.
-5. **Version bumps:** with Supabase, changing `DATA_VERSION` no longer reseeds
+6. **Version bumps:** with Supabase, changing `DATA_VERSION` no longer reseeds
    (which used to wipe shared data). Shape changes need a deliberate migration.
 
 ## Rules for changes
