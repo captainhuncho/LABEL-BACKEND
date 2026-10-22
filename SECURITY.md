@@ -200,8 +200,8 @@ project's policies, grants and every function callable by `authenticated`:
   confirmed artist A against a synthetic artist B's invoices, submissions,
   requests and files; an unconfirmed account with A's email; a signed-out
   visitor. Positive controls prove A really gets their own portal, so the
-  checks can't pass by A getting nothing. An equivalent copy ran on the live
-  project on 2026-10-21 with every row ok (run by the roles session).
+  checks can't pass by A getting nothing. Run on the live project (rolled back)
+  at commit 0033a62: all 20 rows ok, positive controls included.
 
 ## Email
 
