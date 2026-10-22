@@ -125,7 +125,10 @@ public security contact address.
   a team member opens a file only when a section they may read refers to it
   (same rules as `app_data`), label PDFs need Artist earnings, Product Managers
   only their own artists' folders, and uploads need invoice or deal access.
-  Check: `supabase/tests/documents_and_portal_match.sql`. Welcome emails are
+  Check: `supabase/tests/documents_and_portal_match.sql`; run on live with both
+  migrations on 2026-10-22, rolled back: all 18 rows ok (only an Admin and a
+  Product Manager have confirmed accounts, so other roles weren't exercised).
+  Welcome emails are
   limited to 20 an hour per Admin.
 - Multi-section saves (`save_app_data_pair`): an EMPIRE import, a publish to
   artists and a stream-count re-read save both sections in one transaction,
@@ -209,7 +212,8 @@ project's policies, grants and every function callable by `authenticated`:
   (`20261022_artist_portal_match_by_id.sql`): match by `artistId`; rows without
   one fall back to the name only while no other Roster entry shares the slug.
   The app now stamps `artistId` on publish and refuses to publish a shared name
-  (`src/finance.js`, tested in `test/finance.test.js`). Deal notices, budgets,
+  (`src/finance.js`, tested in `test/finance.test.js`). Same-slug twin, rename
+  and fallback checks passed on live, rolled back, on 2026-10-22. Deal notices, budgets,
   statements, invoices and requests already match by id; `artist_my_activity`
   by the signed-in email.
 - **Two-user test:** `supabase/tests/artist_isolation.sql` (rolled back): a
