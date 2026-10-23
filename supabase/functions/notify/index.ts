@@ -676,7 +676,16 @@ async function sendSigninNotice(email: string, ua: string) {
 }
 
 // ---------- entry ----------
+// No other site may frame anything this function returns (owner rule: no
+// clickjacking); every response gets both headers, errors included.
+const FRAME_HEADERS: Record<string, string> = { 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "frame-ancestors 'none'" };
 Deno.serve(async req => {
+  const res = await handleRequest(req);
+  for (const [k, v] of Object.entries(FRAME_HEADERS)) res.headers.set(k, v);
+  return res;
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method !== 'POST') return new Response('ok');
   const raw = await req.text();
   try {
@@ -691,9 +700,11 @@ Deno.serve(async req => {
     const body = JSON.parse(raw || '{}');
     return await requestState.run({ switchKey: '', switches: null }, () => handleAction(body));
   } catch (e) {
-    return new Response(String(e), { status: 500 });
+    // Details go to the function log only; the caller gets a plain answer.
+    console.error('notify failed', e);
+    return new Response('error', { status: 500 });
   }
-});
+}
 
 async function handleAction(body: Item): Promise<Response> {
   {

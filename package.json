@@ -9,7 +9,7 @@
     "build": "node scripts/check-rls.mjs && vite build",
     "check:rls": "node scripts/check-rls.mjs",
     "preview": "vite preview",
-    "test": "node --test test/finance.test.js test/empire.test.js test/licenses.test.js test/streams.test.js test/idle.test.js test/catalogImport.test.js",
+    "test": "node --test test/finance.test.js test/empire.test.js test/licenses.test.js test/streams.test.js test/idle.test.js test/catalogImport.test.js test/headers.test.js",
     "audit": "npm audit --omit=dev"
   },
   "dependencies": {

@@ -96,9 +96,12 @@ let handler: (req: Request) => Promise<Response> = () => { throw new Error('no h
 Deno.serve = (h: typeof handler) => { handler = h; return { finished: Promise.resolve(), shutdown: async () => {} }; };
 await import('../supabase/functions/notify/index.ts');
 
-const call = async (body: Row) => (await handler(new Request('http://fn/notify', {
-  method: 'POST', headers: { 'x-notify-secret': 's' }, body: JSON.stringify(body),
-}))).json();
+const framed: Response[] = [];
+const call = async (body: Row) => {
+  const res = await handler(new Request('http://fn/notify', { method: 'POST', headers: { 'x-notify-secret': 's' }, body: JSON.stringify(body) }));
+  framed.push(res);
+  return res.json();
+};
 const post = () => call({ action: 'events', events: delivery.events, delivery: delivery.id });
 
 let failures = 0;
@@ -150,6 +153,13 @@ check('lost reply: delivery 3 left for retry', deliveries.get(3)!.status === 're
 await call({ action: 'events', events: deliveries.get(3)!.events, delivery: 3 });
 const lostNew = emails.slice(beforeLost);
 check('lost reply: retry done, c@ emailed once, a@ and b@ once each', deliveries.get(3)!.status === 'done' && lostNew.length === 3 && new Set(lostNew.map(e => e.to)).size === 3, { d: deliveries.get(3), lostNew });
+
+// No clickjacking: every response, including a GET and a refused request, can't be framed.
+framed.push(await handler(new Request('http://fn/notify')));
+framed.push(await handler(new Request('http://fn/notify', { method: 'POST', body: '{}', headers: { 'svix-id': 'x', 'svix-timestamp': '0', 'svix-signature': 'v1,x' } })));
+check('every response sends X-Frame-Options DENY and frame-ancestors none',
+  framed.every(r => r.headers.get('X-Frame-Options') === 'DENY' && /frame-ancestors 'none'/.test(r.headers.get('Content-Security-Policy') || '')),
+  framed.map(r => [r.status, r.headers.get('X-Frame-Options'), r.headers.get('Content-Security-Policy')]));
 
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
 if (failures) { console.log(JSON.stringify({ r1, r2 }, null, 1).slice(0, 3000)); Deno.exit(1); }

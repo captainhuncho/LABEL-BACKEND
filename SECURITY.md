@@ -261,7 +261,12 @@ Every response from Vercel carries (`vercel.json`):
   only from this site (system fonts, no third-party font service); connections only to this site and the Supabase project;
   no framing (`frame-ancestors 'none'`), no plugins, `base-uri`/`form-action`
   locked to self, insecure requests upgraded
-- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+- `X-Frame-Options: DENY` together with CSP `frame-ancestors 'none'` on every
+  path (no clickjacking; `test/headers.test.js` checks `vercel.json`). The
+  artist address's `/` is a 307 to `/dashboard`, which Vercel sends without
+  custom headers; it has no page to frame and leads to one that has both. The
+  `notify` function sends both on every response too (from its next deploy).
+- `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`: camera, microphone, geolocation, payment, USB off
 - `X-Robots-Tag: noindex, nofollow`, plus `robots.txt` (`Disallow: /`) and a
