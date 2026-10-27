@@ -23,7 +23,17 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - Artists Access (`artist_portal()`) returns only what that artist may see:
   notices for all artists or them, deal changes once sent to them, an allowlist
   of their own record's fields, invoices without internal review history, and no
-  label settings (`20261020_artist_portal_minimize.sql`).
+  label settings (`20261020_artist_portal_minimize.sql`). Every other section
+  (catalog, revenue, streams, payouts, ledger, notices, requests, release
+  submissions) is an allowlist of the fields the portal screens read, so
+  internal fields (entered/approved by, approval status, recoupable, notes,
+  distribution documents, checklist task names) never leave the database
+  (`20261027_portal_field_allow_lists.sql`, checked by
+  `supabase/tests/portal_fields.sql`).
+- Label reps (`rep_portal()`) get each confirmed release as an allowlist of
+  what the rep screen and release sheet show (title, dates, codes, credits,
+  splits, lyrics, markets, Seen / Sent out), not the whole catalog row, and
+  invoices field by field (`20261027_portal_field_allow_lists.sql`).
 - No passwords. People sign in with Google or a one-time code emailed to them
   (Supabase Auth, sent through Resend).
 - Idle sign-out (ops, Artists Access and label reps): after 3 hours without
@@ -205,6 +215,14 @@ Every response from Vercel carries (`vercel.json`):
 
 When adding a new external service (fonts, analytics, an API), add its origin
 to the CSP or it will be blocked.
+
+CORS: the edge functions (`notify`, `songstats`) send no
+`Access-Control-Allow-Origin` header, so no browser on another site can call
+them; only the database, the scheduler and Resend's signed webhook call them.
+Accepted platform default: Supabase REST/Auth answer ACAO * ; sessions are
+bearer tokens, not cookies, so another site can't ride a signed-in session.
+`test/securityRules.test.js` checks this and the other 27 Oct rules (filters
+never built from input, fixed fetch hosts, no raw HTML, https-only links).
 
 ## Abuse limits
 
