@@ -65,5 +65,5 @@ jobs:
       - name: Encrypt
         env: { RECIPIENT: '${{ secrets.BACKUP_AGE_RECIPIENT }}' }
         run: tar -C out -czf - . | age -r "$RECIPIENT" -o imss-backup-$(date -u +%F).tar.gz.age
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: 'imss-backup-${{ github.run_id }}', path: 'imss-backup-*.age', retention-days: 90 }
