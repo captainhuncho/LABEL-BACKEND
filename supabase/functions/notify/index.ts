@@ -160,6 +160,8 @@ async function switchedOff(key: string) {
   }
   return st.switches![key] === false;
 }
+// Outbound calls to Resend give up instead of hanging the function.
+const RESEND_TIMEOUT_MS = 15_000;
 async function send(to: string[], subject: string, html: string, replyKey?: string, artistTopic?: string, bell = true, attachments?: { filename: string; content: string }[]) {
   let recipients = [...new Set(to.filter(e => e && e.includes('@')).map(e => e.trim().toLowerCase()))];
   if (!ARTIST_EMAIL_TOPICS.includes(artistTopic || '')) {
@@ -186,8 +188,15 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   if (attachments && attachments.length) body.attachments = attachments;
   if (replyable) body.reply_to = `reply-${replyKey}@${RECEIVE_DOMAIN}`;
   else if (REPLY_TO) body.reply_to = REPLY_TO;
+  const headers: Record<string, string> = { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' };
+  // Same key on a retry: if Resend already took this email (say the reply was
+  // lost to the timeout), it returns the first result instead of sending again.
+  // Every email inside a recorded delivery gets one (outside one there's no retry).
+  const d = state().delivery;
+  const key = (d ? await idempotencyKeyFor(d.id, `${d.event}|${subject}|${[...recipients].sort().join(',')}`) : '');
+  if (key) headers['Idempotency-Key'] = key;
   const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST', headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
   });
   const resBody = await res.text();
   // A failed send throws, so the delivery is retried; the bell notice is added
@@ -195,6 +204,13 @@ async function send(to: string[], subject: string, html: string, replyKey?: stri
   if (!res.ok) throw new Error(`Resend ${res.status}: ${resBody.slice(0, 300)}`);
   const inApp = bell ? await notifyInApp(recipients, subject) : null;
   return { status: res.status, body: resBody, inApp };
+}
+
+// One key per email per recorded delivery (delivery id + event + subject +
+// recipients), short enough for Resend's 256-character limit.
+async function idempotencyKeyFor(deliveryId: number, key: string) {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${deliveryId}|${key}`));
+  return 'imss-' + deliveryId + '-' + [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // In loops that email many people one by one, one failed address must not stop
@@ -498,7 +514,7 @@ const addressOf = (s: string) => lower((String(s).match(/<([^>]+)>/) || [, s])[1
 
 async function handleInbound(data: Item) {
   const emailId = data.email_id || data.id;
-  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, { headers: { Authorization: `Bearer ${RESEND_KEY}` } });
+  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, { headers: { Authorization: `Bearer ${RESEND_KEY}` }, signal: AbortSignal.timeout(RESEND_TIMEOUT_MS) });
   if (!res.ok) return { skipped: 'could not fetch email ' + res.status };
   const email = await res.json();
   const toList: string[] = [].concat(email.to || data.to || []).map(addressOf);
@@ -660,7 +676,16 @@ async function sendSigninNotice(email: string, ua: string) {
 }
 
 // ---------- entry ----------
+// No other site may frame anything this function returns (owner rule: no
+// clickjacking); every response gets both headers, errors included.
+const FRAME_HEADERS: Record<string, string> = { 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "frame-ancestors 'none'" };
 Deno.serve(async req => {
+  const res = await handleRequest(req);
+  for (const [k, v] of Object.entries(FRAME_HEADERS)) res.headers.set(k, v);
+  return res;
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method !== 'POST') return new Response('ok');
   const raw = await req.text();
   try {
@@ -675,9 +700,11 @@ Deno.serve(async req => {
     const body = JSON.parse(raw || '{}');
     return await requestState.run({ switchKey: '', switches: null }, () => handleAction(body));
   } catch (e) {
-    return new Response(String(e), { status: 500 });
+    // Details go to the function log only; the caller gets a plain answer.
+    console.error('notify failed', e);
+    return new Response('error', { status: 500 });
   }
-});
+}
 
 async function handleAction(body: Item): Promise<Response> {
   {

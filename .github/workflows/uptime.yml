@@ -1,0 +1,21 @@
+# Free uptime check: every 30 minutes GitHub loads the live team and artist
+# addresses. If either is down the run fails and GitHub emails the repository
+# owner. Off until Max switches it on (repository variable UPTIME_ENABLED=true);
+# 30 minutes keeps it inside GitHub's free minutes for private repos.
+name: uptime
+on:
+  schedule: [{ cron: '*/30 * * * *' }]
+  workflow_dispatch: {}
+permissions: {}
+jobs:
+  check:
+    if: vars.UPTIME_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Team address answers
+        run: curl -fsS --max-time 20 --retry 2 --retry-delay 10 -o /dev/null -w "ops %{http_code} in %{time_total}s\n" https://ops.imssrecords.com/
+      - name: Artist address answers
+        run: curl -fsS --max-time 20 --retry 2 --retry-delay 10 -o /dev/null -w "artist %{http_code} in %{time_total}s\n" https://artist.imssrecords.com/
+      - name: Current build is served
+        run: curl -fsS --max-time 20 --retry 2 --retry-delay 10 https://ops.imssrecords.com/version.json | grep -q '"id"'

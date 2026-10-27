@@ -16,6 +16,7 @@ Read these before changing anything:
 npm install
 npm run dev        # http://localhost:5173
 npm test           # finance baseline
+npm run audit      # npm audit --omit=dev: no high or critical before a push
 ```
 
 ## Deploying
@@ -191,6 +192,28 @@ If you add a screen that shows money, gate it on the right one of those two.
 - **Period filters require an explicit Generate click.** In the artist portal
   nothing renders until then; on team screens the period applies on Generate
   while search stays live.
+
+## Never
+
+These belong to the owner (Max) alone. Ask first, every time; one yes covers
+one action.
+
+- **Secrets:** never put a secret, token, service-role key, Resend key or
+  private link in the repo, chat, logs or commit messages. Don't read `.env*`
+  files unless Max asks; use `.env.example`. The Supabase URL and publishable
+  key are the only keys the app may hold.
+- **Deleting:** never delete data (`app_data` sections, the archive, Storage
+  files, audit rows), databases, buckets, sign-in accounts or branches, local
+  or remote, without Max's yes for that one deletion. Never force-push.
+- **Production settings:** never change Supabase dashboard settings (Auth,
+  hooks, Redirect URLs, rate limits), Vercel project settings or env vars, DNS,
+  or cron jobs unasked. Pushing `main` deploys; push only when asked.
+- **Third-party skills, hooks and plugins:** nothing new without Max's OK.
+  Skills go in as files only (no hooks, scripts or installers), with source
+  and commit recorded in `.claude/skills/SOURCES.md`.
+- **Legal wording:** never write or edit contract terms, clause text, legal
+  notices, terms or policy pages. Legal and Admin own them; the app only shows
+  the dates and data.
 
 ## Data
 

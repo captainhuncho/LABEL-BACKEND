@@ -8,6 +8,9 @@ does not protect yet, and how to report a problem.
 Email **maxwelladjavon@gmail.com** with what you found and how to reproduce it.
 Please don't open a public issue or share details elsewhere until it's fixed.
 
+There is no `/.well-known/security.txt` yet: it waits for Max to choose the
+public security contact address.
+
 ## Where things run
 
 | Piece | Service | Notes |
@@ -115,8 +118,17 @@ Please don't open a public issue or share details elsewhere until it's fixed.
   transaction and rolls back).
 - Royalty statement files (`statements` storage bucket) follow Artist earnings,
   like `statementFiles`.
-- Stored documents (`documents` bucket: invoice files, contracts) can be read
-  and uploaded by the team, never deleted or overwritten. Welcome emails are
+- Stored documents (`documents` bucket: invoice files, split sheets, signed
+  agreements, label PDF statements) are never deleted or overwritten by the
+  team. Since 2026-10-22 (`20261022_documents_by_section.sql`; before it every
+  team member could read and add every artist's documents) a team member opens
+  a file only when a section they may read refers to it
+  (same rules as `app_data`), label PDFs need Artist earnings, Product Managers
+  only their own artists' folders, and uploads need invoice or deal access.
+  Check: `supabase/tests/documents_and_portal_match.sql`; run on live after
+  applying both migrations on 2026-10-22, rolled back: all 18 rows ok (only an Admin and a
+  Product Manager have confirmed accounts, so other roles weren't exercised).
+  Welcome emails are
   limited to 20 an hour per Admin.
 - Multi-section saves (`save_app_data_pair`): an EMPIRE import, a publish to
   artists and a stream-count re-read save both sections in one transaction,
@@ -163,6 +175,55 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - A team member can't remove their own email from the staff list (the update
   check would lock them out, so the database refuses it).
 
+## Per-user isolation (checked 2026-10-21)
+
+Owner rule: each person sees only their own data. Checked against the live
+project's policies, grants and every function callable by `authenticated`:
+
+- **Signed-out visitors (`anon`)** have no table grants and can call no
+  function in `public`: they get nothing.
+- **Artists** never read `app_data`, `audit_log` or other people's
+  notifications. Every artist function (`artist_portal`, `artist_add`,
+  `artist_reply_invoice`, `artist_reply_submission`, `artist_resubmit_invoice`,
+  `artist_update_profile`, `artist_my_activity`) takes the artist from the
+  session (`my_artist()`, which also needs the second step), never from the
+  request, and only touches items whose `artistId` is theirs. Storage: an
+  artist reads and adds files only under their own `<artistId>/` folder.
+- **Label reps** go through `rep_portal`, `rep_acknowledge`,
+  `rep_email_releases` and `rep_can_read_document`, all limited to artists whose
+  `labelRep` is that rep (`private.my_rep()`, second step required).
+- **Team** reads sections by role (`can_read_section`); Product Managers' own
+  artists come through `pm_read`/`pm_save`. `app_data` is one row per section,
+  so within a section the team isolation is by role, not by person (Known
+  limitations, 1).
+- **Notifications** are read only by the address they were sent to.
+- **Admin-only lists** (backups, blocked sign-ins, client errors, failed
+  emails) check `private.is_admin()` inside the function.
+- **Confirmed email:** sign-in is by Google or an emailed code, and the
+  database also checks it: artist, rep and team helpers need
+  `private.email_confirmed()` (the session's `sub` is an account whose email is
+  confirmed and matches the session's email), live since 2026-10-21. On that
+  day 3 accounts had a password set and 2 were unconfirmed; neither unconfirmed
+  account has ever signed in or has a session.
+- **Matching money to the artist:** until 2026-10-22 the portal matched
+  published revenue and payouts on the artist's name slug and ledger lines on
+  the exact name, so two Roster artists whose names slug the same ("A.J." and
+  "A J") would have seen each other's money. Since then
+  (`20261022_artist_portal_match_by_id.sql`, live): match by `artistId`; rows without
+  one fall back to the name only while no other Roster entry shares the slug.
+  The app stamps `artistId` on publish and refuses to publish a shared name
+  (`src/finance.js`, tested in `test/finance.test.js`; reaches production only
+  when this branch is merged and deployed). Same-slug twin, rename
+  and fallback checks passed on live, rolled back, on 2026-10-22. Deal notices, budgets,
+  statements, invoices and requests already match by id; `artist_my_activity`
+  by the signed-in email.
+- **Two-user test:** `supabase/tests/artist_isolation.sql` (rolled back): a
+  confirmed artist A against a synthetic artist B's invoices, submissions,
+  requests and files; an unconfirmed account with A's email; a signed-out
+  visitor. Positive controls prove A really gets their own portal, so the
+  checks can't pass by A getting nothing. Run on the live project (rolled back)
+  at commit 0033a62: all 20 rows ok, positive controls included.
+
 ## Email
 
 - Supabase Edge Function `notify` (`supabase/functions/notify/index.ts`) sends
@@ -182,6 +243,11 @@ Please don't open a public issue or share details elsewhere until it's fixed.
 - Resend's inbound webhook is verified with its signing secret (Svix HMAC,
   5-minute window). A reply is only added to a thread if it comes from that
   artist's email or a staff member's email.
+- Calls to Resend give up after 15 s. Every email sent inside a recorded
+  delivery carries a Resend `Idempotency-Key` (delivery, event, subject and
+  recipients), so a retry after a lost reply returns the first result instead
+  of emailing the person again (`test/notify-delivery.deno.ts`). Takes effect
+  when `notify` is deployed.
 - Secrets live in Supabase → Edge Functions → Secrets: `RESEND_API_KEY`,
   `RESEND_WEBHOOK_SECRET`, `RECEIVE_DOMAIN`. Never in the repo.
 - Receiving uses Resend's `entuurboou.resend.app` address, so the main
@@ -195,7 +261,12 @@ Every response from Vercel carries (`vercel.json`):
   only from this site (system fonts, no third-party font service); connections only to this site and the Supabase project;
   no framing (`frame-ancestors 'none'`), no plugins, `base-uri`/`form-action`
   locked to self, insecure requests upgraded
-- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+- `X-Frame-Options: DENY` together with CSP `frame-ancestors 'none'` on every
+  path (no clickjacking; `test/headers.test.js` checks `vercel.json`). The
+  artist address's `/` is a 307 to `/dashboard`, which Vercel sends without
+  custom headers; it has no page to frame and leads to one that has both. The
+  `notify` function sends both on every response too (from its next deploy).
+- `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`: camera, microphone, geolocation, payment, USB off
 - `X-Robots-Tag: noindex, nofollow`, plus `robots.txt` (`Disallow: /`) and a
@@ -220,10 +291,14 @@ to the CSP or it will be blocked.
 
 ## Dependencies
 
-`npm audit --omit=dev` reports 0 vulnerabilities for what ships. Vite is on v8.
-The remaining dev-only findings are in Tailwind 3's file-watching chain
-(braces, postcss-selector-parser): build-time slowdowns only. They clear with a
-Tailwind 4 migration.
+`npm run audit` (`npm audit --omit=dev`) checks only what ships; it must show
+no high or critical finding before any push. On 2026-10-21 it reported
+0 vulnerabilities. Vite is on v8.
+The full `npm audit` (dev tools included) shows 7 (5 high, 2 moderate), all in
+Tailwind 3's build-time chain (tailwindcss, braces, chokidar, micromatch,
+fast-glob, postcss-nested, postcss-selector-parser): denial-of-service on the
+developer's machine during a build, nothing in the shipped app. They clear with
+a Tailwind 4 migration.
 
 ## Known limitations
 
@@ -242,10 +317,12 @@ These are real and accepted for now. Don't treat them as protected.
    and only an Admin approves or rejects ledger and revenue entries
    (`20261020_pm_scope_approvals_grants.sql`). A budget overspend is still an app
    rule. Per-artist read scoping needs a scoped-read RPC (planned).
-2. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
+2. **Leaked-password protection** (Supabase → Auth) was off on 2026-10-22;
+   Max is turning it on in the dashboard. Mark it done here once confirmed.
+3. **Supabase's own advisor** flags `public.rls_auto_enable()` (created by
    Supabase, not this project) as callable by anyone. Review it in the Supabase
    dashboard.
-3. **Backups:** a daily automatic copy (cron `auto-backup`, kept 30 days) and a
+4. **Backups:** a daily automatic copy (cron `auto-backup`, kept 30 days) and a
    copy before every restore, both in `private.app_data_archive` inside the same
    Supabase project (not off-site, no Storage files). The off-site backup
    (`.github/workflows/offsite-backup.yml`) dumps the database, copies every
@@ -257,7 +334,7 @@ These are real and accepted for now. Don't treat them as protected.
    offline with Max). To restore: download the artifact, `age -d -i key.txt`,
    `pg_restore` into the target project, and re-upload Storage files from the
    manifest. The free plan pauses after a week without use.
-4. **Real data is in the repository and its history** (`src/seed.js`,
+5. **Real data is in the repository and its history** (`src/seed.js`,
    `data/ledger-source-export.json`, a 14-line EMPIRE extract in
    `test/fixtures/empire-sample.csv`; in 10 commits since 2026-10-15). Production
    builds leave it out of the public JavaScript (`OMIT_REAL_DATA`), and a
@@ -266,15 +343,25 @@ These are real and accepted for now. Don't treat them as protected.
    still read it. Removal plan: move the data to an access-controlled store,
    replace seeds with the demo data, then rewrite history (`git filter-repo`) and
    force-push, which needs Max's decision and every clone re-made.
-5. **Version bumps:** with Supabase, changing `DATA_VERSION` no longer reseeds
+6. **Version bumps:** with Supabase, changing `DATA_VERSION` no longer reseeds
    (which used to wipe shared data). Shape changes need a deliberate migration.
 
 ## Rules for changes
+
+- **Never** (the owner's alone; ask Max first, one yes per action): secrets,
+  deleting data, databases, buckets, sign-in accounts or branches, production
+  and dashboard settings, new third-party skills/hooks/plugins, legal wording.
+  Full list: AGENTS.md, "Never". No force-push.
+- Before every push: `npm test`, `npm run build`, `npm run audit` (no high or
+  critical) and, after a database change, `supabase/tests/section_rules.sql`.
 
 - Never commit secrets: no Supabase `service_role`/secret key, no Resend API
   key, no `.env` files. The only keys in the app are the Supabase URL and
   publishable key, which are public by design. `.env*` and `*.local` are
   git-ignored.
+- `npm run build` first runs `scripts/check-rls.mjs`: it fails if a table in
+  `public` lacks row-level security or a policy, or if schema `private` is
+  left usable by `anon`, `authenticated` or `public`.
 - After any database change, run Supabase's security advisor and fix new
   findings before shipping.
 - New database functions: `security definer` with `set search_path = ''`,

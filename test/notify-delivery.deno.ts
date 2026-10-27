@@ -35,6 +35,9 @@ deliveries.set(1, delivery);
 const emails: { to: string; subject: string }[] = [];
 const bells: { to: string; subject: string }[] = [];
 const failing = new Set(['b@x.com']);
+const lostReply = new Set<string>();
+const accepted = new Map<string, unknown>();
+const keysSeen: (string | null)[] = [];
 
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } });
 const rpc: Record<string, (a: Row) => unknown> = {
@@ -63,9 +66,17 @@ globalThis.fetch = async (input: Request | URL | string, init?: RequestInit) => 
   if (url.host === 'api.resend.com') {
     const msg = JSON.parse(body || '{}');
     const to = msg.to[0];
+    const key = req.headers.get('Idempotency-Key');
+    keysSeen.push(key);
+    // Like Resend: a key it has already accepted returns the first result, no new email.
+    if (key && accepted.has(key)) return json(accepted.get(key));
     if (failing.has(to)) return json({ message: 'simulated outage' }, 500);
     emails.push({ to, subject: msg.subject });
-    return json({ id: 'email_' + emails.length });
+    const result = { id: 'email_' + emails.length };
+    if (key) accepted.set(key, result);
+    // Resend took it but the reply never arrived (the function's timeout fires).
+    if (lostReply.has(to)) { lostReply.delete(to); throw new DOMException('The signal has been aborted', 'TimeoutError'); }
+    return json(result);
   }
   if (url.host !== 'mock.local') return realFetch(input, init);
   const path = url.pathname.replace('/rest/v1/', '');
@@ -85,9 +96,12 @@ let handler: (req: Request) => Promise<Response> = () => { throw new Error('no h
 Deno.serve = (h: typeof handler) => { handler = h; return { finished: Promise.resolve(), shutdown: async () => {} }; };
 await import('../supabase/functions/notify/index.ts');
 
-const call = async (body: Row) => (await handler(new Request('http://fn/notify', {
-  method: 'POST', headers: { 'x-notify-secret': 's' }, body: JSON.stringify(body),
-}))).json();
+const framed: Response[] = [];
+const call = async (body: Row) => {
+  const res = await handler(new Request('http://fn/notify', { method: 'POST', headers: { 'x-notify-secret': 's' }, body: JSON.stringify(body) }));
+  framed.push(res);
+  return res.json();
+};
 const post = () => call({ action: 'events', events: delivery.events, delivery: delivery.id });
 
 let failures = 0;
@@ -125,6 +139,27 @@ check('release week: a@ emailed, b@ failed', emails.length === before + 1 && ema
 failing.clear();
 await call({ action: 'events', events: week.events, delivery: 2 });
 check('release week retry: only b@ emailed, status done', emails.length === before + 2 && emails[emails.length - 1].to === 'b@x.com' && week.status === 'done', { week, new: sorted(emails.slice(before)) });
+
+check('every delivery email carried an Idempotency-Key', keysSeen.length > 0 && keysSeen.every(k => !!k && k.length <= 256), keysSeen);
+
+// Resend accepts c@'s email but the reply is lost (timeout): the event stays
+// open, and the retry reuses the key, so c@ still gets one email.
+data.notices = [...(data.notices as Row[]), { id: 'n2', title: 'Second', message: 'Again', audience: 'all' }];
+deliveries.set(3, { id: 3, status: 'pending', attempts: 0, done: [], sent: [], events: [{ type: 'notice', key: 'notices', id: 'n2' }] });
+lostReply.add('c@x.com');
+const beforeLost = emails.length;
+await call({ action: 'events', events: deliveries.get(3)!.events, delivery: 3 });
+check('lost reply: delivery 3 left for retry', deliveries.get(3)!.status === 'retry', deliveries.get(3));
+await call({ action: 'events', events: deliveries.get(3)!.events, delivery: 3 });
+const lostNew = emails.slice(beforeLost);
+check('lost reply: retry done, c@ emailed once, a@ and b@ once each', deliveries.get(3)!.status === 'done' && lostNew.length === 3 && new Set(lostNew.map(e => e.to)).size === 3, { d: deliveries.get(3), lostNew });
+
+// No clickjacking: every response, including a GET and a refused request, can't be framed.
+framed.push(await handler(new Request('http://fn/notify')));
+framed.push(await handler(new Request('http://fn/notify', { method: 'POST', body: '{}', headers: { 'svix-id': 'x', 'svix-timestamp': '0', 'svix-signature': 'v1,x' } })));
+check('every response sends X-Frame-Options DENY and frame-ancestors none',
+  framed.every(r => r.headers.get('X-Frame-Options') === 'DENY' && /frame-ancestors 'none'/.test(r.headers.get('Content-Security-Policy') || '')),
+  framed.map(r => [r.status, r.headers.get('X-Frame-Options'), r.headers.get('Content-Security-Policy')]));
 
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
 if (failures) { console.log(JSON.stringify({ r1, r2 }, null, 1).slice(0, 3000)); Deno.exit(1); }
