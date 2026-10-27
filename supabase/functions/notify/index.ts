@@ -294,7 +294,7 @@ async function handleEvent(ev: Event) {
       const names = [...new Set(months)].sort().map(m => new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
       const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
       results.push(await sendOne([email], `Your IMSS Records earnings for ${list} are ready`,
-        page('New earnings in your portal', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records portal, with the breakdown by song, platform and country.`, LAG_NOTE],
+        page('New earnings in Artists Access', [`Hi ${esc(a.name)},`, `Your earnings for <b>${esc(list)}</b> are now in your IMSS Records Artists Access, with the breakdown by song, platform and country.`, LAG_NOTE],
           { label: 'See your earnings', url: `${APP_URL}/` }), undefined, 'earnings'));
     }
     return results;
@@ -312,7 +312,7 @@ async function handleEvent(ev: Event) {
       const email = lower(a.email);
       if (!email.includes('@')) continue;
       results.push(await sendOne([email], `Notice from IMSS Records: ${item.title}`,
-        page(item.title || 'Notice from IMSS Records', [`Hi ${esc(a.name)},`, esc(item.message || '').replace(/\n/g, '<br>')], { label: 'Open your portal', url: `${APP_URL}/` }), undefined, 'notice'));
+        page(item.title || 'Notice from IMSS Records', [`Hi ${esc(a.name)},`, esc(item.message || '').replace(/\n/g, '<br>')], { label: 'Open Artists Access', url: `${APP_URL}/` }), undefined, 'notice'));
     }
     for (const m of team) {
       const email = lower(m.email);
@@ -373,7 +373,7 @@ async function handleEvent(ev: Event) {
   if (ev.type === 'statement') {
     const period = item.periodStart === item.periodEnd ? item.periodStart : `${item.periodStart} to ${item.periodEnd}`;
     return send([artistEmail], `Your IMSS Records statement is ready (${period})`,
-      page('Your royalty statement is ready', [`Hi ${esc(artistName)},`, `Your statement for <b>${esc(period)}</b> is ready in your IMSS Records portal.`, `Your earnings for this period: <b>$${Number(item.artistShare || 0).toFixed(2)}</b>.`, LAG_NOTE],
+      page('Your royalty statement is ready', [`Hi ${esc(artistName)},`, `Your statement for <b>${esc(period)}</b> is ready in your IMSS Records Artists Access.`, `Your earnings for this period: <b>$${Number(item.artistShare || 0).toFixed(2)}</b>.`, LAG_NOTE],
         { label: 'View your statement', url: `${APP_URL}/` }), undefined, 'statement');
   }
 
@@ -403,16 +403,16 @@ async function handleEvent(ev: Event) {
     if (item.status === 'Rejected') {
       return send([artistEmail], `Your invoice “${item.title}” wasn’t approved`,
         page('Your invoice wasn’t approved', [`Hi ${esc(artistName)}, your invoice <b>${esc(item.title)}</b> (${amount}) wasn’t approved.`],
-          { label: 'Open your portal', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
+          { label: 'Open Artists Access', url: `${APP_URL}/` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
     }
     if (item.status === 'Needs changes') {
       return send([artistEmail], `Your invoice “${item.title}” needs changes`,
-        page('Your invoice needs changes', [`Hi ${esc(artistName)}, the label returned <b>${esc(item.title)}</b> (${amount}) so you can fix it.`, 'Open it in your portal, make the change and press Resubmit.'],
-          { label: 'Open your portal', url: `${APP_URL}/invoices` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
+        page('Your invoice needs changes', [`Hi ${esc(artistName)}, the label returned <b>${esc(item.title)}</b> (${amount}) so you can fix it.`, 'Open it in Artists Access, make the change and press Resubmit.'],
+          { label: 'Open Artists Access', url: `${APP_URL}/invoices` }, item.reviewNote || last.note || undefined), replyKey, 'invoice');
     }
     if (item.status === 'Paid') {
       return send([artistEmail], `Paid: your invoice “${item.title}” (${amount})`,
-        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open your portal', url: `${APP_URL}/` }), replyKey, 'invoice');
+        page('Your invoice has been paid', [`Hi ${esc(artistName)}, <b>${esc(item.title)}</b> for <b>${amount}</b> has been paid.`], { label: 'Open Artists Access', url: `${APP_URL}/` }), replyKey, 'invoice');
     }
     const reviewers = await stageReviewers(item.status, artist);
     const back = last.action === 'sent back', moved = last.action === 'moved by Admin';
@@ -432,7 +432,7 @@ async function handleEvent(ev: Event) {
       setSwitch('invoiceArtist');
       return send([artistEmail], `IMSS Records replied about ${what.replace('your ', '')}`,
         page('The label replied', [`Hi ${esc(artistName)}, here’s a message about ${esc(what)}:`],
-          { label: 'Open your portal', url: `${APP_URL}/` }, labelText), replyKey, 'invoice');
+          { label: 'Open Artists Access', url: `${APP_URL}/` }, labelText), replyKey, 'invoice');
     }
     if (last && last.from === 'artist') {
       // Invoice replies go to whoever holds the invoice now, plus Admins.
@@ -570,7 +570,7 @@ async function sendReleaseWeek(week = '') {
           `Your release <b>${esc(r.title)}</b> is out on <b>${esc(when)}</b>. Please check everything is ready: artwork, credits, links and anything you're posting.`,
           ...(checklist ? [checklist] : []),
           pm ? `Keep in touch with your Product Manager, <b>${esc(pm.name)}</b>, this week about anything that's not ready.` : 'Reply to the label this week about anything that\'s not ready.',
-        ], { label: 'Open your portal', url: `${APP_URL}/releases` }), undefined, 'release'));
+        ], { label: 'Open Artists Access', url: `${APP_URL}/releases` }), undefined, 'release'));
     }
     if (pm && lower(pm.email).includes('@')) {
       results.push(await sendOne([lower(pm.email)], `Release week: “${r.title}” by ${a.name}, ${when}`,
@@ -627,13 +627,13 @@ async function sendWelcome(artistId: string) {
   const a = (await section('roster')).find(x => x.id === artistId);
   const email = lower(a?.email);
   if (!a || a.status === 'Archived' || !email.includes('@')) return { skipped: 'no artist email' };
-  const html = page('Your artist portal is ready', [
+  const html = page('Your Artists Access is ready', [
     `Hi ${esc(a.name)},`,
-    'Your IMSS Records artist portal is where you see your royalties, statements, releases and invoices.',
+    'IMSS Records Artists Access is where you see your royalties, statements, releases and invoices.',
     `Sign in at <b>artist.imssrecords.com</b> with this email address (${esc(email)}): continue with Google, or ask for a sign-in code by email.`,
     'For the best experience, use a desktop or laptop. Your phone works too for quick checks.',
-  ], { label: 'Open your portal', url: ARTIST_URL });
-  return await send([email], 'Welcome to your IMSS Records artist portal', html, undefined, 'welcome');
+  ], { label: 'Open Artists Access', url: ARTIST_URL });
+  return await send([email], 'Welcome to IMSS Records Artists Access', html, undefined, 'welcome');
 }
 
 // Admin pressed "Send welcome email" for a team member or label rep (send_team_welcome).
@@ -671,7 +671,7 @@ async function sendSigninNotice(email: string, ua: string) {
     `Hi ${esc(who)},`,
     `Your account was signed in on <b>${esc(when)}</b> from <b>${esc(deviceName(ua))}</b>.`,
     `If this was you, there's nothing to do. <b>If it wasn't you</b>, ${help} Also change the password of the email account you sign in with.`,
-  ], { label: member ? 'Open the dashboard' : 'Open your portal', url: `${APP_URL}/` });
+  ], { label: member ? 'Open the dashboard' : 'Open Artists Access', url: `${APP_URL}/` });
   return await send([email], 'New sign-in to your IMSS Records account', html, undefined, artist ? 'security' : undefined, false);
 }
 

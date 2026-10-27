@@ -51,7 +51,7 @@ export function SubmissionsSection({ releaseSubmissions, update, roster, catalog
   function mailto(sub) {
     const a = artistOf(sub.artistId);
     const last = [...(sub.messages || [])].reverse().find(m => m.from === 'label');
-    const body = 'Hi ' + (a.name || '') + ',\n\nAbout your release submission “' + sub.title + '”:\n\n' + (message.trim() || (last ? last.text : '')) + '\n\nYou can reply in your IMSS Records portal under Releases.\n\n' + sessionName;
+    const body = 'Hi ' + (a.name || '') + ',\n\nAbout your release submission “' + sub.title + '”:\n\n' + (message.trim() || (last ? last.text : '')) + '\n\nYou can reply in IMSS Records Artists Access under Releases.\n\n' + sessionName;
     return 'mailto:' + encodeURIComponent(a.email || '') + '?subject=' + encodeURIComponent('IMSS Records: more info needed for “' + sub.title + '”') + '&body=' + encodeURIComponent(body);
   }
 
@@ -67,7 +67,7 @@ export function SubmissionsSection({ releaseSubmissions, update, roster, catalog
         ))}
       </div>
       {shown.length === 0 ? (
-        <EmptyState icon={Disc3} title={status === 'Pending' ? 'Nothing waiting for review' : 'Nothing here'} description="When an artist submits a release from their portal, it arrives here for review." />
+        <EmptyState icon={Disc3} title={status === 'Pending' ? 'Nothing waiting for review' : 'Nothing here'} description="When an artist submits a release from Artists Access, it arrives here for review." />
       ) : (
         <div className="rounded border overflow-x-auto" style={{ borderColor: C.border, background: C.panel }}>
           <table className="w-full" style={{ minWidth: 820 }}>

@@ -406,10 +406,10 @@ function PortalAccess({ artist, isAdmin, isPm, canEdit, onEdit }) {
   }
   return (
     <div className="mt-3 pt-3" style={{ borderTop: '1px solid ' + C.border }}>
-      <div style={{ color: C.textFaint }} className="text-xs mb-1">Portal access</div>
+      <div style={{ color: C.textFaint }} className="text-xs mb-1">Artists Access</div>
       {!artist.email ? (
         <div className="flex items-center gap-3 flex-wrap text-sm">
-          <span style={{ color: C.amber }}>No sign-in email yet, so they can’t open the artist portal.</span>
+          <span style={{ color: C.amber }}>No sign-in email yet, so they can’t open Artists Access.</span>
           {canEdit && <Btn variant="ghost" onClick={() => onEdit(artist)}><Pencil size={14} /> Add email</Btn>}
         </div>
       ) : (

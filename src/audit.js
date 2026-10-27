@@ -22,7 +22,7 @@ export function logActivity(action, detail = '', artistId = null, meta = {}) {
 export function logSignIn(kind, name) {
   window.__imssActor = name; window.__imssActorKind = kind;
   try { if (sessionStorage.getItem('imss:signin-logged')) return; sessionStorage.setItem('imss:signin-logged', '1'); } catch (e) { /* ignore */ }
-  logActivity('signed in', kind === 'artist' ? 'Artist portal' : kind === 'rep' ? 'Label rep view' : 'Team dashboard');
+  logActivity('signed in', kind === 'artist' ? 'Artists Access' : kind === 'rep' ? 'Label rep view' : 'Team dashboard');
 }
 
 export async function readAudit({ limit = 500 } = {}) {

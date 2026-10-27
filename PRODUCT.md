@@ -35,7 +35,7 @@ decides which door opens:
 
 - an email on the **Team** list opens the team side, with that staff record's
   role and permissions;
-- an email on an artist's **Roster** entry opens that artist's portal;
+- an email on an artist's **Roster** entry opens Artists Access for that artist;
 - any other email sees a "not set up yet" message and nothing else.
 
 An Admin can send anyone their sign-in link from the Team or Roster screen.
@@ -43,7 +43,7 @@ An Admin can send anyone their sign-in link from the Team or Roster screen.
 **Team side** — label staff. What they see depends on their role and
 permissions.
 
-**Artist portal** — an artist sees only their own revenue, payouts, statements,
+**Artists Access** — an artist sees only their own revenue, payouts, statements,
 releases, and profile.
 
 ---
@@ -248,7 +248,7 @@ Revenue and ledger entries submitted by non-Admins get
 **Every aggregate figure must compute from approved-only data.** The management
 screens (Revenue, Ledger) show pending rows so they can be approved, but
 Overview, Master Gross reconciliation, Payouts, Statements, the roster detail
-panel and the artist portal all consume the approved subset. Mixing these
+panel and Artists Access all consume the approved subset. Mixing these
 produces numbers that disagree between screens.
 
 ---
@@ -338,7 +338,7 @@ Sidebar nav, grouped. Items appear only if the person's permissions allow.
 **System**
 - **Backup & Restore** — export the whole dataset as JSON, reimport it.
 
-### Artist portal
+### Artists Access
 
 Built around what the artist is owed. Sidebar navigation (a swipeable strip on
 phones) in two groups — **Money:** Dashboard, Royalties, Earnings, Expenses,
@@ -399,7 +399,7 @@ reach an artist's browser.
 
 **Generate gates.** Anywhere a period is chosen, there is a Generate button.
 
-- In the **artist portal**, nothing renders until they press it — Revenue and
+- In **Artists Access**, nothing renders until they press it — Revenue and
   Statements both open on a prompt ("Pick a period, then generate"). The
   artist asks a question; the app answers it.
 - On **team screens**, the period applies on Generate while other filters
@@ -484,7 +484,7 @@ Finance can request a time; the Admin's approval keeps it.
 
 All money is worked out on the team side. Publishing saves each row's final
 figures (`swiftShare` charge, `artistPct`, `artistShare`, `final: true`); the
-artist portal and its downloads show those as stored and never recompute them
+Artists Access and its downloads show those as stored and never recompute them
 (`isFinal` in `finance.js`). A changed charge or % shows as "changed since
 publish" until it's republished.
 
@@ -610,6 +610,6 @@ the cent. That one test catches most of the ways this can go wrong.
 4. Roster, catalog, revenue, master gross.
 5. Ledger, budgets, payouts, statements.
 6. Permissions and roles; then the Legal → Admin approval queue.
-7. Artist portal.
+7. Artists Access.
 8. CSV import.
 9. Export, backup/restore, print.
