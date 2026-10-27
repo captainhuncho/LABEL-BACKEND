@@ -29,7 +29,7 @@ jobs:
       - name: Switched on?
         if: vars.BACKUP_ENABLED != 'true'
         run: echo 'BACKUP_ENABLED is not true; nothing to do.' && exit 1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm ci --omit=dev
