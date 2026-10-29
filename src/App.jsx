@@ -512,19 +512,20 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
       await window.storage.set(key, JSON.stringify(value), false);
       return true;
     } catch (e) {
+      // The activity log only ever gains entries, so merge by id and retry. The
+      // database also refuses (42501) a save that would drop someone else's entry.
+      if (key === 'activityLog' && (isConflict(e) || (e && e.code === '42501'))) {
+        try {
+          const res = await window.storage.get(key, false);
+          const theirs = res && res.value ? JSON.parse(res.value) : [];
+          const seen = new Set(value.map(x => x.id));
+          const merged = [...value, ...theirs.filter(x => !seen.has(x.id))].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, 200);
+          setActivityLog(merged);
+          await window.storage.set(key, JSON.stringify(merged), false);
+          return true;
+        } catch (e2) { /* fall through to the message */ }
+      }
       if (isConflict(e)) {
-        // The activity log only ever gains entries, so merge by id and retry.
-        if (key === 'activityLog') {
-          try {
-            const res = await window.storage.get(key, false);
-            const theirs = res && res.value ? JSON.parse(res.value) : [];
-            const seen = new Set(value.map(x => x.id));
-            const merged = [...value, ...theirs.filter(x => !seen.has(x.id))].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, 200);
-            setActivityLog(merged);
-            await window.storage.set(key, JSON.stringify(merged), false);
-            return true;
-          } catch (e2) { /* fall through to the message */ }
-        }
         // Anything else: never overwrite. Show the latest and say so.
         await reloadSection(key);
         setError('This list changed since you opened it (someone else saved), so your last change wasn’t saved. The latest version is now showing; please make your change again.');
