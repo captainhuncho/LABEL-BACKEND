@@ -440,12 +440,14 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         ['activityLog', setActivityLog, SEED_ACTIVITY_LOG],
       ];
       sectionSetters.current = Object.fromEntries(jobs.map(([key, setter]) => [key, setter]));
-      for (const [key, setter, seed] of jobs) {
-        if (needsReseed) {
+      if (needsReseed) {
+        for (const [key, setter, seed] of jobs) {
           if (!cancelled) setter(seed);
           try { await window.storage.set(key, JSON.stringify(seed), false); } catch (e2) { /* ignore */ }
-          continue;
         }
+      }
+      // Each section is read on its own, so ask for them all at once.
+      async function loadOne([key, setter, seed]) {
         try {
           const res = await window.storage.get(key, false);
           const val = res && res.value ? JSON.parse(res.value) : seed;
@@ -453,7 +455,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
         } catch (e) {
           const missing = String(e && e.message).startsWith('not found');
           // With Supabase a section you have no permission for reads as missing: show it empty, never seed it.
-          if (supabase && missing) { if (!cancelled) setter(Array.isArray(seed) ? [] : seed); continue; }
+          if (supabase && missing) { if (!cancelled) setter(Array.isArray(seed) ? [] : seed); return; }
           if (!cancelled) setter(seed);
           // Missing key: save the seed. Unreadable data: keep it on disk so nothing real is lost.
           if (missing) {
@@ -463,6 +465,7 @@ export default function RecordLabelDashboard({ authEmail = null, signOut = null 
           }
         }
       }
+      if (!needsReseed) await Promise.all(jobs.map(loadOne));
       if (needsReseed) {
         try { await window.storage.set('dataVersion', DATA_VERSION, false); } catch (e) { /* ignore */ }
       }
