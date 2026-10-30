@@ -178,8 +178,9 @@ If you add a screen that shows money, gate it on the right one of those two.
   teal = earned/confirmed; amounts in mono; readable text never in Smoke Ink.
 - **On screen the swift fee is "Inbound Banking Charge".** Code and data keep
   `swiftFee`/`swift`.
-- **Commit and push only when the user asks.** Pushing `main` deploys to
-  production on Vercel.
+- **Commit and push only when the user asks, on a branch, never `main`.**
+  `main` deploys to production on Vercel and changes only by merging a pull
+  request on GitHub (steps in the `owner-ship` skill).
 
 - **Styling is inline `style={{}}` plus Tailwind utility classes.** Layout
   classes prefixed `imss-` are defined in `GLOBAL_STYLES` in `theme.js`, not
