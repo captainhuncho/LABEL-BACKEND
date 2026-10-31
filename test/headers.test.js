@@ -30,3 +30,18 @@ test('redirects stay on this site', () => {
   // one points at a page of this app, which carries both headers.
   for (const r of config.redirects || []) assert.match(r.destination, /^\/(?!\/)/, `${r.source} redirects off-site`);
 });
+
+// Hide the stack (owner rule): nothing names the framework or its version.
+test('no header rule adds X-Powered-By or Server', () => {
+  for (const r of rules) for (const h of r.headers) assert.doesNotMatch(h.key, /^(x-powered-by|server)$/i, r.source);
+});
+
+test('production builds ship no source maps', () => {
+  assert.match(readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8'), /sourcemap:\s*false/);
+});
+
+test('live response hides the stack (CHECK_URL=https://ops.imssrecords.com)', { skip: !process.env.CHECK_URL }, async () => {
+  const res = await fetch(process.env.CHECK_URL);
+  assert.equal(res.headers.get('x-powered-by'), null);
+  assert.doesNotMatch(res.headers.get('server') || '', /\d/, 'Server header carries a version');
+});

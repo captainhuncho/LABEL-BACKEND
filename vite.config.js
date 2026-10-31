@@ -23,5 +23,7 @@ export default defineConfig({
     generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: BUILD_ID }) }); },
   }],
   define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
+  // Hide the stack: no source maps in production builds.
+  build: { sourcemap: false },
   server: { port: 5173, open: true },
 });

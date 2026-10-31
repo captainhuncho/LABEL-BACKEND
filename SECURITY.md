@@ -271,6 +271,13 @@ Every response from Vercel carries (`vercel.json`):
 - `Permissions-Policy`: camera, microphone, geolocation, payment, USB off
 - `X-Robots-Tag: noindex, nofollow`, plus `robots.txt` (`Disallow: /`) and a
   noindex meta tag: nothing in this private dashboard is indexed
+- Hide the stack: no `X-Powered-By`, no generator meta, no source maps
+  (`build.sourcemap: false`); `test/headers.test.js` checks it, and with
+  `CHECK_URL` set it checks the live response too. Accepted Vercel headers:
+  `Server: Vercel` (no version), `x-vercel-id`, `x-vercel-cache`.
+  `version.json` holds only the build id (commit) the app uses to spot a new
+  deploy; no package or framework versions. Errors shown on screen carry the
+  message only; stack traces go to `log_client_error` for Admin.
 - Unknown paths serve the app instead of a bare 404; a favicon and page
   metadata are set in `index.html`
 
